@@ -22,8 +22,8 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: temurin
+          java-version: '27'
+          distribution: zulu
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -183,12 +183,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Sem setup-java aqui: dependency-check/Dependency-Check_Action roda em Docker
-      # com JDK proprio; JAVA_HOME do host nao existe dentro do container e causa erro.
+      # dependency-check roda em Docker com JDK proprio.
+      # O runner define JAVA_HOME apontando para o host, que nao existe no container.
+      # Desfazer via GITHUB_ENV antes da action para que o container use seu proprio Java.
+      - name: Clear JAVA_HOME for Docker action
+        run: echo "JAVA_HOME=" >> "$GITHUB_ENV"
+
       - name: OWASP Dependency Check
         uses: dependency-check/Dependency-Check_Action@main
-        env:
-          JAVA_HOME: ""
         with:
           project: 'AnarCry'
           path: '.'
