@@ -2,6 +2,8 @@
 build/
 .gradle/
 *.jar
+# Gradle wrapper JAR must be committed for CI
+!gradle/wrapper/gradle-wrapper.jar
 
 # Scan reports (generated output — não versionar)
 anarcry-report-*.md

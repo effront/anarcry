@@ -1,5 +1,8 @@
 # Semgrep ignore — AnarCry
 
+# Documentation: JWT examples are intentional (alg:none demo payloads, not real tokens)
+README.md
+
 # Build output
 build/
 .gradle/
