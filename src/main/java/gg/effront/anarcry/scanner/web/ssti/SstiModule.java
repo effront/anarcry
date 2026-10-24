@@ -33,14 +33,15 @@ public class SstiModule implements Scanner {
 
     private record SstiProbe(String payload, String engine) {}
 
-    // Phase 1: math detection probes — look for "49" in response
+    // Phase 1: math detection probes — look for "2401" (7^4) in response.
+    // 2401 has near-zero collision probability vs "49" which appears in pagination/IDs/years.
     private static final List<SstiProbe> DETECTION_PROBES = List.of(
-            new SstiProbe("${7*7}",    "FreeMarker/Spring"),
-            new SstiProbe("{{7*7}}",   "Jinja2/Twig"),
-            new SstiProbe("#{7*7}",    "Thymeleaf"),
-            new SstiProbe("${{7*7}}",  "Thymeleaf/Spring"),
-            new SstiProbe("<%= 7*7 %>","ERB/EJS"),
-            new SstiProbe("{{7*'7'}}",  "Twig (confirma)")
+            new SstiProbe("${7*7*7*7}",    "FreeMarker/Spring"),
+            new SstiProbe("{{7*7*7*7}}",   "Jinja2/Twig"),
+            new SstiProbe("#{7*7*7*7}",    "Thymeleaf"),
+            new SstiProbe("${{7*7*7*7}}",  "Thymeleaf/Spring"),
+            new SstiProbe("<%= 7*7*7*7 %>","ERB/EJS"),
+            new SstiProbe("{{7*'7'}}",      "Twig (confirma)")
     );
 
     // Phase 2: engine-specific RCE probes — run after detection confirms an engine.
@@ -130,7 +131,7 @@ public class SstiModule implements Scanner {
                         findings.add(Finding.of("SSTI", endpoint,
                                 "SSTI — Template Injection detectado (" + engine + ")",
                                 Severity.CRITICAL,
-                                "Payload: " + probe.payload() + " → resposta contém '49' | Engine: " + engine
+                                "Payload: " + probe.payload() + " → resposta contém '2401' | Engine: " + engine
                                         + " | URL: " + base + endpoint,
                                 "Server-Side Template Injection — equivale a RCE na engine " + engine
                                         + ". Payloads RCE conhecidos incluem: FreeMarker Execute?new(), "
@@ -189,7 +190,7 @@ public class SstiModule implements Scanner {
             HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
             String body = resp.body() != null ? resp.body() : "";
             if (resp.statusCode() == 200) {
-                if (body.contains("49") && !baseline.contains("49")) return probe.engine();
+                if (body.contains("2401") && !baseline.contains("2401")) return probe.engine();
                 if (probe.payload().equals("{{7*'7'}}") && body.contains("7777777")
                         && !baseline.contains("7777777")) return "Jinja2 (confirma)";
             }

@@ -75,18 +75,37 @@ public class CachePoisoningModule implements Scanner {
                             .orElse("").contains(PROBE_VALUE);
 
                     if (inBody || inLoc) {
-                        boolean cached  = isCacheHit(resp);
-                        Severity sev    = cached ? Severity.CRITICAL : Severity.HIGH;
-                        String title    = cached
-                                ? "Web Cache Poisoning — reflexão confirmada e cacheada"
+                        // Confirm actual cache poisoning: make a second GET WITHOUT the poison
+                        // header and check if PROBE_VALUE still appears. Reflection alone is not
+                        // enough — we need evidence the poisoned response was stored.
+                        boolean poisonPersisted = false;
+                        try {
+                            HttpRequest cleanReq = HttpRequest.newBuilder()
+                                    .uri(URI.create(url))
+                                    .timeout(Duration.ofSeconds(5))
+                                    .GET().build();
+                            HttpResponse<String> cleanResp = Http.send(ctx, hc, cleanReq,
+                                    HttpResponse.BodyHandlers.ofString(), id());
+                            String cleanBody = cleanResp.body() != null ? cleanResp.body() : "";
+                            String cleanLoc  = cleanResp.headers().firstValue("location").orElse("");
+                            poisonPersisted  = cleanBody.contains(PROBE_VALUE)
+                                    || cleanLoc.contains(PROBE_VALUE);
+                        } catch (Exception ignored) {}
+
+                        Severity sev = poisonPersisted ? Severity.CRITICAL : Severity.HIGH;
+                        String title = poisonPersisted
+                                ? "Web Cache Poisoning — confirmado (resposta envenenada persistiu)"
                                 : "Web Cache Poisoning — header unkeyed refletido (cache não confirmado)";
                         log.accept("[!!] CachePoisoning: " + sev + " — " + header
-                                + " refletido" + (cached ? " + cacheado" : "") + " em " + url);
+                                + " refletido" + (poisonPersisted ? " + cache envenenado confirmado" : "")
+                                + " em " + url);
                         findings.add(Finding.of("CachePoisoning", path,
                                 title, sev,
                                 "Header: " + header + "=" + PROBE_VALUE
                                         + " | Refletido em " + (inBody ? "body" : "Location")
-                                        + (cached ? " | Cache HIT detectado" : ""),
+                                        + (poisonPersisted
+                                                ? " | Segunda request sem header retornou PROBE_VALUE — cache envenenado"
+                                                : " | Segunda request sem header não retornou PROBE_VALUE"),
                                 "Header não incluso na cache key é refletido na resposta — "
                                         + "atacante pode envenenar o cache servindo XSS/redirects maliciosos "
                                         + "para todos os usuários que acessam essa URL",
@@ -111,13 +130,8 @@ public class CachePoisoningModule implements Scanner {
     private boolean isCacheHit(HttpResponse<?> resp) {
         String xCache  = resp.headers().firstValue("x-cache").orElse("").toLowerCase();
         String cfCache = resp.headers().firstValue("cf-cache-status").orElse("").toLowerCase();
-        String age     = resp.headers().firstValue("age").orElse("0").trim();
-        boolean varnish = resp.headers().map().containsKey("x-varnish");
-
-        if (xCache.contains("hit"))   return true;
-        if (cfCache.contains("hit"))  return true;
-        if (varnish)                  return true;
-        try { if (Integer.parseInt(age) > 0) return true; } catch (NumberFormatException ignored) {}
-        return false;
+        // x-varnish alone only means Varnish is present, not that this response is cached.
+        // Require x-cache: HIT or cf-cache-status: HIT for a confirmed cache hit.
+        return xCache.contains("hit") || cfCache.contains("hit");
     }
 }

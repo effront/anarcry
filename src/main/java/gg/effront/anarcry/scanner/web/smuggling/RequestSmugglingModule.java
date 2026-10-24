@@ -174,7 +174,9 @@ public class RequestSmugglingModule implements Scanner {
         }
     }
 
-    // Returns the obfuscated TE variant accepted, or null if none accepted
+    // Returns the obfuscated TE variant that causes a timeout (server hung waiting for chunks),
+    // or null if none causes a timeout. A 200 response alone is NOT evidence of desync —
+    // many servers ignore invalid TE values and respond normally. Only a timeout is meaningful.
     private String probeTeTeObfuscation(ScanContext ctx, String host, int port, Consumer<String> log) {
         List<String> variants = List.of(
                 "xchunked",
@@ -182,20 +184,24 @@ public class RequestSmugglingModule implements Scanner {
                 "chunked\t"
         );
         for (String variant : variants) {
+            // Send an INCOMPLETE chunked body: server that processes the obfuscated TE
+            // will hang waiting for the terminating 0-chunk → SocketTimeoutException.
+            // Servers that ignore it (treat as identity/CL) respond immediately.
             String probe = "POST / HTTP/1.1\r\n"
                     + "Host: " + host + "\r\n"
                     + "Content-Type: application/x-www-form-urlencoded\r\n"
-                    + "Content-Length: 8\r\n"
+                    + "Content-Length: 44\r\n"
                     + "Transfer-Encoding: " + variant + "\r\n"
                     + "\r\n"
-                    + "1\r\nA\r\n0\r\n\r\n";
+                    + "5\r\nHELLO"; // intentionally incomplete — no terminating 0\r\n\r\n
             try {
-                String resp = rawSend(ctx, host, port, probe, PROBE_TIMEOUT_MS);
-                if (resp != null && (resp.startsWith("HTTP/1.1 200") || resp.startsWith("HTTP/1.0 200"))) {
-                    return variant;
-                }
+                rawSend(ctx, host, port, probe, PROBE_TIMEOUT_MS);
+                // Got a response without timeout — server ignored the obfuscated TE
+            } catch (java.net.SocketTimeoutException e) {
+                // Timed out — server processed the obfuscated TE and hung on the incomplete body
+                return variant;
             } catch (Exception e) {
-                // Skip
+                // Connection error or other — skip
             }
         }
         return null;

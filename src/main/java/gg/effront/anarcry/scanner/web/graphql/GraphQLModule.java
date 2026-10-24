@@ -86,21 +86,35 @@ public class GraphQLModule implements Scanner {
                     continue;
                 }
 
-                // Endpoint exists but introspection disabled — still worth reporting
-                if ((status == 200 || status == 400 || status == 422)
-                        && (ct.contains("json") || body.contains("\"data\"") || body.contains("\"errors\""))) {
-                    log.accept("[+] GraphQL: endpoint descoberto em " + url + " (introspection desativada)");
-                    findings.add(Finding.of("GraphQL", url,
-                            "GraphQL endpoint descoberto",
-                            Severity.INFO,
-                            "Endpoint: " + url + " | HTTP " + status + " | Content-Type: " + ct,
-                            "Endpoint GraphQL identificado — auditar queries expostas, depth limiting e rate limiting",
-                            "curl -sX POST " + url + " \\\n"
-                                    + "  -H 'Content-Type: application/json' \\\n"
-                                    + "  -d '" + TYPENAME_QUERY + "'",
-                            "Habilitar depth limiting, field-level authorization e rate limiting; " +
-                                    "considerar persisted queries para reduzir superfície de ataque",
-                            _cweId, _cweTitle, _cveVector, _score));
+                // Endpoint exists but introspection disabled — confirm with __typename probe
+                // to avoid FP on any REST API that returns JSON errors.
+                if ((status == 200 || status == 400 || status == 422) && ct.contains("json")) {
+                    try {
+                        HttpRequest typenameReq = HttpRequest.newBuilder()
+                                .uri(URI.create(url))
+                                .header("Content-Type", "application/json")
+                                .timeout(Duration.ofSeconds(5))
+                                .POST(HttpRequest.BodyPublishers.ofString(TYPENAME_QUERY))
+                                .build();
+                        HttpResponse<String> typenameResp = Http.send(ctx, hc, typenameReq,
+                                HttpResponse.BodyHandlers.ofString(), id());
+                        String typenameBody = typenameResp.body() != null ? typenameResp.body() : "";
+                        if (typenameBody.contains("__typename")) {
+                            log.accept("[+] GraphQL: endpoint confirmado em " + url + " (introspection desativada)");
+                            findings.add(Finding.of("GraphQL", url,
+                                    "GraphQL endpoint descoberto",
+                                    Severity.INFO,
+                                    "Endpoint: " + url + " | HTTP " + status
+                                            + " | __typename confirmado na resposta",
+                                    "Endpoint GraphQL identificado — auditar queries expostas, depth limiting e rate limiting",
+                                    "curl -sX POST " + url + " \\\n"
+                                            + "  -H 'Content-Type: application/json' \\\n"
+                                            + "  -d '" + TYPENAME_QUERY + "'",
+                                    "Habilitar depth limiting, field-level authorization e rate limiting; " +
+                                            "considerar persisted queries para reduzir superfície de ataque",
+                                    _cweId, _cweTitle, _cveVector, _score));
+                        }
+                    } catch (Exception ignored) {}
                 }
 
             } catch (Exception e) {
