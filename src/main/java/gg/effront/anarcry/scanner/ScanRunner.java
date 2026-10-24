@@ -21,7 +21,9 @@ import gg.effront.anarcry.scanner.web.cachepoisoning.CachePoisoningModule;
 import gg.effront.anarcry.scanner.web.smuggling.RequestSmugglingModule;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -30,6 +32,7 @@ public class ScanRunner {
 
     private final Consumer<String>  logCb;
     private final Consumer<Finding> findingCb;
+    private final Set<String> seenFindings = new HashSet<>();
     private final List<Scanner> customModules = new ArrayList<>();
     private final ExecutorService   executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "anarcry-scan");
@@ -88,8 +91,13 @@ public class ScanRunner {
                 try {
                     List<Finding> findings = module.scan(ctx, logCb);
                     for (Finding f : findings) {
-                        findingCb.accept(f);
-                        total++;
+                        String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
+                        if (seenFindings.add(dedupKey)) {
+                            findingCb.accept(f);
+                            total++;
+                        } else {
+                            logCb.accept("[~] dedup: ignorado finding duplicado — " + f.module() + " " + f.title());
+                        }
                     }
                     logCb.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
                 } catch (Exception e) {

@@ -60,10 +60,12 @@ public class ReportEngine {
         sb.append("\n");
 
         sb.append("## Findings\n\n");
-        sb.append("| Severity | Module | Endpoint | Title | Evidence | Recommendation |\n");
-        sb.append("|----------|--------|----------|-------|----------|----------------|\n");
+        sb.append("| Severity | CVSS | CWE | Module | Endpoint | Title | Evidence | Recommendation |\n");
+        sb.append("|----------|------|-----|--------|----------|-------|----------|----------------|\n");
         for (Finding f : findings) {
             sb.append("| ").append(f.severity())
+              .append(" | ").append(f.cvssScore())
+              .append(" | ").append(escape(f.cweId()))
               .append(" | ").append(escape(f.module()))
               .append(" | ").append(escape(f.endpoint()))
               .append(" | ").append(escape(f.title()))
@@ -82,6 +84,8 @@ public class ReportEngine {
             sb.append("**Impacto:** ").append(f.impact()).append("  \n");
             sb.append("**Reprodução:**\n```\n").append(f.reproduction()).append("\n```\n");
             sb.append("**Recomendação:** ").append(f.recommendation()).append("  \n");
+            sb.append("**CWE:** ").append(f.cweId()).append(" — ").append(f.cweTitle()).append("  \n");
+            sb.append("**CVSS v3.1:** ").append(f.cvssScore()).append(" (").append(f.cvssVector()).append(")  \n");
             sb.append("\n---\n\n");
         }
         return sb.toString();
