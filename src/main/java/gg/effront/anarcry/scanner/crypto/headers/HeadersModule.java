@@ -92,24 +92,26 @@ public class HeadersModule implements Scanner {
                 _cweId, _cweTitle, _cveVector, _score));
         }
 
-        // CSP presente com unsafe-inline — distingue script-src (MEDIUM) de style-src (LOW)
+        // CSP presente com unsafe-inline — distingue script-src (MEDIUM) de style-src (LOW).
+        // nonce-/hash- neutraliza unsafe-inline em CSP Level 2+, portanto não é finding nesses casos.
         String cspVal = getHeader(headers, "Content-Security-Policy");
         if (cspVal != null) {
-            boolean scriptUnsafe = scriptSrcHasUnsafeInline(cspVal);
-            boolean styleUnsafe  = !scriptUnsafe && cspVal.toLowerCase().contains("unsafe-inline");
+            boolean scriptUnsafe = directiveHasEffectiveUnsafeInline(cspVal, "script-src", "default-src");
+            boolean styleUnsafe  = !scriptUnsafe
+                    && directiveHasEffectiveUnsafeInline(cspVal, "style-src", "default-src");
             if (scriptUnsafe) {
                 findings.add(Finding.of("Headers", ctx.targetUrl(),
-                    "CSP script-src contém unsafe-inline", Severity.MEDIUM,
+                    "CSP script-src contém unsafe-inline sem nonce/hash", Severity.MEDIUM,
                     evidence + " | CSP: " + cspVal,
-                    "unsafe-inline em script-src anula a proteção contra XSS — scripts injetados são executados",
+                    "unsafe-inline em script-src sem nonce/hash anula a proteção contra XSS",
                     "curl -sI " + ctx.targetUrl() + " | grep -i content-security-policy",
                     "Remover 'unsafe-inline' do script-src e usar nonces ou hashes para scripts legítimos",
                     _cweId, _cweTitle, _cveVector, _score));
             } else if (styleUnsafe) {
                 findings.add(Finding.of("Headers", ctx.targetUrl(),
-                    "CSP style-src contém unsafe-inline", Severity.LOW,
+                    "CSP style-src contém unsafe-inline sem nonce/hash", Severity.LOW,
                     evidence + " | CSP: " + cspVal,
-                    "unsafe-inline em style-src permite CSS injection — risco limitado a clickjacking visual e exfiltração via CSS",
+                    "unsafe-inline em style-src permite CSS injection — risco limitado a clickjacking visual",
                     "curl -sI " + ctx.targetUrl() + " | grep -i content-security-policy",
                     "Remover 'unsafe-inline' do style-src e usar nonces ou hashes para estilos legítimos",
                     _cweId, _cweTitle, _cveVector, _score));
@@ -214,12 +216,20 @@ public class HeadersModule implements Scanner {
                 .findFirst().orElse(null);
     }
 
-    // Returns true only if the script-src directive explicitly contains 'unsafe-inline'
-    // (not just style-src or other directives)
-    private static boolean scriptSrcHasUnsafeInline(String csp) {
-        for (String directive : csp.split(";")) {
-            String d = directive.trim().toLowerCase();
-            if (d.startsWith("script-src") && d.contains("unsafe-inline")) return true;
+    // Returns true if the first matching directive contains 'unsafe-inline' AND
+    // is NOT neutralized by a nonce or hash (CSP Level 2+: nonce/hash makes unsafe-inline a no-op).
+    // Checks directives in order — first match wins (mirrors browser fallback to default-src).
+    private static boolean directiveHasEffectiveUnsafeInline(String csp, String... candidates) {
+        for (String candidate : candidates) {
+            for (String directive : csp.split(";")) {
+                String d = directive.trim().toLowerCase();
+                if (!d.startsWith(candidate)) continue;
+                if (!d.contains("unsafe-inline")) return false; // directive present but no unsafe-inline
+                // nonce- or hash- in the same directive neutralizes unsafe-inline
+                boolean neutralized = d.contains("'nonce-")
+                        || d.contains("'sha256-") || d.contains("'sha384-") || d.contains("'sha512-");
+                return !neutralized;
+            }
         }
         return false;
     }
