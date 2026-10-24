@@ -1319,11 +1319,15 @@ class ScanHarnessTest {
 
     @Test @Order(56)
     void cachePoisoningReflectedCachedCritical() throws Exception {
-        // Vulnerable: echoes X-Forwarded-Host in body and sets X-Cache: HIT
+        // Simulates a real poisoned cache: first request with X-Forwarded-Host stores the value,
+        // subsequent requests (even without the header) keep returning the poisoned body.
+        java.util.concurrent.atomic.AtomicReference<String> cachedValue =
+                new java.util.concurrent.atomic.AtomicReference<>("ok");
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             String xfh = exchange.getRequestHeaders().getFirst("X-Forwarded-Host");
-            byte[] body = (xfh != null ? xfh : "ok").getBytes();
+            if (xfh != null) cachedValue.set(xfh);
+            byte[] body = cachedValue.get().getBytes();
             exchange.getResponseHeaders().set("X-Cache", "HIT from proxy");
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
@@ -1714,13 +1718,13 @@ class ScanHarnessTest {
 
     @Test @Order(51)
     void sstiFreemarkerDetected() throws Exception {
-        // Server echoes "49" when query param contains ${7*7}
+        // Server echoes "2401" when query param contains ${7*7*7*7} (7^4)
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             String query = exchange.getRequestURI().getQuery();
             String body;
             if (query != null && query.contains("7*7")) {
-                body = "Result: 49";
+                body = "Result: 2401";
             } else {
                 body = "Hello";
             }
@@ -1735,7 +1739,7 @@ class ScanHarnessTest {
             List<Finding> findings = new SstiModule().scan(ctx, msg -> {});
             assertTrue(findings.stream().anyMatch(f ->
                     f.severity() == Severity.CRITICAL && f.module().equals("SSTI")),
-                    "Servidor que retorna 49 deve gerar SSTI CRITICAL");
+                    "Servidor que retorna 2401 deve gerar SSTI CRITICAL");
         } finally {
             server.stop(0);
         }
