@@ -24,8 +24,8 @@
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  ANARCRY — Java 27 Security Scanner                                          ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
-║  Scanner TUI para bug bounty. 18 módulos de ataque, CVSS v3.1 automático,   ║
-║  export direto para HackerOne e Bugcrowd. Crypto-first + OWASP Top 10.      ║
+║  Scanner TUI para bug bounty. 18 módulos de ataque, CVSS v3.1 automático,    ║
+║  export direto para HackerOne e Bugcrowd. Crypto-first + OWASP Top 10.       ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -36,13 +36,13 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  CRIPTOGRAFIA                                                                │
+│  CRIPTOGRAFIA                                                               │
 │  [■] TLS             — versão, cipher suites fracas, cert expirado, SHA-1   │
 │  [■] Headers         — HSTS, CSP unsafe-inline/*, cookies, CORP/CORB        │
 │  [■] JWT             — alg:none, RS256→HS256, JWK injection, kid SQLi       │
 │  [■] PQC             — X25519MLKEM768, TLS 1.3, grupos pós-quânticos NIST   │
-│                                                                              │
-│  WEB (OWASP)                                                                 │
+│                                                                             │
+│  WEB (OWASP)                                                                │
 │  [■] CORS            — origin reflection + credentials, wildcard, null      │
 │  [■] OAuth           — state CSRF, redirect_uri bypass, .well-known         │
 │  [■] OpenRedirect    — url/redirect/next/return/dest parameters             │
@@ -56,7 +56,7 @@
 │  [■] Actuator        — Spring Boot /env /heapdump /mappings /beans          │
 │  [■] MassAssign      — JSON mass assignment em endpoints REST               │
 │  [■] CachePoisoning  — headers não-keyed refletidos e cacheados             │
-│  [■] ReqSmuggling    — CL.TE e TE.CL HTTP request smuggling                │
+│  [■] ReqSmuggling    — CL.TE e TE.CL HTTP request smuggling                 │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -160,52 +160,71 @@ curl -H "Authorization: Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIn0." \
 
 ## 05 · Interface TUI
 
+7 modos navegáveis por F-key. ModeBar com tabs coloridas (ativo = amarelo). StatusBar com contadores de severidade e barra de progresso por módulo.
+
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  AnarCry v1.0              [Q] Quit  [E] Export  [Tab] Foco        │
-├──────────────┬──────────────────────────────────────────────────────┤
-│ MÓDULOS      │ LOG / OUTPUT                                         │
-│              │                                                      │
-│ [x] TLS      │  [*] Módulo JWT iniciado                            │
-│ [x] Headers  │  [!!] alg:none aceito — CRITICAL                   │
-│ [x] JWT      │  [!!] RS256→HS256 confusion — CRITICAL             │
-│ [x] PQC      │  [!] JWK injection — HIGH                          │
-│ [x] CORS     │  [+] JWT: 3 finding(s)                             │
-│ [x] SSRF     │                                                      │
-│ [x] IDOR     │                                                      │
-│ ...          │                                                      │
-│              │                                                      │
-│ Target:      │                                                      │
-│ alvo.com     │                                                      │
-│              │                                                      │
-│ JWT Token:   │                                                      │
-│ eyJ...       │                                                      │
-│              │                                                      │
-│ [F5] Scan    │                                                      │
-│ [F6] Parar   │                                                      │
-├──────────────┴──────────────────────────────────────────────────────┤
-│ FINDINGS                                                 3 total    │
-├─────────────────────────────────────────────────────────────────────┤
-│  CRITICAL  9.1  CWE-347  JWT — Algorithm None Accepted             │
-│  CRITICAL  9.1  CWE-347  JWT — RS256/HS256 Confusion              │
-│  HIGH      8.1  CWE-347  JWT — JWK Injection                      │
-│                                                                     │
-│  [Enter] Detalhes  [E] Exportar  [↑↓] Navegar                     │
-└─────────────────────────────────────────────────────────────────────┘
+ F1 Dashboard  F2 Scan ▶  F3 Target  F4 Findings(4)  F5 Repeater  F6 Relatório  F7 Site Map
+┌──────────────┬────────────────────────────────────────────────────────────────────────────┐
+│ MODULOS      │ OUTPUT / LOG  scroll:↑↓ PgUp/Dn                                           │
+│              │                                                                            │
+│ [x] TLS      │  [*] Módulo JWT iniciado                                                  │
+│ [x] Headers  │  [!!] alg:none aceito — CRITICAL                                         │
+│ [x] JWT      │  [!!] RS256→HS256 confusion — CRITICAL                                   │
+│ [x] PQC      │  [!] JWK injection — HIGH                                                │
+│ [x] CORS     │  [+] JWT: 3 finding(s)                                                   │
+│ [x] OAuth    │  [*] Módulo CORS iniciado                                                │
+│ [x] SSRF     │  [!!] Origin reflection + credentials — CRITICAL                         │
+│ [x] GraphQL  │  [+] CORS: 1 finding(s)                                                  │
+│ [x] IDOR     │                                                                            │
+│ [x] SSTI     │                                                                            │
+│ ...          │                                                                            │
+│              │                                                                            │
+│ Target:      │                                                                            │
+│ alvo.com     │                                                                            │
+│              │                                                                            │
+│ JWT:         │                                                                            │
+│ eyJ...       │                                                                            │
+│              │                                                                            │
+│ [Iniciar]    │                                                                            │
+│ [Parar]      │                                                                            │
+├──────────────┴────────────────────────────────────────────────────────────────────────────┤
+│ FINDINGS                                                                                  │
+│  CRITICAL  10.0  CWE-918  SSRF — Internal SSRF via URL parameter                        │
+│  CRITICAL   9.1  CWE-347  JWT — Algorithm None Accepted                                  │
+│  CRITICAL   9.1  CWE-942  CORS — Origin Reflection with Credentials                     │
+│  HIGH       8.1  CWE-347  JWT — JWK Injection                                            │
+│  [Enter] Detalhe  [↑↓] Navegar                                                           │
+├───────────────────────────────────────────────────────────────────────────────────────────┤
+│ alvo: https://alvo.com │ ◆3 ▲1 ●0 ▼0 │ [████████░░░░] 12/18 │ [Q] Sair  [E] Export  [?]│
+└───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Atalhos:**
+**F1 Dashboard** — resumo visual com barras `█░` por severidade e top 5 findings críticos/high.
+
+**F3 Target** — formulário dedicado: alvo, JWT token, JWT2 (segundo token para probes IDOR cross-user).
+
+**F4 Findings** — tela cheia. Filtro por tecla: `1`=todos, `2`=CRITICAL, `3`=HIGH, `4`=MEDIUM, `5`=LOW, `6`=INFO.
+
+**F5 Repeater** — HTTP repeater integrado com o alvo e JWT do módulo configurado.
+
+**F6 Relatório** — barras de severidade + `[E] Exportar MD + JSON`.
+
+**F7 Site Map** — requisições HTTP interceptadas durante o scan.
+
+**F8** — event log drawer com histórico completo de log.
+
+**Atalhos globais:**
 
 | Tecla | Ação |
 |---|---|
-| `F5` | Iniciar scan |
-| `F6` | Parar scan |
-| `Tab` | Alternar foco entre painéis |
-| `↑↓` | Navegar findings |
-| `Enter` | Abrir detalhe do finding |
-| `E` | Exportar relatório |
-| `C` | Copiar curl de reprodução |
+| `F1`–`F7` | Alternar modo |
+| `F8` | Event log drawer |
 | `Q` | Sair |
+| `E` | Exportar MD + JSON |
+| `?` | Action palette |
+| `Enter` | Detalhe do finding (modal com evidência + curl) |
+| `C` | Copiar curl para clipboard (xclip/xsel/AWT) |
+| `PgUp/PgDn` | Scroll no log (modo Scan) |
 
 ---
 
