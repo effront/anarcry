@@ -59,6 +59,11 @@ public class ScanRunner {
     public void run(ScanContext ctx) {
         executor.submit(() -> {
             onScanStart.run();
+            if (!ctx.config().isInScope(ctx.host())) {
+                logCb.accept("[!] Host " + ctx.host() + " fora do scope — scan cancelado");
+                onScanFinish.run();
+                return;
+            }
             List<Scanner> modules = new ArrayList<>();
             if (ctx.has("TLS"))     modules.add(new TlsModule());
             if (ctx.has("Headers")) modules.add(new HeadersModule());

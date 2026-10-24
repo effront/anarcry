@@ -6,14 +6,22 @@ import java.net.URI;
 import java.util.Set;
 import java.util.function.Consumer;
 
-public record ScanContext(String targetUrl, String jwtToken, Set<String> enabledModules, String jwtToken2, Consumer<RequestRecord> requestLog) {
+public record ScanContext(String targetUrl, String jwtToken, String jwtToken2, Set<String> enabledModules, ScanConfig config, Consumer<RequestRecord> requestLog) {
 
     public ScanContext(String targetUrl, String jwtToken, Set<String> enabledModules) {
-        this(targetUrl, jwtToken, enabledModules, "", r -> {});
+        this(targetUrl, jwtToken, "", enabledModules, ScanConfig.defaults(), r -> {});
+    }
+
+    public ScanContext(String targetUrl, String jwtToken, String jwtToken2, Set<String> enabledModules) {
+        this(targetUrl, jwtToken, jwtToken2, enabledModules, ScanConfig.defaults(), r -> {});
     }
 
     public ScanContext(String targetUrl, String jwtToken, Set<String> enabledModules, String jwtToken2) {
-        this(targetUrl, jwtToken, enabledModules, jwtToken2, r -> {});
+        this(targetUrl, jwtToken, jwtToken2, enabledModules, ScanConfig.defaults(), r -> {});
+    }
+
+    public ScanContext(String targetUrl, String jwtToken, Set<String> enabledModules, String jwtToken2, Consumer<RequestRecord> requestLog) {
+        this(targetUrl, jwtToken, jwtToken2, enabledModules, ScanConfig.defaults(), requestLog);
     }
 
     public String host() {

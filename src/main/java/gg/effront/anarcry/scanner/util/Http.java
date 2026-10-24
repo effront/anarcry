@@ -15,7 +15,15 @@ public class Http {
             HttpRequest req,
             HttpResponse.BodyHandler<T> handler,
             String moduleId) throws Exception {
+        if (!ctx.config().sessionCookie().isBlank()) {
+            req = HttpRequest.newBuilder(req, (n, v) -> true)
+                    .header("Cookie", ctx.config().sessionCookie())
+                    .build();
+        }
         HttpResponse<T> resp = hc.send(req, handler);
+        if (ctx.config().delayMs() > 0) {
+            try { Thread.sleep(ctx.config().delayMs()); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+        }
         long bodySize = resp.headers().firstValueAsLong("content-length").orElse(0);
         if (bodySize == 0) {
             Object b = resp.body();
