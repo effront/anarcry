@@ -30,7 +30,7 @@
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  ANARCRY — Java 27 Security Scanner                                          ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
-║  Scanner TUI para bug bounty. 18 módulos de ataque, CVSS v3.1 automático,    ║
+║  Scanner TUI para bug bounty. 19 módulos de ataque, CVSS v3.1 automático,    ║
 ║  export direto para HackerOne e Bugcrowd. Crypto-first + OWASP Top 10.       ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
@@ -53,6 +53,7 @@
 │  [■] OAuth           — state CSRF, redirect_uri bypass, .well-known         │
 │  [■] OpenRedirect    — url/redirect/next/return/dest parameters             │
 │  [■] SSRF            — URLs aceitas, bypass @/IP decimal/169.254.169.254    │
+│                         Phase 3: open-redirect relay bypass (WAF evasion)   │
 │  [■] GraphQL         — introspection, field suggestions, batching DoS       │
 │  [■] CRLF            — header injection via \r\n                            │
 │  [■] XXE             — external entity, SSRF via XXE, blind XXE             │
@@ -63,6 +64,9 @@
 │  [■] MassAssign      — JSON mass assignment em endpoints REST               │
 │  [■] CachePoisoning  — headers não-keyed refletidos e cacheados             │
 │  [■] ReqSmuggling    — CL.TE e TE.CL HTTP request smuggling                 │
+│  [ ] Infra           — port scan 21 portas + fingerprint SSH/Redis/Docker/  │
+│                         Elasticsearch/Kibana/Coolify/Portainer/Prometheus   │
+│                         nmap integrado (-sV; -sS -O quando root)            │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -120,7 +124,7 @@ java -jar build/libs/anarcry-1.0.jar \
 ║  HTTP Client         ║  java.net.http.HttpClient (Java 11+)               ║
 ║  JSON                ║  Gson                                              ║
 ║  CVSS                ║  CvssCalculator.java (fórmula FIRST, sem deps)     ║
-║  CWE                 ║  CweRegistry.java (18 módulos mapeados)            ║
+║  CWE                 ║  CweRegistry.java (24 entradas mapeadas)           ║
 ╚══════════════════════╩════════════════════════════════════════════════════╝
 ```
 
@@ -258,7 +262,10 @@ src/main/java/gg/effront/anarcry/
 │   ├── Scanner.java          interface
 │   ├── ScanContext.java
 │   ├── ScanRunner.java       single-thread + deduplicação por module|endpoint|title
+│   ├── ScanConfig.java       delayMs · sessionCookie · inScopeHosts · suppressions · redirectRelayUrl
 │   ├── ScanEvent.java
+│   ├── Suppression.java
+│   ├── SuppressionLoader.java
 │   ├── util/
 │   │   ├── Http.java
 │   │   ├── HttpClientFactory.java
@@ -271,7 +278,8 @@ src/main/java/gg/effront/anarcry/
 │   └── web/
 │       ├── cors/  oauth/  openredirect/  ssrf/  graphql/
 │       ├── crlf/  xxe/    ssti/          idor/  hostheader/
-│       └── actuator/  massassign/  cachepoisoning/  smuggling/
+│       ├── actuator/  massassign/  cachepoisoning/  smuggling/
+│       └── infra/        port scan · nmap integration · SSH/Redis/panel fingerprinting
 ├── report/
 │   └── ReportEngine.java     MD · JSON · HackerOne · Bugcrowd
 └── tui/
