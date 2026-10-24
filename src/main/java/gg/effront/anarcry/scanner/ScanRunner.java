@@ -20,6 +20,7 @@ import gg.effront.anarcry.scanner.web.massassign.MassAssignmentModule;
 import gg.effront.anarcry.scanner.web.cachepoisoning.CachePoisoningModule;
 import gg.effront.anarcry.scanner.web.smuggling.RequestSmugglingModule;
 import gg.effront.anarcry.scanner.web.crawler.CrawlerModule;
+import gg.effront.anarcry.scanner.web.infra.InfraModule;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -146,6 +147,9 @@ public class ScanRunner {
             if (ctx.has("Crawler")) {
                 modules.add(new CrawlerModule());
             }
+            if (ctx.has("Infra")) {
+                modules.add(new InfraModule());
+            }
             modules.addAll(customModules);
 
             int moduleCount = modules.size();
@@ -175,9 +179,13 @@ public class ScanRunner {
                         for (Finding f : findings) {
                             String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
                             if (seenFindings.add(dedupKey)) {
-                                findingCb.accept(f);
-                                synchronized (total) {
-                                    total[0]++;
+                                if (ctx.config().isSuppressed(f.module(), f.title(), ctx.host())) {
+                                    logCb.accept("[~] suppressed: " + f.module() + " — " + f.title());
+                                } else {
+                                    findingCb.accept(f);
+                                    synchronized (total) {
+                                        total[0]++;
+                                    }
                                 }
                             } else {
                                 logCb.accept("[~] dedup: ignorado finding duplicado — " + f.module() + " " + f.title());

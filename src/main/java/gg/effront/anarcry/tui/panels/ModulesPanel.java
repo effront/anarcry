@@ -9,12 +9,17 @@ import com.googlecode.lanterna.gui2.Label;
 import com.googlecode.lanterna.gui2.LinearLayout;
 import com.googlecode.lanterna.gui2.Panel;
 import gg.effront.anarcry.model.RequestRecord;
+import gg.effront.anarcry.scanner.ScanConfig;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.ScanRunner;
+import gg.effront.anarcry.scanner.SuppressionLoader;
 import gg.effront.anarcry.tui.PasteableTextBox;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 public class ModulesPanel extends Panel {
@@ -39,6 +44,7 @@ public class ModulesPanel extends Panel {
     private final CheckBox hostHeaderCheck;
     private final CheckBox actuatorCheck;
     private final CheckBox massAssignCheck;
+    private final CheckBox infraCheck;
     private final PasteableTextBox targetBox;
     private final PasteableTextBox jwtTokenBox;
     private final PasteableTextBox jwtToken2Box;
@@ -84,6 +90,8 @@ public class ModulesPanel extends Panel {
         actuatorCheck.setChecked(true);
         massAssignCheck = new CheckBox("MassAssign");
         massAssignCheck.setChecked(true);
+        infraCheck = new CheckBox(infraLabel());
+        infraCheck.setChecked(false);
 
         Label cryptoLabel = new Label("── CRYPTO ──────────────");
         cryptoLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.BLUE);
@@ -109,6 +117,7 @@ public class ModulesPanel extends Panel {
         addComponent(hostHeaderCheck);
         addComponent(actuatorCheck);
         addComponent(massAssignCheck);
+        addComponent(infraCheck);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
         addComponent(new Label("─".repeat(width - 2)));
@@ -178,6 +187,30 @@ public class ModulesPanel extends Panel {
         onStart();
     }
 
+    private static String infraLabel() {
+        if (!nmapOnPath()) return "Infra";
+        return rootProcess() ? "Infra [nmap+SYN]" : "Infra [nmap]";
+    }
+
+    private static boolean nmapOnPath() {
+        try {
+            Process p = new ProcessBuilder("nmap", "--version").start();
+            boolean done = p.waitFor(5, TimeUnit.SECONDS);
+            return done && p.exitValue() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static boolean rootProcess() {
+        try {
+            for (String line : Files.readAllLines(Path.of("/proc/self/status"))) {
+                if (line.startsWith("Uid:")) return "0".equals(line.split("\\s+")[1]);
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
     private void onStart() {
         String target = targetBox.getText().trim();
         if (target.isBlank() || target.equals("https://")) {
@@ -236,6 +269,9 @@ public class ModulesPanel extends Panel {
         if (massAssignCheck.isChecked()) {
             modules.add("MassAssign");
         }
+        if (infraCheck.isChecked()) {
+            modules.add("Infra");
+        }
 
         if (modules.isEmpty()) {
             logPanel.log("[!] Nenhum módulo selecionado");
@@ -244,6 +280,7 @@ public class ModulesPanel extends Panel {
 
         String jwt2 = jwtToken2Box.getText().trim();
         logPanel.log("[*] Iniciando scan em " + target + " ...");
-        scanRunner.run(new ScanContext(target, jwt, modules, jwt2, requestLogCb));
+        ScanConfig cfg = new ScanConfig(0, "", java.util.Set.of(), SuppressionLoader.loadFromCwd(), "");
+        scanRunner.run(new ScanContext(target, jwt, modules, jwt2, cfg, requestLogCb));
     }
 }
