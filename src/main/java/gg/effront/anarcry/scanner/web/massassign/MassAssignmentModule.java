@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.CvssCalculator;
@@ -125,27 +126,69 @@ public class MassAssignmentModule implements Scanner {
                     continue;
                 }
 
-                // MEDIUM: endpoint accepts JSON with 200/201 (fields may be silently accepted)
+                // Potential mass assignment: endpoint accepts JSON with 200/201
                 if ((status == 200 || status == 201) && !body.isBlank() && !isHtml(body)) {
                     // Only report if baseline GET also returned something (endpoint is real)
                     if (getResp.statusCode() == 200 || getResp.statusCode() == 404) {
-                        log.accept("[!] MassAssign: MEDIUM — " + ep.method() + " " + ep.path()
-                                + " aceita JSON (campos não confirmados)");
-                        findings.add(Finding.of("MassAssign", ep.path(),
-                                "Mass Assignment potencial — " + ep.method() + " " + ep.path()
-                                        + " aceita payload com campos extras",
-                                Severity.MEDIUM,
-                                "URL: " + url + " | Método: " + ep.method()
-                                        + " | Status: " + status
-                                        + " | Response não reflete admin mas endpoint aceita JSON",
-                                "Endpoint aceita payload JSON com campos extras sem rejeitar — "
-                                        + "campos podem ser silenciosamente atribuídos à entidade sem aparecer no response",
-                                ep.method() + " " + url
-                                        + " -H 'Content-Type: application/json'"
-                                        + " -d '" + MASS_PAYLOAD + "'",
-                                "Verificar manualmente se campos como role/admin são persistidos; "
-                                        + "usar DTO com allowlist explícita de campos",
-                                _cweId, _cweTitle, _cveVector, _score));
+                        // Try to extract ID from mutation response to confirm persistence
+                        Pattern idPat = Pattern.compile("\"id\"\\s*:\\s*\"?([^\"\\s,}]+)\"?");
+                        Matcher idMatcher = idPat.matcher(body);
+                        String resourceId = idMatcher.find() ? idMatcher.group(1) : null;
+
+                        // Build GET URL: prefer /{id} suffix if we have an ID
+                        String verifyUrl = (resourceId != null) ? url + "/" + resourceId : url;
+                        boolean persisted = false;
+                        try {
+                            HttpRequest.Builder verifyBuilder = HttpRequest.newBuilder()
+                                    .uri(URI.create(verifyUrl))
+                                    .timeout(Duration.ofSeconds(5))
+                                    .GET();
+                            if (!ctx.jwtToken().isBlank()) {
+                                verifyBuilder.header("Authorization", "Bearer " + ctx.jwtToken());
+                            }
+                            HttpResponse<String> verifyResp = Http.send(ctx, hc, verifyBuilder.build(),
+                                    HttpResponse.BodyHandlers.ofString(), id());
+                            String verifyBody = verifyResp.body() != null ? verifyResp.body() : "";
+                            if ((verifyResp.statusCode() == 200) && ADMIN_PATTERN.matcher(verifyBody).find()) {
+                                persisted = true;
+                                log.accept("[!!] MassAssign: HIGH — campo admin persistiu após GET em " + verifyUrl);
+                            }
+                        } catch (Exception ignored) {}
+
+                        if (persisted) {
+                            findings.add(Finding.of("MassAssign", ep.path(),
+                                    "Mass Assignment — campo persistido via " + ep.method() + " " + ep.path(),
+                                    Severity.HIGH,
+                                    "URL: " + url + " | Método: " + ep.method()
+                                            + " | Status: " + status
+                                            + " | GET " + verifyUrl + " confirmou campo admin no body",
+                                    "Servidor aceita E persiste campos privilegiados (admin/role) — "
+                                            + "confirmado via GET após mutação. Escalada de privilégios confirmada.",
+                                    ep.method() + " " + url
+                                            + " -H 'Content-Type: application/json'"
+                                            + " -H 'Authorization: Bearer <TOKEN>'"
+                                            + " -d '" + MASS_PAYLOAD + "'\n"
+                                            + "# Confirmar: GET " + verifyUrl,
+                                    "Usar DTO explícito com @JsonIgnoreProperties(ignoreUnknown=false); "
+                                            + "nunca mapear request body diretamente para entidade JPA; "
+                                            + "allowlist de campos aceitos por endpoint"));
+                        } else {
+                            log.accept("[!] MassAssign: LOW — " + ep.method() + " " + ep.path()
+                                    + " aceita JSON mas persistência não confirmada (possível FP)");
+                            findings.add(Finding.of("MassAssign", ep.path(),
+                                    "Mass Assignment — possível FP (não persistiu) via " + ep.method() + " " + ep.path(),
+                                    Severity.LOW,
+                                    "URL: " + url + " | Método: " + ep.method()
+                                            + " | Status: " + status
+                                            + " | GET " + verifyUrl + " não confirmou campo admin",
+                                    "Endpoint aceita payload JSON com campos extras, mas GET subsequente não "
+                                            + "confirmou persistência — pode ser FP ou campo ignorado silenciosamente",
+                                    ep.method() + " " + url
+                                            + " -H 'Content-Type: application/json'"
+                                            + " -d '" + MASS_PAYLOAD + "'",
+                                    "Verificar manualmente se campos como role/admin são persistidos; "
+                                            + "usar DTO com allowlist explícita de campos"));
+                        }
                     }
                 }
 

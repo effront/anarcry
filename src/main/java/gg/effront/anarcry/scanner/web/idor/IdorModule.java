@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.CvssCalculator;
@@ -80,9 +81,30 @@ public class IdorModule implements Scanner {
 
         log.accept("[~] IDOR: iniciando probes em " + base);
 
+        // Discover real user ID from /api/me and similar endpoints
+        String discoveredId = (token1 != null && !token1.isBlank())
+                ? discoverUserId(ctx, hc, log) : null;
+
+        // Build effective probe paths based on discovered ID
+        List<String> effectivePaths;
+        if (discoveredId != null && !discoveredId.matches("\\d+")) {
+            // UUID discovered — build UUID-based paths
+            effectivePaths = List.of(
+                    "/api/user/"    + discoveredId,
+                    "/api/users/"   + discoveredId,
+                    "/api/account/" + discoveredId,
+                    "/api/profile/" + discoveredId,
+                    "/api/v1/user/" + discoveredId,
+                    "/api/v1/users/"+ discoveredId
+            );
+            log.accept("[~] IDOR: usando UUID descoberto para probing: " + discoveredId);
+        } else {
+            effectivePaths = ID_PATHS;
+        }
+
         // Phase 1: cross-user GET (requires two tokens)
         if (token2 != null && !token2.isBlank()) {
-            for (String path : ID_PATHS) {
+            for (String path : effectivePaths) {
                 String r1 = fetch(ctx, hc, base + path, token1);
                 if (r1 == null || isHtml(r1)) continue;
 
@@ -189,6 +211,30 @@ public class IdorModule implements Scanner {
             log.accept("[+] IDOR: nenhum acesso cruzado detectado");
         }
         return findings;
+    }
+
+    private String discoverUserId(ScanContext ctx, HttpClient hc, Consumer<String> log) {
+        String[] mePaths = {"/api/me", "/api/user/me", "/api/profile", "/api/v1/me", "/api/v1/user/me"};
+        Pattern idPat = Pattern.compile("\"id\"\\s*:\\s*\"?([a-f0-9\\-]{8,})\"?");
+        String base = (ctx.isHttps() ? "https" : "http") + "://" + ctx.host()
+                + (ctx.port() != (ctx.isHttps() ? 443 : 80) ? ":" + ctx.port() : "");
+        for (String p : mePaths) {
+            try {
+                var req = HttpRequest.newBuilder()
+                        .uri(URI.create(base + p))
+                        .header("Authorization", "Bearer " + ctx.jwtToken())
+                        .timeout(Duration.ofSeconds(5)).GET().build();
+                var resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
+                if (resp.statusCode() == 200 && resp.body() != null) {
+                    Matcher m = idPat.matcher(resp.body());
+                    if (m.find()) {
+                        log.accept("[~] IDOR: ID descoberto em " + p + " → " + m.group(1));
+                        return m.group(1);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        return null;
     }
 
     private String fetch(ScanContext ctx, HttpClient hc, String url, String token) {
