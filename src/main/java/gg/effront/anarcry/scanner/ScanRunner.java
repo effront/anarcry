@@ -19,6 +19,7 @@ import gg.effront.anarcry.scanner.web.actuator.SpringActuatorModule;
 import gg.effront.anarcry.scanner.web.massassign.MassAssignmentModule;
 import gg.effront.anarcry.scanner.web.cachepoisoning.CachePoisoningModule;
 import gg.effront.anarcry.scanner.web.smuggling.RequestSmugglingModule;
+import gg.effront.anarcry.scanner.web.crawler.CrawlerModule;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -83,6 +84,7 @@ public class ScanRunner {
             if (ctx.has("MassAssign"))      modules.add(new MassAssignmentModule());
             if (ctx.has("CachePoisoning"))  modules.add(new CachePoisoningModule());
             if (ctx.has("ReqSmuggling"))    modules.add(new RequestSmugglingModule());
+            if (ctx.has("Crawler"))         modules.add(new CrawlerModule());
             modules.addAll(customModules);
 
             int moduleCount = modules.size();
