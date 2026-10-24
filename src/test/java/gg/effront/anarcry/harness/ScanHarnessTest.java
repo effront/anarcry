@@ -60,6 +60,8 @@ import java.util.Map;
 import java.util.Set;
 import gg.effront.anarcry.scanner.web.cachepoisoning.CachePoisoningModule;
 import gg.effront.anarcry.scanner.web.smuggling.RequestSmugglingModule;
+import gg.effront.anarcry.scanner.web.crawler.CrawlerModule;
+import gg.effront.anarcry.scanner.ScanConfig;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -1863,6 +1865,84 @@ class ScanHarnessTest {
         assertTrue(latch.await(5, TimeUnit.SECONDS), "Scan deve completar em 5s");
         runner.shutdown();
         assertEquals(1, counter.get(), "findingCb deve ser chamado apenas 1 vez para findings duplicados");
+    }
+
+    // ─────────────────────────────────────────
+    // Crawler — Sprints 18-21
+    // ─────────────────────────────────────────
+
+    @Test @Order(66)
+    void crawlerDiscoverOpenApi() throws Exception {
+        // Server returns a minimal swagger.json at /swagger.json
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/swagger.json", exchange -> {
+            byte[] body = ("{\"swagger\":\"2.0\",\"info\":{\"title\":\"Test\",\"version\":\"1.0\"},"
+                    + "\"paths\":{}}").getBytes();
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.createContext("/", exchange -> {
+            exchange.sendResponseHeaders(404, -1);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("Crawler"));
+            List<Finding> findings = new CrawlerModule().scan(ctx, msg -> {});
+            assertTrue(findings.stream().anyMatch(f ->
+                    f.title().toLowerCase().contains("openapi") || f.title().toLowerCase().contains("swagger")),
+                    "CrawlerModule deve detectar OpenAPI/Swagger spec exposta");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test @Order(67)
+    void crawlerWordlistSensitivePath() throws Exception {
+        // Server returns 200 at /.env (sensitive path)
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/.env", exchange -> {
+            byte[] body = "DB_PASSWORD=secret\nAPI_KEY=abc123\n".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.createContext("/", exchange -> {
+            exchange.sendResponseHeaders(404, -1);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("Crawler"));
+            List<Finding> findings = new CrawlerModule().scan(ctx, msg -> {});
+            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.HIGH),
+                    "CrawlerModule deve emitir finding HIGH para /.env acessível");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test @Order(68)
+    void scanConfigDelayIsRespected() {
+        ScanConfig config = new ScanConfig(0, "", Set.of());
+        ScanContext ctx = new ScanContext("https://example.com", "", "", Set.of(), config, r -> {});
+        assertEquals(config, ctx.config(),
+                "ScanContext.config() deve retornar o ScanConfig fornecido");
+        assertEquals(0, ctx.config().delayMs(),
+                "ScanConfig.delayMs deve ser 0");
+    }
+
+    @Test @Order(69)
+    void scanConfigInScopeCheck() {
+        ScanConfig config = new ScanConfig(0, "", Set.of("allowed.com"));
+        assertTrue(config.isInScope("allowed.com"),
+                "isInScope(\"allowed.com\") deve ser true");
+        assertFalse(config.isInScope("blocked.com"),
+                "isInScope(\"blocked.com\") deve ser false");
     }
 
     @Test @Order(55)
