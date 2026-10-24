@@ -35,7 +35,7 @@ public class ScanRunner {
 
     private static final int DEFAULT_PARALLELISM = 4;
 
-    private final Consumer<String>  logCb;
+    private final Consumer<String> logCb;
     private final Consumer<Finding> findingCb;
     private final Set<String> seenFindings = Collections.synchronizedSet(new HashSet<>());
     private final List<Scanner> customModules = new ArrayList<>();
@@ -44,24 +44,41 @@ public class ScanRunner {
         t.setDaemon(true);
         return t;
     });
-    private final ExecutorService modulePool = Executors.newFixedThreadPool(DEFAULT_PARALLELISM,
-        r -> { Thread t = new Thread(r, "anarcry-module"); t.setDaemon(true); return t; });
+    private final ExecutorService modulePool = Executors.newFixedThreadPool(DEFAULT_PARALLELISM, r -> {
+        Thread t = new Thread(r, "anarcry-module");
+        t.setDaemon(true);
+        return t;
+    });
 
-    private Runnable onScanStart  = () -> {};
-    private Runnable onScanFinish = () -> {};
-    private Consumer<ScanEvent> eventCb = e -> {};
+    private Runnable onScanStart = () -> {
+    };
+    private Runnable onScanFinish = () -> {
+    };
+    private Consumer<ScanEvent> eventCb = e -> {
+    };
 
     public ScanRunner(Consumer<String> logCb, Consumer<Finding> findingCb) {
-        this.logCb     = logCb;
+        this.logCb = logCb;
         this.findingCb = findingCb;
     }
 
-    public void setOnScanStart(Runnable r)  { this.onScanStart  = r; }
-    public void setOnScanFinish(Runnable r) { this.onScanFinish = r; }
-    public void setOnScanEvent(Consumer<ScanEvent> cb) { this.eventCb = cb; }
+    public void setOnScanStart(Runnable r) {
+        this.onScanStart = r;
+    }
+    public void setOnScanFinish(Runnable r) {
+        this.onScanFinish = r;
+    }
+    public void setOnScanEvent(Consumer<ScanEvent> cb) {
+        this.eventCb = cb;
+    }
 
-    /** For testing only — adds a custom Scanner that always runs regardless of ScanContext modules. */
-    public void addModule(Scanner module) { customModules.add(module); }
+    /**
+     * For testing only — adds a custom Scanner that always runs regardless of
+     * ScanContext modules.
+     */
+    public void addModule(Scanner module) {
+        customModules.add(module);
+    }
 
     public void run(ScanContext ctx) {
         executor.submit(() -> {
@@ -72,25 +89,63 @@ public class ScanRunner {
                 return;
             }
             List<Scanner> modules = new ArrayList<>();
-            if (ctx.has("TLS"))     modules.add(new TlsModule());
-            if (ctx.has("Headers")) modules.add(new HeadersModule());
-            if (ctx.has("JWT"))     modules.add(new JwtModule());
-            if (ctx.has("PQC"))     modules.add(new PqcModule());
-            if (ctx.has("CORS"))         modules.add(new CorsModule());
-            if (ctx.has("OAuth"))        modules.add(new OAuthModule());
-            if (ctx.has("OpenRedirect")) modules.add(new OpenRedirectModule());
-            if (ctx.has("SSRF"))         modules.add(new SsrfModule());
-            if (ctx.has("GraphQL"))      modules.add(new GraphQLModule());
-            if (ctx.has("CRLF"))         modules.add(new CrlfModule());
-            if (ctx.has("XXE"))          modules.add(new XxeModule());
-            if (ctx.has("SSTI"))         modules.add(new SstiModule());
-            if (ctx.has("IDOR"))         modules.add(new IdorModule());
-            if (ctx.has("HostHeader"))   modules.add(new HostHeaderModule());
-            if (ctx.has("Actuator"))     modules.add(new SpringActuatorModule());
-            if (ctx.has("MassAssign"))      modules.add(new MassAssignmentModule());
-            if (ctx.has("CachePoisoning"))  modules.add(new CachePoisoningModule());
-            if (ctx.has("ReqSmuggling"))    modules.add(new RequestSmugglingModule());
-            if (ctx.has("Crawler"))         modules.add(new CrawlerModule());
+            if (ctx.has("TLS")) {
+                modules.add(new TlsModule());
+            }
+            if (ctx.has("Headers")) {
+                modules.add(new HeadersModule());
+            }
+            if (ctx.has("JWT")) {
+                modules.add(new JwtModule());
+            }
+            if (ctx.has("PQC")) {
+                modules.add(new PqcModule());
+            }
+            if (ctx.has("CORS")) {
+                modules.add(new CorsModule());
+            }
+            if (ctx.has("OAuth")) {
+                modules.add(new OAuthModule());
+            }
+            if (ctx.has("OpenRedirect")) {
+                modules.add(new OpenRedirectModule());
+            }
+            if (ctx.has("SSRF")) {
+                modules.add(new SsrfModule());
+            }
+            if (ctx.has("GraphQL")) {
+                modules.add(new GraphQLModule());
+            }
+            if (ctx.has("CRLF")) {
+                modules.add(new CrlfModule());
+            }
+            if (ctx.has("XXE")) {
+                modules.add(new XxeModule());
+            }
+            if (ctx.has("SSTI")) {
+                modules.add(new SstiModule());
+            }
+            if (ctx.has("IDOR")) {
+                modules.add(new IdorModule());
+            }
+            if (ctx.has("HostHeader")) {
+                modules.add(new HostHeaderModule());
+            }
+            if (ctx.has("Actuator")) {
+                modules.add(new SpringActuatorModule());
+            }
+            if (ctx.has("MassAssign")) {
+                modules.add(new MassAssignmentModule());
+            }
+            if (ctx.has("CachePoisoning")) {
+                modules.add(new CachePoisoningModule());
+            }
+            if (ctx.has("ReqSmuggling")) {
+                modules.add(new RequestSmugglingModule());
+            }
+            if (ctx.has("Crawler")) {
+                modules.add(new CrawlerModule());
+            }
             modules.addAll(customModules);
 
             int moduleCount = modules.size();
@@ -121,7 +176,9 @@ public class ScanRunner {
                             String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
                             if (seenFindings.add(dedupKey)) {
                                 findingCb.accept(f);
-                                synchronized (total) { total[0]++; }
+                                synchronized (total) {
+                                    total[0]++;
+                                }
                             } else {
                                 logCb.accept("[~] dedup: ignorado finding duplicado — " + f.module() + " " + f.title());
                             }

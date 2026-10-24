@@ -1,6 +1,10 @@
 plugins {
     id 'java'
-    id 'com.gradleup.shadow' version '8.3.6'
+    id 'com.gradleup.shadow'        version '8.3.6'
+    id 'checkstyle'
+    id 'pmd'
+    id 'com.github.spotbugs'        version '6.1.7'
+    id 'com.diffplug.spotless'      version '7.0.4'
 }
 
 group = 'gg.effront'
@@ -25,6 +29,8 @@ dependencies {
     testImplementation 'org.bouncycastle:bcpkix-jdk18on:1.80'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.3'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0'
 }
 
 shadowJar {
@@ -42,6 +48,78 @@ test {
     }
 }
 
+// ============================================================
+// Spotless — auto-formatador (Google Java Format)
+// Uso: ./gradlew spotlessApply  (corrige)
+//      ./gradlew spotlessCheck  (só verifica, usado no CI)
+// ============================================================
+spotless {
+    java {
+        // Eclipse JDT formatter — independente do javac, compativel com Java 27+
+        // GJF e palantirJavaFormat usam com.sun.tools.javac internals removidos no Java 27
+        eclipse('4.34').configFile('config/spotless/eclipse-java-format.xml')
+        // removeUnusedImports() usa com.sun.tools.javac internals removidos no Java 27
+        // imports sem uso sao pegos pelo Checkstyle (UnusedImports)
+        trimTrailingWhitespace()
+        endWithNewline()
+        targetExclude('build/**', '.gradle/**')
+    }
+}
+
+// ============================================================
+// Checkstyle — equivalente ao RuboCop (estilo/formatacao)
+// ============================================================
+checkstyle {
+    toolVersion = '10.21.4'
+    configFile = file('config/checkstyle/checkstyle.xml')
+    ignoreFailures = false
+    maxWarnings = 0
+}
+
+checkstyleTest {
+    enabled = false
+}
+
+// ============================================================
+// PMD — qualidade de código (complementa Checkstyle)
+// ============================================================
+pmd {
+    toolVersion = '7.13.0'
+    ruleSetFiles = files('config/pmd/pmd-ruleset.xml')
+    consoleOutput = true
+    // Reporta mas nao bloqueia — usar maxPriority para escalar gradualmente
+    ignoreFailures = true
+}
+
+pmdTest {
+    enabled = false
+}
+
+// ============================================================
+// SpotBugs + FindSecBugs — equivalente ao Brakeman (SAST)
+// ============================================================
+spotbugs {
+    toolVersion = '4.9.3'
+    excludeFilter = file('config/spotbugs/spotbugs-exclude.xml')
+    // Java 27 (bytecode v71) ainda nao suportado pelo SpotBugs 4.x; ignoreFailures
+    // evita falso bloqueio no CI enquanto analisa o que conseguir
+    ignoreFailures = true
+    effort = com.github.spotbugs.snom.Effort.valueOf('MAX')
+    reportLevel = com.github.spotbugs.snom.Confidence.valueOf('MEDIUM')
+}
+
+spotbugsMain {
+    reports {
+        xml { required = true }
+        html { required = false }
+    }
+}
+
+spotbugsTest {
+    enabled = false
+}
+
+// ============================================================
 // Roda testes de integração (requerem rede externa) separadamente: ./gradlew integrationTest
 tasks.register('integrationTest', Test) {
     useJUnitPlatform {

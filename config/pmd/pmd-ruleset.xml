@@ -1,0 +1,169 @@
+<?xml version="1.0"?>
+<ruleset name="AnarCry PMD Ruleset"
+    xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0
+                        https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+  <description>AnarCry — Java security tool quality rules</description>
+
+  <!-- ====== Best Practices ====== -->
+  <rule ref="category/java/bestpractices.xml">
+    <exclude name="GuardLogStatement"/>
+    <exclude name="JUnitAssertionsShouldIncludeMessage"/>
+    <exclude name="JUnitTestContainsTooManyAsserts"/>
+    <!-- scanner entry points throw Exception by design -->
+    <exclude name="SignatureDeclareThrowsException"/>
+    <!-- Yoda-style comparison excluded; NPE handled by explicit null-checks -->
+    <exclude name="LiteralsFirstInComparisons"/>
+    <!-- interface types vs concrete: scanner uses concrete collections intentionally -->
+    <exclude name="LooseCoupling"/>
+    <!-- System.err is intentional in CLI startup/debug messages -->
+    <exclude name="SystemPrintln"/>
+    <!-- unused private members: false positives on reflection-accessible code -->
+    <exclude name="UnusedPrivateMethod"/>
+    <exclude name="UnusedLocalVariable"/>
+    <exclude name="UnusedFormalParameter"/>
+    <exclude name="UnusedPrivateField"/>
+    <!-- one declaration per line: style handled by Spotless/Eclipse -->
+    <exclude name="OneDeclarationPerLine"/>
+    <!-- loop variable reassign used intentionally in line-by-line readers -->
+    <exclude name="AvoidReassigningLoopVariables"/>
+    <!-- parameter reassign: HTTP request mutation is idiomatic in scanner modules -->
+    <exclude name="AvoidReassigningParameters"/>
+    <!-- hardcoded IPs: scanner intentionally tests SSRF/JKU injection with local IPs -->
+    <exclude name="AvoidUsingHardCodedIP"/>
+    <!-- varargs: TLS utility API cannot change without breaking callers -->
+    <exclude name="UseVarargs"/>
+  </rule>
+
+  <!-- ====== Code Style ====== -->
+  <rule ref="category/java/codestyle.xml">
+    <exclude name="AtLeastOneConstructor"/>
+    <exclude name="OnlyOneReturn"/>
+    <exclude name="UseUnderscoresInNumericLiterals"/>
+    <exclude name="LongVariable"/>
+    <exclude name="ShortVariable"/>
+    <exclude name="CommentDefaultAccessModifier"/>
+    <exclude name="DefaultPackage"/>
+    <!-- final on every local/param is too noisy and non-idiomatic in this codebase -->
+    <exclude name="LocalVariableCouldBeFinal"/>
+    <exclude name="MethodArgumentCouldBeFinal"/>
+    <!-- naming covered by Checkstyle -->
+    <exclude name="LocalVariableNamingConventions"/>
+    <!-- braces covered by Checkstyle NeedBraces -->
+    <exclude name="ControlStatementBraces"/>
+    <!-- var is fine in Java 10+ -->
+    <exclude name="UseExplicitTypes"/>
+    <!-- ternary style is subjective -->
+    <exclude name="ConfusingTernary"/>
+    <!-- scanner probes use short method names like run(), hc, req by convention -->
+    <exclude name="ShortMethodName"/>
+    <!-- UnnecessaryImport covered by Checkstyle UnusedImports -->
+    <exclude name="UnnecessaryImport"/>
+    <!-- field ordering handled by Spotless/Eclipse -->
+    <exclude name="FieldDeclarationsShouldBeAtStartOfClass"/>
+    <!-- short class names: Tui, Http etc. are conventional abbreviations -->
+    <exclude name="ShortClassName"/>
+    <!-- array initializer shorthand: minor style preference -->
+    <exclude name="UseShortArrayInitializer"/>
+    <!-- UnnecessaryCast: cast removed where possible; remaining are required by Lanterna API -->
+    <exclude name="UnnecessaryCast"/>
+  </rule>
+
+  <!-- ====== Design ====== -->
+  <rule ref="category/java/design.xml">
+    <exclude name="LawOfDemeter"/>
+    <exclude name="LoosePackageCoupling"/>
+    <exclude name="DataClass"/>
+    <!-- scanner modules are inherently complex; complexity metrics excluded -->
+    <exclude name="CyclomaticComplexity"/>
+    <exclude name="CognitiveComplexity"/>
+    <exclude name="NPathComplexity"/>
+    <exclude name="NcssCount"/>
+    <!-- scanner modules need long methods for sequential HTTP probe pipelines -->
+    <exclude name="ExcessiveMethodLength"/>
+    <exclude name="ExcessiveClassLength"/>
+    <exclude name="ExcessiveParameterList"/>
+    <exclude name="TooManyMethods"/>
+    <exclude name="TooManyFields"/>
+    <!-- ExcessiveImports: scanner modules import many HTTP/crypto utilities -->
+    <exclude name="ExcessiveImports"/>
+    <!-- CouplingBetweenObjects: scanner modules are inherently coupled to model classes -->
+    <exclude name="CouplingBetweenObjects"/>
+    <!-- GodClass: scanner entry points (ScanRunner, TUI) are intentionally large -->
+    <exclude name="GodClass"/>
+    <!-- generic exception catch: scanner entry points catch Exception by design -->
+    <exclude name="AvoidCatchingGenericException"/>
+    <!-- raw exception types: scanner runner re-throws for caller handling -->
+    <exclude name="AvoidThrowingRawExceptionTypes"/>
+    <!-- utility class pattern: scanner modules are not pure utility classes -->
+    <exclude name="UseUtilityClass"/>
+    <!-- UseObjectForClearerAPI: minor style preference -->
+    <exclude name="UseObjectForClearerAPI"/>
+    <!-- CollapsibleIfStatements: nested ifs aid readability in complex probe logic -->
+    <exclude name="CollapsibleIfStatements"/>
+    <!-- scanner modules declare throws Exception throughout -->
+    <exclude name="SignatureDeclareThrowsException"/>
+  </rule>
+
+  <!-- ====== Error Prone ====== -->
+  <rule ref="category/java/errorprone.xml">
+    <exclude name="BeanMembersShouldSerialize"/>
+    <!-- constructor calls in builder-style setup are intentional -->
+    <exclude name="ConstructorCallsOverridableMethod"/>
+    <!-- magic literals in scanner thresholds are named in context -->
+    <exclude name="AvoidLiteralsInIfCondition"/>
+    <!-- empty catch blocks with comment are valid in TLS probe fallbacks -->
+    <exclude name="EmptyCatchBlock"/>
+    <!-- duplicate string literals acceptable in scanner messages -->
+    <exclude name="AvoidDuplicateLiterals"/>
+    <!-- null assignment used for GC hints in long-running scans -->
+    <exclude name="NullAssignment"/>
+    <!-- AvoidCatchingThrowable: scanner entry points need this -->
+    <exclude name="AvoidCatchingThrowable"/>
+    <!-- return/continue as last-in-loop: intentional early-exit in scanner probes -->
+    <exclude name="AvoidBranchingStatementAsLastInLoop"/>
+  </rule>
+
+  <!-- ====== Performance ====== -->
+  <rule ref="category/java/performance.xml">
+    <exclude name="InefficientStringBuffering"/>
+    <!-- ConsecutiveLiteralAppends: minor, IDE handles it -->
+    <exclude name="ConsecutiveLiteralAppends"/>
+    <!-- InsufficientStringBufferDeclaration: minor pre-sizing not critical -->
+    <exclude name="InsufficientStringBufferDeclaration"/>
+    <!-- loop allocation: scanner probes create per-request objects by design -->
+    <exclude name="AvoidInstantiatingObjectsInLoops"/>
+    <!-- redundant field init: explicit zero/null init aids readability in models -->
+    <exclude name="RedundantFieldInitializer"/>
+    <!-- StringBuilder: single += in crawler loop is acceptable -->
+    <exclude name="UseStringBufferForStringAppends"/>
+  </rule>
+
+  <!-- ====== Security — critical for a security tool ====== -->
+  <rule ref="category/java/security.xml">
+    <!-- HardCodedCryptoKey: Rs256Hs256Probe uses an intentional RSA key as attack payload
+         to test JWT algorithm confusion. This is the test vector, not a production key. -->
+    <exclude name="HardCodedCryptoKey"/>
+  </rule>
+
+  <!-- Custom: flag hardcoded credentials / keys -->
+  <rule name="HardcodedSecret"
+       language="java"
+       message="Possible hardcoded secret or API key"
+       class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+    <description>Detects string literals that look like hardcoded secrets.</description>
+    <priority>1</priority>
+    <properties>
+      <property name="xpath">
+        <value>
+//StringLiteral[string-length(@Image) > 20
+  and (matches(@Image, '(?i)(password|passwd|secret|api_key|apikey|token|bearer|auth|credential)'))
+]
+        </value>
+      </property>
+    </properties>
+  </rule>
+
+</ruleset>

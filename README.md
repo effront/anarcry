@@ -12,9 +12,15 @@
 
 [![Java Version](https://img.shields.io/badge/java-27-ED8B00?logo=openjdk)](https://openjdk.org/projects/jdk/27/)
 [![Gradle](https://img.shields.io/badge/gradle-9.x-02303A?logo=gradle)](https://gradle.org/)
-[![Modules](https://img.shields.io/badge/modules-18-4CAF50)](https://github.com/effront/anarcry)
-[![Tests](https://img.shields.io/badge/tests-69-blue)](https://github.com/effront/anarcry)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+[![Lint](https://github.com/effront/anarcry/actions/workflows/lint.yml/badge.svg)](https://github.com/effront/anarcry/actions/workflows/lint.yml)
+[![Security Scan](https://github.com/effront/anarcry/actions/workflows/security-scan.yml/badge.svg)](https://github.com/effront/anarcry/actions/workflows/security-scan.yml)
+[![Spotless](https://img.shields.io/badge/code%20style-eclipse%20JDT-4CAF50)](https://github.com/diffplug/spotless)
+[![Checkstyle](https://img.shields.io/badge/checkstyle-10.21.4-blue)](https://checkstyle.org/)
+[![PMD](https://img.shields.io/badge/PMD-7.13.0-orange)](https://pmd.github.io/)
+[![SpotBugs](https://img.shields.io/badge/SpotBugs%20+%20FindSecBugs-4.9.3-red)](https://spotbugs.github.io/)
+[![Semgrep](https://img.shields.io/badge/semgrep-auto-blueviolet)](https://semgrep.dev/)
 
 </div>
 
@@ -164,10 +170,10 @@ curl -H "Authorization: Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIn0." \
 
 ```
  F1 Dashboard  F2 Scan ▶  F3 Target  F4 Findings(4)  F5 Repeater  F6 Relatório  F7 Site Map
-┌──────────────┬────────────────────────────────────────────────────────────────────────────┐
-│ MODULOS      │ OUTPUT / LOG  scroll:↑↓ PgUp/Dn                                           │
-│              │                                                                            │
-│ [x] TLS      │  [*] Módulo JWT iniciado                                                  │
+┌──────────────┬──────────────────────────────────────────────────────────────────────────┐
+│ MODULOS      │ OUTPUT / LOG  scroll:↑↓ PgUp/Dn                                          │
+│              │                                                                          │
+│ [x] TLS      │  [*] Módulo JWT iniciado                                                 │
 │ [x] Headers  │  [!!] alg:none aceito — CRITICAL                                         │
 │ [x] JWT      │  [!!] RS256→HS256 confusion — CRITICAL                                   │
 │ [x] PQC      │  [!] JWK injection — HIGH                                                │
@@ -175,28 +181,28 @@ curl -H "Authorization: Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIn0." \
 │ [x] OAuth    │  [*] Módulo CORS iniciado                                                │
 │ [x] SSRF     │  [!!] Origin reflection + credentials — CRITICAL                         │
 │ [x] GraphQL  │  [+] CORS: 1 finding(s)                                                  │
-│ [x] IDOR     │                                                                            │
-│ [x] SSTI     │                                                                            │
-│ ...          │                                                                            │
-│              │                                                                            │
-│ Target:      │                                                                            │
-│ alvo.com     │                                                                            │
-│              │                                                                            │
-│ JWT:         │                                                                            │
-│ eyJ...       │                                                                            │
-│              │                                                                            │
-│ [Iniciar]    │                                                                            │
-│ [Parar]      │                                                                            │
-├──────────────┴────────────────────────────────────────────────────────────────────────────┤
-│ FINDINGS                                                                                  │
+│ [x] IDOR     │                                                                          │
+│ [x] SSTI     │                                                                          │
+│ ...          │                                                                          │
+│              │                                                                          │
+│ Target:      │                                                                          │
+│ alvo.com     │                                                                          │
+│              │                                                                          │
+│ JWT:         │                                                                          │
+│ eyJ...       │                                                                          │
+│              │                                                                          │
+│ [Iniciar]    │                                                                          │
+│ [Parar]      │                                                                          │
+├──────────────┴──────────────────────────────────────────────────────────────────────────┤
+│ FINDINGS                                                                                │
 │  CRITICAL  10.0  CWE-918  SSRF — Internal SSRF via URL parameter                        │
-│  CRITICAL   9.1  CWE-347  JWT — Algorithm None Accepted                                  │
+│  CRITICAL   9.1  CWE-347  JWT — Algorithm None Accepted                                 │
 │  CRITICAL   9.1  CWE-942  CORS — Origin Reflection with Credentials                     │
-│  HIGH       8.1  CWE-347  JWT — JWK Injection                                            │
-│  [Enter] Detalhe  [↑↓] Navegar                                                           │
-├───────────────────────────────────────────────────────────────────────────────────────────┤
-│ alvo: https://alvo.com │ ◆3 ▲1 ●0 ▼0 │ [████████░░░░] 12/18 │ [Q] Sair  [E] Export  [?]│
-└───────────────────────────────────────────────────────────────────────────────────────────┘
+│  HIGH       8.1  CWE-347  JWT — JWK Injection                                           │
+│  [Enter] Detalhe  [↑↓] Navegar                                                          │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│ alvo: https://***.com │ ◆3 ▲1 ●0 ▼0 │ [████████░░░░] 12/18 │ [Q] Sair  [E] Export  [?]  │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **F1 Dashboard** — resumo visual com barras `█░` por severidade e top 5 findings críticos/high.

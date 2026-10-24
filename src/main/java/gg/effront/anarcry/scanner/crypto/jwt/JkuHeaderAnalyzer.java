@@ -11,30 +11,28 @@ import java.util.Optional;
 public class JkuHeaderAnalyzer {
 
     public Optional<Finding> analyze(JsonObject header, String evidence) {
-        if (!header.has("jku")) return Optional.empty();
+        if (!header.has("jku")) {
+            return Optional.empty();
+        }
 
         String jku = header.get("jku").getAsString();
-        boolean insecure = jku.startsWith("http://")
-                || jku.contains("localhost")
-                || jku.contains("127.0.0.1");
+        boolean insecure = jku.startsWith("http://") || jku.contains("localhost") || jku.contains("127.0.0.1");
 
         Severity sev = insecure ? Severity.HIGH : Severity.MEDIUM;
         String detail = insecure
                 ? "jku aponta para URL insegura (" + jku + ") — facilita JWKS hijacking local"
-                : "jku presente (" + jku + ") — servidor busca JWKS remotamente; atacante pode hospedar chave maliciosa";
+                : "jku presente (" + jku
+                        + ") — servidor busca JWKS remotamente; atacante pode hospedar chave maliciosa";
 
         String _cweId = CweRegistry.cweId("JWT");
         String _cweTitle = CweRegistry.cweTitle("JWT");
         String _cvssVector = CweRegistry.cvssVector("JWT");
         double _score = CvssCalculator.calculate(_cvssVector);
-        return Optional.of(Finding.of("JWT", "(token)",
-                "jku header presente — risco de JWKS hijacking",
-                sev,
-                "jku=" + jku + " | " + evidence,
-                detail,
-                "Hospedar JWKS em URL controlada pelo atacante com par de chaves RSA gerado localmente:\n" +
-                        "python3 jwt_tool.py <token> -X s -ju https://evil.com/jwks.json",
-                "Ignorar o campo jku do header; validar apenas com chave pré-configurada no servidor",
-                _cweId, _cweTitle, _cvssVector, _score));
+        return Optional.of(Finding.of("JWT", "(token)", "jku header presente — risco de JWKS hijacking", sev,
+                "jku=" + jku + " | " + evidence, detail,
+                "Hospedar JWKS em URL controlada pelo atacante com par de chaves RSA gerado localmente:\n"
+                        + "python3 jwt_tool.py <token> -X s -ju https://evil.com/jwks.json",
+                "Ignorar o campo jku do header; validar apenas com chave pré-configurada no servidor", _cweId,
+                _cweTitle, _cvssVector, _score));
     }
 }

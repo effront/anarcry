@@ -13,14 +13,16 @@ import java.util.function.Consumer;
 public class TlsModule implements Scanner {
 
     @Override
-    public String id() { return "TLS"; }
+    public String id() {
+        return "TLS";
+    }
 
     @Override
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
-        String _cweId     = CweRegistry.cweId(id());
-        String _cweTitle  = CweRegistry.cweTitle(id());
+        String _cweId = CweRegistry.cweId(id());
+        String _cweTitle = CweRegistry.cweTitle(id());
         String _cveVector = CweRegistry.cvssVector(id());
-        double _score     = CvssCalculator.calculate(_cveVector);
+        double _score = CvssCalculator.calculate(_cveVector);
         List<Finding> results = new ArrayList<>();
         if (!ctx.isHttps()) {
             log.accept("[!] TLS: alvo não é HTTPS — módulo TLS ignorado");

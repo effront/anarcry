@@ -32,17 +32,17 @@ public class PasteableTextBox extends TextBox {
     }
 
     private String readClipboard() {
-        String[][] cmds = {
-            {"xclip", "-selection", "clipboard", "-o"},
-            {"xsel",  "--clipboard", "--output"},
-            {"wl-paste", "--no-newline"}
-        };
+        String[][] cmds = {{"xclip", "-selection", "clipboard", "-o"}, {"xsel", "--clipboard", "--output"},
+                {"wl-paste", "--no-newline"}};
         for (String[] cmd : cmds) {
             try {
                 Process p = Runtime.getRuntime().exec(cmd);
                 String out = new String(p.getInputStream().readAllBytes());
-                if (p.waitFor() == 0) return out;
-            } catch (IOException | InterruptedException ignored) {}
+                if (p.waitFor() == 0) {
+                    return out;
+                }
+            } catch (IOException | InterruptedException ignored) {
+            }
         }
         return null;
     }

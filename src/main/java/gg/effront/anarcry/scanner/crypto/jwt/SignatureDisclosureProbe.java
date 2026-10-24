@@ -20,29 +20,31 @@ import gg.effront.anarcry.model.CvssCalculator;
 
 public class SignatureDisclosureProbe {
 
-    // Matches: "Expected <sig> got <sig>" — pattern from CVE-2019-7644 / auth0 jwt-dotnet
-    private static final Pattern DISCLOSURE = Pattern.compile(
-            "(?i)expected\\s+[A-Za-z0-9+/=_-]+\\s+got\\s+[A-Za-z0-9+/=_-]+");
+    // Matches: "Expected <sig> got <sig>" — pattern from CVE-2019-7644 / auth0
+    // jwt-dotnet
+    private static final Pattern DISCLOSURE = Pattern
+            .compile("(?i)expected\\s+[A-Za-z0-9+/=_-]+\\s+got\\s+[A-Za-z0-9+/=_-]+");
 
     private static final List<String> AUTH_PATHS = List.of("/api/me", "/api/user", "/api/profile");
 
     public Optional<Finding> probe(String[] parts, ScanContext ctx, String base, HttpClient hc, Consumer<String> log) {
-        if (parts.length < 3 || parts[2].isBlank()) return Optional.empty();
+        if (parts.length < 3 || parts[2].isBlank()) {
+            return Optional.empty();
+        }
         try {
             byte[] sigBytes = Base64.getUrlDecoder().decode(padB64(parts[2]));
-            if (sigBytes.length == 0) return Optional.empty();
+            if (sigBytes.length == 0) {
+                return Optional.empty();
+            }
             sigBytes[sigBytes.length - 1] ^= (byte) 0xFF; // flip last byte → wrong but deterministic
-            String badSig   = Base64.getUrlEncoder().withoutPadding().encodeToString(sigBytes);
+            String badSig = Base64.getUrlEncoder().withoutPadding().encodeToString(sigBytes);
             String badToken = parts[0] + "." + parts[1] + "." + badSig;
 
             log.accept("[~] JWT: probe signature disclosure (CVE-2019-7644) → " + base);
             for (String path : AUTH_PATHS) {
                 try {
-                    HttpRequest req = HttpRequest.newBuilder()
-                            .uri(URI.create(base + path))
-                            .header("Authorization", "Bearer " + badToken)
-                            .timeout(Duration.ofSeconds(5))
-                            .GET().build();
+                    HttpRequest req = HttpRequest.newBuilder().uri(URI.create(base + path))
+                            .header("Authorization", "Bearer " + badToken).timeout(Duration.ofSeconds(5)).GET().build();
                     HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), "JWT");
                     log.accept("[~] JWT: sig disclosure " + path + " → HTTP " + resp.statusCode());
                     String body = resp.body();
@@ -54,9 +56,11 @@ public class SignatureDisclosureProbe {
                         return Optional.of(Finding.of("JWT", base + path,
                                 "Signature correta exposta em mensagem de erro (CVE-2019-7644)", Severity.MEDIUM,
                                 "Response body em " + base + path + ": " + truncate(body, 300),
-                                "Servidor revela a assinatura válida em respostas de erro — facilita forgery de tokens sem brute-force",
+                                "Servidor revela a assinatura válida em respostas de erro — facilita forgery de tokens"
+                                        + "sem brute-force",
                                 "curl -H 'Authorization: Bearer " + badToken + "' " + base + path,
-                                "Nunca incluir detalhes de signature em respostas de erro; usar mensagens genéricas como '401 Unauthorized'",
+                                "Nunca incluir detalhes de signature em erros; usar mensagens genéricas"
+                                        + " como '401 Unauthorized'",
                                 _cweId, _cweTitle, _cvssVector, _score));
                     }
                 } catch (Exception e) {

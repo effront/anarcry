@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+
+  <!-- Test code — harness intentionally uses raw HTTP, reflection, etc. -->
+  <Match>
+    <Class name="~gg\.effront\.anarcry\.harness\..*"/>
+  </Match>
+
+  <!-- TUI rendering layer — Lanterna internals trigger false positives -->
+  <Match>
+    <Class name="~gg\.effront\.anarcry\.tui\..*"/>
+    <Bug category="STYLE"/>
+  </Match>
+
+  <!-- BouncyCastle SecureRandom usage is intentional -->
+  <Match>
+    <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+  </Match>
+
+  <!-- We intentionally catch Exception in scanner entry-points to surface errors cleanly -->
+  <Match>
+    <Class name="~gg\.effront\.anarcry\.scanner\.ScanRunner"/>
+    <Bug pattern="REC_CATCH_EXCEPTION"/>
+  </Match>
+
+</FindBugsFilter>

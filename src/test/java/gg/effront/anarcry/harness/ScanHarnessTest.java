@@ -72,25 +72,28 @@ class ScanHarnessTest {
     // Fast tests (pure logic, no network)
     // ─────────────────────────────────────────
 
-    @Test @Order(1)
+    @Test
+    @Order(1)
     void jwtAlgNoneDetected() throws Exception {
         // eyJhbGciOiJub25lIn0 = {"alg":"none"}
         // eyJzdWIiOiJ0ZXN0In0 = {"sub":"test"}
         String token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.";
         ScanContext ctx = new ScanContext("https://example.com", token, Set.of("JWT"));
-        List<Finding> findings = new JwtModule().scan(ctx, msg -> {});
-        assertTrue(findings.stream().anyMatch(f ->
-            f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("none")),
-            "Deve detectar alg:none como CRITICAL");
+        List<Finding> findings = new JwtModule().scan(ctx, msg -> {
+        });
+        assertTrue(
+                findings.stream()
+                        .anyMatch(f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("none")),
+                "Deve detectar alg:none como CRITICAL");
     }
 
-    @Test @Order(2)
+    @Test
+    @Order(2)
     void jwtWeakSecretDetected() throws Exception {
         String secret = "secret";
-        String headerB64  = Base64.getUrlEncoder().withoutPadding()
+        String headerB64 = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
-        String payloadB64 = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString("{\"sub\":\"test\"}".getBytes());
+        String payloadB64 = Base64.getUrlEncoder().withoutPadding().encodeToString("{\"sub\":\"test\"}".getBytes());
         String sigInput = headerB64 + "." + payloadB64;
 
         Mac mac = Mac.getInstance("HmacSHA256");
@@ -100,56 +103,65 @@ class ScanHarnessTest {
 
         String token = sigInput + "." + sigB64;
         ScanContext ctx = new ScanContext("https://example.com", token, Set.of("JWT"));
-        List<Finding> findings = new JwtModule().scan(ctx, msg -> {});
+        List<Finding> findings = new JwtModule().scan(ctx, msg -> {
+        });
 
-        assertTrue(findings.stream().anyMatch(f ->
-            f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("fraco")),
-            "Deve detectar segredo 'secret' como CRITICAL");
+        assertTrue(
+                findings.stream()
+                        .anyMatch(f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("fraco")),
+                "Deve detectar segredo 'secret' como CRITICAL");
     }
 
-    @Test @Order(3)
+    @Test
+    @Order(3)
     void jwtNoExpDetected() throws Exception {
-        String headerB64  = Base64.getUrlEncoder().withoutPadding()
+        String headerB64 = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
-        String payloadB64 = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString("{\"sub\":\"test\"}".getBytes());
+        String payloadB64 = Base64.getUrlEncoder().withoutPadding().encodeToString("{\"sub\":\"test\"}".getBytes());
         // Signature doesn't matter for this check
         String token = headerB64 + "." + payloadB64 + ".fakesig";
         ScanContext ctx = new ScanContext("https://example.com", token, Set.of("JWT"));
-        List<Finding> findings = new JwtModule().scan(ctx, msg -> {});
+        List<Finding> findings = new JwtModule().scan(ctx, msg -> {
+        });
 
-        assertTrue(findings.stream().anyMatch(f ->
-            f.severity() == Severity.LOW && f.title().toLowerCase().contains("exp")),
-            "Deve detectar ausência de claim exp como LOW");
+        assertTrue(
+                findings.stream()
+                        .anyMatch(f -> f.severity() == Severity.LOW && f.title().toLowerCase().contains("exp")),
+                "Deve detectar ausência de claim exp como LOW");
     }
 
-    @Test @Order(4)
+    @Test
+    @Order(4)
     void jwtKidDetected() throws Exception {
-        String headerB64  = Base64.getUrlEncoder().withoutPadding()
+        String headerB64 = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\",\"kid\":\"key1\"}".getBytes());
         String payloadB64 = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString("{\"sub\":\"test\",\"exp\":9999999999}".getBytes());
         String token = headerB64 + "." + payloadB64 + ".fakesig";
         ScanContext ctx = new ScanContext("https://example.com", token, Set.of("JWT"));
-        List<Finding> findings = new JwtModule().scan(ctx, msg -> {});
+        List<Finding> findings = new JwtModule().scan(ctx, msg -> {
+        });
 
-        assertTrue(findings.stream().anyMatch(f ->
-            f.severity() == Severity.LOW && f.title().toLowerCase().contains("kid")),
-            "Deve detectar parâmetro kid como LOW");
+        assertTrue(
+                findings.stream()
+                        .anyMatch(f -> f.severity() == Severity.LOW && f.title().toLowerCase().contains("kid")),
+                "Deve detectar parâmetro kid como LOW");
     }
 
-    @Test @Order(5)
+    @Test
+    @Order(5)
     void reportExportWritesDisk() throws Exception {
         List<Finding> findings = List.of(
-            new Finding("TLS", "/", "Disco 1", Severity.HIGH, "ev1", "imp1", "rep1", "rec1", "CWE-200", "Exposure of Sensitive Information", "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3),
-            new Finding("JWT", "/", "Disco 2", Severity.CRITICAL, "ev2", "imp2", "rep2", "rec2", "CWE-200", "Exposure of Sensitive Information", "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3)
-        );
+                new Finding("TLS", "/", "Disco 1", Severity.HIGH, "ev1", "imp1", "rep1", "rec1", "CWE-200",
+                        "Exposure of Sensitive Information", "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3),
+                new Finding("JWT", "/", "Disco 2", Severity.CRITICAL, "ev2", "imp2", "rep2", "rec2", "CWE-200",
+                        "Exposure of Sensitive Information", "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3));
         Path cwd = Path.of(System.getProperty("user.dir"));
         String mdFile = new ReportEngine().export(findings, "https://test.example.com");
-        Path md   = cwd.resolve(mdFile);
+        Path md = cwd.resolve(mdFile);
         Path json = cwd.resolve(mdFile.replace(".md", ".json"));
         try {
-            assertTrue(Files.exists(md),   "Arquivo .md deve existir em disco");
+            assertTrue(Files.exists(md), "Arquivo .md deve existir em disco");
             assertTrue(Files.exists(json), "Arquivo .json deve existir em disco");
             String mdContent = Files.readString(md);
             assertTrue(mdContent.contains("https://test.example.com"), "Markdown deve conter o target");
@@ -162,12 +174,14 @@ class ScanHarnessTest {
         }
     }
 
-    @Test @Order(6)
+    @Test
+    @Order(6)
     void reportExportJson() throws Exception {
         List<Finding> findings = List.of(
-            new Finding("TLS", "/", "Teste 1", Severity.HIGH, "ev1", "imp1", "rep1", "rec1", "CWE-200", "Exposure of Sensitive Information", "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3),
-            new Finding("JWT", "/", "Teste 2", Severity.CRITICAL, "ev2", "imp2", "rep2", "rec2", "CWE-200", "Exposure of Sensitive Information", "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3)
-        );
+                new Finding("TLS", "/", "Teste 1", Severity.HIGH, "ev1", "imp1", "rep1", "rec1", "CWE-200",
+                        "Exposure of Sensitive Information", "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3),
+                new Finding("JWT", "/", "Teste 2", Severity.CRITICAL, "ev2", "imp2", "rep2", "rec2", "CWE-200",
+                        "Exposure of Sensitive Information", "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3));
         String json = new ReportEngine().toJson(findings);
         JsonArray arr = JsonParser.parseString(json).getAsJsonArray();
         assertEquals(2, arr.size(), "JSON deve conter 2 findings");
@@ -179,25 +193,33 @@ class ScanHarnessTest {
     // Integration tests (network required)
     // ─────────────────────────────────────────
 
-    @Test @Order(6) @Tag("integration")
+    @Test
+    @Order(6)
+    @Tag("integration")
     void tlsCertExpiredBadSsl() throws Exception {
         ScanContext ctx = new ScanContext("https://expired.badssl.com", "", Set.of("TLS"));
         List<Finding> findings = new TlsModule().scan(ctx, msg -> System.out.println("[CERT] " + msg));
-        assertTrue(findings.stream().anyMatch(f ->
-            f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("expirado")),
-            "Deve detectar certificado expirado em expired.badssl.com");
+        assertTrue(
+                findings.stream().anyMatch(
+                        f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("expirado")),
+                "Deve detectar certificado expirado em expired.badssl.com");
     }
 
-    @Test @Order(7) @Tag("integration")
+    @Test
+    @Order(7)
+    @Tag("integration")
     void tlsCertSelfSignedBadSsl() throws Exception {
         ScanContext ctx = new ScanContext("https://self-signed.badssl.com", "", Set.of("TLS"));
         List<Finding> findings = new TlsModule().scan(ctx, msg -> System.out.println("[CERT] " + msg));
-        assertTrue(findings.stream().anyMatch(f ->
-            f.severity() == Severity.MEDIUM && f.title().toLowerCase().contains("auto-assinado")),
-            "Deve detectar certificado auto-assinado em self-signed.badssl.com");
+        assertTrue(
+                findings.stream().anyMatch(
+                        f -> f.severity() == Severity.MEDIUM && f.title().toLowerCase().contains("auto-assinado")),
+                "Deve detectar certificado auto-assinado em self-signed.badssl.com");
     }
 
-    @Test @Order(8) @Tag("integration")
+    @Test
+    @Order(8)
+    @Tag("integration")
     void headersMissingOnLocalServer() throws Exception {
         // Sobe servidor HTTP local sem headers de segurança
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -211,20 +233,20 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
 
         try {
-            ScanContext ctx = new ScanContext(
-                "http://127.0.0.1:" + port, "", Set.of("Headers"));
-            List<Finding> findings = new HeadersModule().scan(ctx, msg -> {});
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("Headers"));
+            List<Finding> findings = new HeadersModule().scan(ctx, msg -> {
+            });
 
-            assertTrue(findings.stream().anyMatch(f -> f.title().contains("CSP")),
-                "Deve reportar CSP ausente");
+            assertTrue(findings.stream().anyMatch(f -> f.title().contains("CSP")), "Deve reportar CSP ausente");
             assertTrue(findings.stream().anyMatch(f -> f.title().contains("X-Frame-Options")),
-                "Deve reportar X-Frame-Options ausente");
+                    "Deve reportar X-Frame-Options ausente");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(9)
+    @Test
+    @Order(9)
     void headersCookieFlags() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -238,40 +260,42 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("Headers"));
-            List<Finding> findings = new HeadersModule().scan(ctx, msg -> {});
+            List<Finding> findings = new HeadersModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.stream().anyMatch(f -> f.title().toLowerCase().contains("secure")),
-                "Deve reportar cookie sem Secure");
+                    "Deve reportar cookie sem Secure");
             assertTrue(findings.stream().anyMatch(f -> f.title().toLowerCase().contains("httponly")),
-                "Deve reportar cookie sem HttpOnly");
+                    "Deve reportar cookie sem HttpOnly");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(10)
+    @Test
+    @Order(10)
     void headersHstsSubdomains() throws Exception {
-        Map<String, String> hdrs = Map.of(
-            "Strict-Transport-Security", "max-age=31536000",
-            "Content-Security-Policy",   "default-src 'self'"
-        );
+        Map<String, String> hdrs = Map.of("Strict-Transport-Security", "max-age=31536000", "Content-Security-Policy",
+                "default-src 'self'");
         HttpsServer server = createTestHttpsServer(hdrs);
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("https://127.0.0.1:" + port, "", Set.of("Headers"));
-            List<Finding> findings = new HeadersModule().scan(ctx, msg -> {});
+            List<Finding> findings = new HeadersModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.stream().anyMatch(f -> f.title().toLowerCase().contains("includesubdomains")),
-                "Deve reportar HSTS sem includeSubDomains");
+                    "Deve reportar HSTS sem includeSubDomains");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(11)
+    @Test
+    @Order(11)
     void headersUnsafeCsp() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             exchange.getResponseHeaders().add("Content-Security-Policy",
-                "default-src 'self'; script-src 'unsafe-inline'");
+                    "default-src 'self'; script-src 'unsafe-inline'");
             byte[] body = "ok".getBytes();
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
@@ -281,15 +305,17 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("Headers"));
-            List<Finding> findings = new HeadersModule().scan(ctx, msg -> {});
+            List<Finding> findings = new HeadersModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.stream().anyMatch(f -> f.title().toLowerCase().contains("unsafe-inline")),
-                "Deve reportar CSP com unsafe-inline");
+                    "Deve reportar CSP com unsafe-inline");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(12)
+    @Test
+    @Order(12)
     void jwtAlgNoneActiveFails() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -301,19 +327,20 @@ class ScanHarnessTest {
         try {
             String h = Base64.getUrlEncoder().withoutPadding()
                     .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
-            String p = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString("{\"sub\":\"test\"}".getBytes());
+            String p = Base64.getUrlEncoder().withoutPadding().encodeToString("{\"sub\":\"test\"}".getBytes());
             String token = h + "." + p + ".fakesig";
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, token, Set.of("JWT"));
-            List<Finding> findings = new JwtModule().scan(ctx, msg -> {});
+            List<Finding> findings = new JwtModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.stream().noneMatch(f -> f.title().toLowerCase().contains("ativamente")),
-                "Probe ativa NÃO deve gerar finding quando servidor retorna 401");
+                    "Probe ativa NÃO deve gerar finding quando servidor retorna 401");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(13)
+    @Test
+    @Order(13)
     void jwtAlgNoneActiveDetected() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -327,20 +354,21 @@ class ScanHarnessTest {
         try {
             String h = Base64.getUrlEncoder().withoutPadding()
                     .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
-            String p = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString("{\"sub\":\"test\"}".getBytes());
+            String p = Base64.getUrlEncoder().withoutPadding().encodeToString("{\"sub\":\"test\"}".getBytes());
             String token = h + "." + p + ".fakesig";
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, token, Set.of("JWT"));
             List<Finding> findings = new JwtModule().scan(ctx, msg -> System.out.println("[JWT] " + msg));
-            assertTrue(findings.stream().anyMatch(f ->
-                f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("ativamente")),
-                "Probe ativa DEVE gerar CRITICAL quando servidor aceita alg:none");
+            assertTrue(
+                    findings.stream().anyMatch(
+                            f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("ativamente")),
+                    "Probe ativa DEVE gerar CRITICAL quando servidor aceita alg:none");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(14)
+    @Test
+    @Order(14)
     void cipherSuiteGroupsRegistered() throws Exception {
         // Java 27 removeu 3DES/EXPORT do JSSE completamente — probe responde
         // "nenhum cipher disponível localmente" (comportamento correto).
@@ -355,11 +383,13 @@ class ScanHarnessTest {
                 var m = g.getClass().getDeclaredMethod("name");
                 m.setAccessible(true);
                 return (String) m.invoke(g);
-            } catch (Exception e) { return ""; }
+            } catch (Exception e) {
+                return "";
+            }
         }).collect(java.util.stream.Collectors.toList());
 
         assertEquals(5, groups.size(), "GROUPS deve ter 5 entradas: RC4/NULL/ANON/3DES/EXPORT");
-        assertTrue(names.contains("3DES"),   "GROUPS deve conter grupo 3DES");
+        assertTrue(names.contains("3DES"), "GROUPS deve conter grupo 3DES");
         assertTrue(names.contains("EXPORT"), "GROUPS deve conter grupo EXPORT");
     }
 
@@ -367,22 +397,24 @@ class ScanHarnessTest {
     // JWT v2 — Sprint 1 (novos probes)
     // ─────────────────────────────────────────
 
-    @Test @Order(15)
+    @Test
+    @Order(15)
     void jwtJkuHeaderDetected() throws Exception {
         // Token com jku apontando para HTTPS externo → MEDIUM
-        String hdr = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString("{\"alg\":\"RS256\",\"typ\":\"JWT\",\"jku\":\"https://example.com/jwks.json\"}".getBytes());
+        String hdr = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                "{\"alg\":\"RS256\",\"typ\":\"JWT\",\"jku\":\"https://example.com/jwks.json\"}".getBytes());
         String pld = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString("{\"sub\":\"test\",\"exp\":9999999999}".getBytes());
         String token = hdr + "." + pld + ".fakesig";
         ScanContext ctx = new ScanContext("https://example.com", token, Set.of("JWT"));
-        List<Finding> findings = new JwtModule().scan(ctx, msg -> {});
-        assertTrue(findings.stream().anyMatch(f ->
-            f.title().toLowerCase().contains("jku")),
-            "Deve detectar jku header como finding");
+        List<Finding> findings = new JwtModule().scan(ctx, msg -> {
+        });
+        assertTrue(findings.stream().anyMatch(f -> f.title().toLowerCase().contains("jku")),
+                "Deve detectar jku header como finding");
     }
 
-    @Test @Order(16)
+    @Test
+    @Order(16)
     void jwtJkuHttpSchemeIsHigh() throws Exception {
         // jku com http:// → HIGH (inseguro)
         String hdr = Base64.getUrlEncoder().withoutPadding()
@@ -391,13 +423,16 @@ class ScanHarnessTest {
                 .encodeToString("{\"sub\":\"test\",\"exp\":9999999999}".getBytes());
         String token = hdr + "." + pld + ".fakesig";
         ScanContext ctx = new ScanContext("https://example.com", token, Set.of("JWT"));
-        List<Finding> findings = new JwtModule().scan(ctx, msg -> {});
-        assertTrue(findings.stream().anyMatch(f ->
-            f.title().toLowerCase().contains("jku") && f.severity() == Severity.HIGH),
-            "jku com http:// deve ser HIGH");
+        List<Finding> findings = new JwtModule().scan(ctx, msg -> {
+        });
+        assertTrue(
+                findings.stream()
+                        .anyMatch(f -> f.title().toLowerCase().contains("jku") && f.severity() == Severity.HIGH),
+                "jku com http:// deve ser HIGH");
     }
 
-    @Test @Order(17)
+    @Test
+    @Order(17)
     void jwtNullSignatureDetected() throws Exception {
         // Servidor aceita qualquer Bearer → NullSignatureProbe deve reportar CRITICAL
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -417,15 +452,18 @@ class ScanHarnessTest {
             String token = hdr + "." + pld + ".fakesig";
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, token, Set.of("JWT"));
             List<Finding> findings = new JwtModule().scan(ctx, msg -> System.out.println("[NULL_SIG] " + msg));
-            assertTrue(findings.stream().anyMatch(f ->
-                f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("null signature")),
-                "Null signature aceita pelo servidor deve gerar CRITICAL");
+            assertTrue(
+                    findings.stream()
+                            .anyMatch(f -> f.severity() == Severity.CRITICAL
+                                    && f.title().toLowerCase().contains("null signature")),
+                    "Null signature aceita pelo servidor deve gerar CRITICAL");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(18)
+    @Test
+    @Order(18)
     void jwtNullSignatureActiveFails() throws Exception {
         // Servidor retorna 401 para tudo → sem finding de null signature
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -442,16 +480,17 @@ class ScanHarnessTest {
                     .encodeToString("{\"sub\":\"test\",\"exp\":9999999999}".getBytes());
             String token = hdr + "." + pld + ".fakesig";
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, token, Set.of("JWT"));
-            List<Finding> findings = new JwtModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().noneMatch(f ->
-                f.title().toLowerCase().contains("null signature")),
-                "Servidor 401 não deve gerar finding de null signature");
+            List<Finding> findings = new JwtModule().scan(ctx, msg -> {
+            });
+            assertTrue(findings.stream().noneMatch(f -> f.title().toLowerCase().contains("null signature")),
+                    "Servidor 401 não deve gerar finding de null signature");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(19)
+    @Test
+    @Order(19)
     void jwtSignatureDisclosureDetected() throws Exception {
         // Servidor retorna body com "Expected <sig> got <sig>" → MEDIUM
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -478,17 +517,20 @@ class ScanHarnessTest {
 
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, token, Set.of("JWT"));
             List<Finding> findings = new JwtModule().scan(ctx, msg -> System.out.println("[SIG_DISC] " + msg));
-            assertTrue(findings.stream().anyMatch(f ->
-                f.severity() == Severity.MEDIUM && f.title().toLowerCase().contains("signature")),
-                "Response body com 'Expected X got Y' deve gerar finding MEDIUM");
+            assertTrue(
+                    findings.stream().anyMatch(
+                            f -> f.severity() == Severity.MEDIUM && f.title().toLowerCase().contains("signature")),
+                    "Response body com 'Expected X got Y' deve gerar finding MEDIUM");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(20)
+    @Test
+    @Order(20)
     void jwtRs256Hs256Detected() throws Exception {
-        // Servidor HTTPS que aceita qualquer Bearer → RS256→HS256 probe deve reportar CRITICAL
+        // Servidor HTTPS que aceita qualquer Bearer → RS256→HS256 probe deve reportar
+        // CRITICAL
         HttpsServer httpsServer = createTestHttpsServer(Map.of());
         int port = httpsServer.getAddress().getPort();
         try {
@@ -499,9 +541,10 @@ class ScanHarnessTest {
             String token = hdr + "." + pld + ".fakesig";
             ScanContext ctx = new ScanContext("https://127.0.0.1:" + port, token, Set.of("JWT"));
             List<Finding> findings = new JwtModule().scan(ctx, msg -> System.out.println("[RS256] " + msg));
-            assertTrue(findings.stream().anyMatch(f ->
-                f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("rs256")),
-                "RS256→HS256 confusion aceita pelo servidor deve gerar CRITICAL");
+            assertTrue(
+                    findings.stream().anyMatch(
+                            f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("rs256")),
+                    "RS256→HS256 confusion aceita pelo servidor deve gerar CRITICAL");
         } finally {
             httpsServer.stop(0);
         }
@@ -511,7 +554,8 @@ class ScanHarnessTest {
     // CORS — Sprint 2
     // ─────────────────────────────────────────
 
-    @Test @Order(21)
+    @Test
+    @Order(21)
     void corsCriticalOriginReflectionWithCredentials() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -529,16 +573,19 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CORS"));
-            List<Finding> findings = new CorsModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().anyMatch(f ->
-                f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("cors")),
-                "Origin reflection + credentials deve gerar CRITICAL");
+            List<Finding> findings = new CorsModule().scan(ctx, msg -> {
+            });
+            assertTrue(
+                    findings.stream().anyMatch(
+                            f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("cors")),
+                    "Origin reflection + credentials deve gerar CRITICAL");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(22)
+    @Test
+    @Order(22)
     void corsHighWildcard() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -552,16 +599,19 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CORS"));
-            List<Finding> findings = new CorsModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().anyMatch(f ->
-                f.severity() == Severity.HIGH && f.title().toLowerCase().contains("wildcard")),
-                "ACAO: * deve gerar HIGH");
+            List<Finding> findings = new CorsModule().scan(ctx, msg -> {
+            });
+            assertTrue(
+                    findings.stream().anyMatch(
+                            f -> f.severity() == Severity.HIGH && f.title().toLowerCase().contains("wildcard")),
+                    "ACAO: * deve gerar HIGH");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(23)
+    @Test
+    @Order(23)
     void corsMediumNullOrigin() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -578,16 +628,19 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CORS"));
-            List<Finding> findings = new CorsModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().anyMatch(f ->
-                f.severity() == Severity.MEDIUM && f.title().toLowerCase().contains("null")),
-                "ACAO: null deve gerar MEDIUM");
+            List<Finding> findings = new CorsModule().scan(ctx, msg -> {
+            });
+            assertTrue(
+                    findings.stream()
+                            .anyMatch(f -> f.severity() == Severity.MEDIUM && f.title().toLowerCase().contains("null")),
+                    "ACAO: null deve gerar MEDIUM");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(24)
+    @Test
+    @Order(24)
     void corsCleanNoFinding() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -601,7 +654,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CORS"));
-            List<Finding> findings = new CorsModule().scan(ctx, msg -> {});
+            List<Finding> findings = new CorsModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "Sem CORS headers → sem findings");
         } finally {
             server.stop(0);
@@ -612,15 +666,16 @@ class ScanHarnessTest {
     // OAuth — Sprint 2
     // ─────────────────────────────────────────
 
-    @Test @Order(25)
+    @Test
+    @Order(25)
     void oauthEndpointDiscoveredViaWellKnown() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             String path = exchange.getRequestURI().getPath();
             byte[] body;
             if (path.contains("openid-configuration")) {
-                String json = "{\"issuer\":\"http://test\","
-                        + "\"authorization_endpoint\":\"http://127.0.0.1:" + server.getAddress().getPort() + "/authorize\"}";
+                String json = "{\"issuer\":\"http://test\"," + "\"authorization_endpoint\":\"http://127.0.0.1:"
+                        + server.getAddress().getPort() + "/authorize\"}";
                 body = json.getBytes();
             } else {
                 body = "not found".getBytes();
@@ -638,31 +693,35 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("OAuth"));
-            List<Finding> findings = new OAuthModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().anyMatch(f ->
-                f.title().toLowerCase().contains("oauth") || f.title().toLowerCase().contains("openid")),
-                "Well-known endpoint deve gerar finding OAuth");
+            List<Finding> findings = new OAuthModule().scan(ctx, msg -> {
+            });
+            assertTrue(
+                    findings.stream()
+                            .anyMatch(f -> f.title().toLowerCase().contains("oauth")
+                                    || f.title().toLowerCase().contains("openid")),
+                    "Well-known endpoint deve gerar finding OAuth");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(26)
+    @Test
+    @Order(26)
     void oauthRedirectUriBypassDetected() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
-            String path  = exchange.getRequestURI().getPath();
+            String path = exchange.getRequestURI().getPath();
             String query = exchange.getRequestURI().getRawQuery();
             if (path.endsWith("/authorize")) {
                 if (query != null && query.contains("redirect_uri=")) {
                     // Naive server — redirect to whatever redirect_uri was sent
                     String redirectUri = java.util.Arrays.stream(query.split("&"))
-                            .filter(p -> p.startsWith("redirect_uri="))
-                            .map(p -> p.substring("redirect_uri=".length()))
+                            .filter(p -> p.startsWith("redirect_uri=")).map(p -> p.substring("redirect_uri=".length()))
                             .findFirst().orElse("https://callback.example.com");
                     try {
                         redirectUri = java.net.URLDecoder.decode(redirectUri, "UTF-8");
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                    }
                     exchange.getResponseHeaders().set("Location", redirectUri + "?code=auth123");
                     exchange.sendResponseHeaders(302, -1);
                 } else {
@@ -681,15 +740,17 @@ class ScanHarnessTest {
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("OAuth"));
             List<Finding> findings = new OAuthModule().scan(ctx, msg -> System.out.println("[OAUTH] " + msg));
-            assertTrue(findings.stream().anyMatch(f ->
-                f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("redirect")),
-                "redirect_uri bypass deve gerar CRITICAL");
+            assertTrue(
+                    findings.stream().anyMatch(
+                            f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("redirect")),
+                    "redirect_uri bypass deve gerar CRITICAL");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(27)
+    @Test
+    @Order(27)
     void oauthEndpointNotFoundNoOauthFinding() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -700,9 +761,9 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("OAuth"));
-            List<Finding> findings = new OAuthModule().scan(ctx, msg -> {});
-            assertTrue(findings.isEmpty(),
-                "Servidor sem endpoints OAuth → nenhum finding");
+            List<Finding> findings = new OAuthModule().scan(ctx, msg -> {
+            });
+            assertTrue(findings.isEmpty(), "Servidor sem endpoints OAuth → nenhum finding");
         } finally {
             server.stop(0);
         }
@@ -712,23 +773,26 @@ class ScanHarnessTest {
     // Open Redirect — Sprint 3
     // ─────────────────────────────────────────
 
-    @Test @Order(28)
+    @Test
+    @Order(28)
     void openRedirectHighDetected() throws Exception {
         // Naive server: echoes back any redirect param value as Location (vulnerable)
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             String query = exchange.getRequestURI().getRawQuery();
             if (query != null) {
-                for (String param : java.util.List.of("url", "next", "redirect", "redir", "return",
-                        "returnUrl", "returnTo", "goto", "to", "dest")) {
+                for (String param : java.util.List.of("url", "next", "redirect", "redir", "return", "returnUrl",
+                        "returnTo", "goto", "to", "dest")) {
                     java.util.Optional<String> match = java.util.Arrays.stream(query.split("&"))
-                            .filter(p -> p.startsWith(param + "="))
-                            .map(p -> p.substring(param.length() + 1))
+                            .filter(p -> p.startsWith(param + "=")).map(p -> p.substring(param.length() + 1))
                             .findFirst();
                     if (match.isPresent()) {
                         String location;
-                        try { location = java.net.URLDecoder.decode(match.get(), "UTF-8"); }
-                        catch (Exception e) { location = match.get(); }
+                        try {
+                            location = java.net.URLDecoder.decode(match.get(), "UTF-8");
+                        } catch (Exception e) {
+                            location = match.get();
+                        }
                         exchange.getResponseHeaders().set("Location", location);
                         exchange.sendResponseHeaders(302, -1);
                         exchange.getResponseBody().close();
@@ -745,7 +809,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("OpenRedirect"));
-            List<Finding> findings = new OpenRedirectModule().scan(ctx, msg -> {});
+            List<Finding> findings = new OpenRedirectModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.HIGH),
                     "Servidor que reflete redirect param deve gerar HIGH");
         } finally {
@@ -753,7 +818,8 @@ class ScanHarnessTest {
         }
     }
 
-    @Test @Order(29)
+    @Test
+    @Order(29)
     void openRedirectCleanNoFinding() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -766,7 +832,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("OpenRedirect"));
-            List<Finding> findings = new OpenRedirectModule().scan(ctx, msg -> {});
+            List<Finding> findings = new OpenRedirectModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "Servidor que não redireciona → nenhum finding");
         } finally {
             server.stop(0);
@@ -777,9 +844,11 @@ class ScanHarnessTest {
     // SSRF — Sprint 3
     // ─────────────────────────────────────────
 
-    @Test @Order(30)
+    @Test
+    @Order(30)
     void ssrfLocalHostDetected() throws Exception {
-        // Vulnerable server: if url param contains known SSRF targets, returns metadata-like body
+        // Vulnerable server: if url param contains known SSRF targets, returns
+        // metadata-like body
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             String query = exchange.getRequestURI().getRawQuery();
@@ -798,7 +867,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("SSRF"));
-            List<Finding> findings = new SsrfModule().scan(ctx, msg -> {});
+            List<Finding> findings = new SsrfModule().scan(ctx, msg -> {
+            });
             assertFalse(findings.isEmpty(), "Servidor vulnerável a SSRF deve gerar finding");
             assertTrue(findings.stream().anyMatch(f -> f.title().toLowerCase().contains("ssrf")),
                     "Finding deve mencionar SSRF");
@@ -807,7 +877,8 @@ class ScanHarnessTest {
         }
     }
 
-    @Test @Order(31)
+    @Test
+    @Order(31)
     void ssrfCleanNoFinding() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -820,7 +891,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("SSRF"));
-            List<Finding> findings = new SsrfModule().scan(ctx, msg -> {});
+            List<Finding> findings = new SsrfModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "Servidor sem SSRF → nenhum finding");
         } finally {
             server.stop(0);
@@ -831,7 +903,8 @@ class ScanHarnessTest {
     // GraphQL — Sprint 3
     // ─────────────────────────────────────────
 
-    @Test @Order(32)
+    @Test
+    @Order(32)
     void graphqlIntrospectionEnabled() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/graphql", exchange -> {
@@ -849,16 +922,19 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("GraphQL"));
-            List<Finding> findings = new GraphQLModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.HIGH
-                    && f.title().toLowerCase().contains("introspection")),
+            List<Finding> findings = new GraphQLModule().scan(ctx, msg -> {
+            });
+            assertTrue(
+                    findings.stream().anyMatch(
+                            f -> f.severity() == Severity.HIGH && f.title().toLowerCase().contains("introspection")),
                     "GraphQL com introspection deve gerar HIGH");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(33)
+    @Test
+    @Order(33)
     void graphqlNoEndpoint() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -869,7 +945,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("GraphQL"));
-            List<Finding> findings = new GraphQLModule().scan(ctx, msg -> {});
+            List<Finding> findings = new GraphQLModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "Servidor sem GraphQL → nenhum finding");
         } finally {
             server.stop(0);
@@ -880,14 +957,16 @@ class ScanHarnessTest {
     // CRLF Injection — Sprint 3
     // ─────────────────────────────────────────
 
-    @Test @Order(34)
+    @Test
+    @Order(34)
     void crlfInjectionDetected() throws Exception {
-        // Vulnerable server: if path contains %0a or %0d, echoes Set-Cookie: crlf=injection
+        // Vulnerable server: if path contains %0a or %0d, echoes Set-Cookie:
+        // crlf=injection
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             String rawPath = exchange.getRequestURI().getRawPath();
-            if (rawPath != null && (rawPath.contains("%0a") || rawPath.contains("%0d")
-                    || rawPath.contains("%0A") || rawPath.contains("%0D"))) {
+            if (rawPath != null && (rawPath.contains("%0a") || rawPath.contains("%0d") || rawPath.contains("%0A")
+                    || rawPath.contains("%0D"))) {
                 exchange.getResponseHeaders().add("Set-Cookie", "crlf=injection; Path=/; HttpOnly");
             }
             byte[] body = "ok".getBytes();
@@ -899,16 +978,19 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CRLF"));
-            List<Finding> findings = new CrlfModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.CRITICAL
-                    && f.title().toLowerCase().contains("crlf")),
+            List<Finding> findings = new CrlfModule().scan(ctx, msg -> {
+            });
+            assertTrue(
+                    findings.stream().anyMatch(
+                            f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("crlf")),
                     "Servidor vulnerável a CRLF deve gerar CRITICAL");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(35)
+    @Test
+    @Order(35)
     void crlfCleanNoFinding() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -921,7 +1003,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CRLF"));
-            List<Finding> findings = new CrlfModule().scan(ctx, msg -> {});
+            List<Finding> findings = new CrlfModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "Servidor sem CRLF → nenhum finding");
         } finally {
             server.stop(0);
@@ -932,57 +1015,59 @@ class ScanHarnessTest {
     // ScanContext — E2E Sprint
     // ─────────────────────────────────────────
 
-    @Test @Order(36)
+    @Test
+    @Order(36)
     void scanContextHttpsDefaultPort() {
         ScanContext ctx = new ScanContext("https://example.com", "", Set.of());
-        assertTrue(ctx.isHttps(),              "HTTPS deve marcar isHttps=true");
-        assertEquals("example.com", ctx.host(),"host() deve extrair o hostname");
-        assertEquals(443, ctx.port(),           "Porta padrão HTTPS deve ser 443");
+        assertTrue(ctx.isHttps(), "HTTPS deve marcar isHttps=true");
+        assertEquals("example.com", ctx.host(), "host() deve extrair o hostname");
+        assertEquals(443, ctx.port(), "Porta padrão HTTPS deve ser 443");
     }
 
-    @Test @Order(37)
+    @Test
+    @Order(37)
     void scanContextHttpCustomPort() {
         ScanContext ctx = new ScanContext("http://target.local:8080", "", Set.of());
-        assertFalse(ctx.isHttps(),                  "HTTP deve marcar isHttps=false");
-        assertEquals("target.local", ctx.host(),    "host() deve excluir a porta");
-        assertEquals(8080, ctx.port(),              "Porta explícita deve ser respeitada");
+        assertFalse(ctx.isHttps(), "HTTP deve marcar isHttps=false");
+        assertEquals("target.local", ctx.host(), "host() deve excluir a porta");
+        assertEquals(8080, ctx.port(), "Porta explícita deve ser respeitada");
     }
 
-    @Test @Order(38)
+    @Test
+    @Order(38)
     void scanContextHasModule() {
         ScanContext ctx = new ScanContext("https://x.com", "", Set.of("TLS", "JWT", "CORS"));
-        assertTrue(ctx.has("TLS"),       "TLS deve estar habilitado");
-        assertTrue(ctx.has("JWT"),       "JWT deve estar habilitado");
-        assertTrue(ctx.has("CORS"),      "CORS deve estar habilitado");
-        assertFalse(ctx.has("SSRF"),     "SSRF NÃO deve estar habilitado");
-        assertFalse(ctx.has("GraphQL"),  "GraphQL NÃO deve estar habilitado");
+        assertTrue(ctx.has("TLS"), "TLS deve estar habilitado");
+        assertTrue(ctx.has("JWT"), "JWT deve estar habilitado");
+        assertTrue(ctx.has("CORS"), "CORS deve estar habilitado");
+        assertFalse(ctx.has("SSRF"), "SSRF NÃO deve estar habilitado");
+        assertFalse(ctx.has("GraphQL"), "GraphQL NÃO deve estar habilitado");
     }
 
     // ─────────────────────────────────────────
     // PQC — E2E Sprint
     // ─────────────────────────────────────────
 
-    @Test @Order(39)
+    @Test
+    @Order(39)
     void pqcSkipsNonHttps() throws Exception {
         List<String> logs = new java.util.ArrayList<>();
-        List<Finding> findings = new PqcModule()
-                .scan(new ScanContext("http://example.com", "", Set.of("PQC")), logs::add);
-        assertTrue(findings.isEmpty(),                             "PQC deve ignorar alvo HTTP");
-        assertTrue(logs.stream().anyMatch(l -> l.contains("ignorado")),
-                "PQC deve logar que foi ignorado em HTTP");
+        List<Finding> findings = new PqcModule().scan(new ScanContext("http://example.com", "", Set.of("PQC")),
+                logs::add);
+        assertTrue(findings.isEmpty(), "PQC deve ignorar alvo HTTP");
+        assertTrue(logs.stream().anyMatch(l -> l.contains("ignorado")), "PQC deve logar que foi ignorado em HTTP");
     }
 
-    @Test @Order(40)
+    @Test
+    @Order(40)
     void pqcHttpsLocalServerReturnsInfo() throws Exception {
         HttpsServer server = createTestHttpsServer(Map.of());
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("https://127.0.0.1:" + port, "", Set.of("PQC"));
             List<Finding> findings = new PqcModule().scan(ctx, msg -> System.out.println("[PQC] " + msg));
-            assertFalse(findings.isEmpty(),
-                    "PQC deve retornar ao menos um finding em servidor HTTPS local");
-            assertTrue(findings.stream().anyMatch(f ->
-                            f.severity() == Severity.INFO || f.severity() == Severity.LOW),
+            assertFalse(findings.isEmpty(), "PQC deve retornar ao menos um finding em servidor HTTPS local");
+            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.INFO || f.severity() == Severity.LOW),
                     "PQC deve reportar INFO ou LOW sobre suporte TLS 1.3");
         } finally {
             server.stop(0);
@@ -993,22 +1078,21 @@ class ScanHarnessTest {
     // ScanRunner — callbacks e isolamento
     // ─────────────────────────────────────────
 
-    @Test @Order(41)
+    @Test
+    @Order(41)
     void scanRunnerCallbacksFireInOrder() throws Exception {
-        AtomicInteger startSeq        = new AtomicInteger(0);
+        AtomicInteger startSeq = new AtomicInteger(0);
         AtomicInteger firstFindingSeq = new AtomicInteger(0);
-        AtomicInteger finishSeq       = new AtomicInteger(0);
-        AtomicInteger counter         = new AtomicInteger(0);
+        AtomicInteger finishSeq = new AtomicInteger(0);
+        AtomicInteger counter = new AtomicInteger(0);
         CountDownLatch latch = new CountDownLatch(1);
 
-        ScanRunner runner = new ScanRunner(
-                msg -> {},
-                f -> {
-                    int seq = counter.incrementAndGet();
-                    firstFindingSeq.compareAndSet(0, seq);
-                }
-        );
-        runner.setOnScanStart(()  -> startSeq.set(counter.incrementAndGet()));
+        ScanRunner runner = new ScanRunner(msg -> {
+        }, f -> {
+            int seq = counter.incrementAndGet();
+            firstFindingSeq.compareAndSet(0, seq);
+        });
+        runner.setOnScanStart(() -> startSeq.set(counter.incrementAndGet()));
         runner.setOnScanFinish(() -> {
             finishSeq.set(counter.incrementAndGet());
             latch.countDown();
@@ -1020,12 +1104,13 @@ class ScanHarnessTest {
         assertTrue(latch.await(10, TimeUnit.SECONDS), "Scan deve completar em 10s");
         runner.shutdown();
 
-        assertEquals(1, startSeq.get(),                       "onScanStart deve ser o primeiro evento");
-        assertTrue(firstFindingSeq.get() > startSeq.get(),    "findings devem chegar após onScanStart");
-        assertTrue(finishSeq.get() > firstFindingSeq.get(),   "onScanFinish deve chegar após os findings");
+        assertEquals(1, startSeq.get(), "onScanStart deve ser o primeiro evento");
+        assertTrue(firstFindingSeq.get() > startSeq.get(), "findings devem chegar após onScanStart");
+        assertTrue(finishSeq.get() > firstFindingSeq.get(), "onScanFinish deve chegar após os findings");
     }
 
-    @Test @Order(42)
+    @Test
+    @Order(42)
     void scanRunnerDisabledModuleDoesNotRun() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -1038,7 +1123,7 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
 
         List<Finding> found = Collections.synchronizedList(new java.util.ArrayList<>());
-        List<String>  logs  = Collections.synchronizedList(new java.util.ArrayList<>());
+        List<String> logs = Collections.synchronizedList(new java.util.ArrayList<>());
         CountDownLatch latch = new CountDownLatch(1);
         ScanRunner runner = new ScanRunner(logs::add, found::add);
         runner.setOnScanFinish(latch::countDown);
@@ -1048,12 +1133,9 @@ class ScanHarnessTest {
             assertTrue(latch.await(15, TimeUnit.SECONDS), "Scan deve completar em 15s");
             runner.shutdown();
 
-            assertTrue(found.stream().anyMatch(f -> "Headers".equals(f.module())),
-                    "Headers deve gerar findings");
-            assertTrue(found.stream().noneMatch(f -> "CORS".equals(f.module())),
-                    "CORS NÃO deve rodar se desabilitado");
-            assertTrue(found.stream().noneMatch(f -> "SSRF".equals(f.module())),
-                    "SSRF NÃO deve rodar se desabilitado");
+            assertTrue(found.stream().anyMatch(f -> "Headers".equals(f.module())), "Headers deve gerar findings");
+            assertTrue(found.stream().noneMatch(f -> "CORS".equals(f.module())), "CORS NÃO deve rodar se desabilitado");
+            assertTrue(found.stream().noneMatch(f -> "SSRF".equals(f.module())), "SSRF NÃO deve rodar se desabilitado");
             assertTrue(logs.stream().noneMatch(l -> l.contains("Modulo CORS")),
                     "Log NÃO deve conter 'Modulo CORS' quando desabilitado");
         } finally {
@@ -1061,11 +1143,13 @@ class ScanHarnessTest {
         }
     }
 
-    @Test @Order(43)
+    @Test
+    @Order(43)
     void scanRunnerAllModulesDisabledZeroFindings() throws Exception {
         List<Finding> found = Collections.synchronizedList(new java.util.ArrayList<>());
         CountDownLatch latch = new CountDownLatch(1);
-        ScanRunner runner = new ScanRunner(msg -> {}, found::add);
+        ScanRunner runner = new ScanRunner(msg -> {
+        }, found::add);
         runner.setOnScanFinish(latch::countDown);
         runner.run(new ScanContext("https://example.com", "", Set.of()));
         assertTrue(latch.await(5, TimeUnit.SECONDS), "Scan vazio deve completar em 5s");
@@ -1077,7 +1161,8 @@ class ScanHarnessTest {
     // E2E Omnibus — servidor vulnerável completo
     // ─────────────────────────────────────────
 
-    @Test @Order(44)
+    @Test
+    @Order(44)
     void scanRunnerOmnibusVulnerableAllModules() throws Exception {
         HttpServer omnibus = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         int omPort = omnibus.getAddress().getPort();
@@ -1085,9 +1170,9 @@ class ScanHarnessTest {
 
         omnibus.createContext("/", exchange -> {
             String rawPath = exchange.getRequestURI().getRawPath();
-            String path    = exchange.getRequestURI().getPath();
-            String query   = exchange.getRequestURI().getRawQuery();
-            String origin  = exchange.getRequestHeaders().getFirst("Origin");
+            String path = exchange.getRequestURI().getPath();
+            String query = exchange.getRequestURI().getRawQuery();
+            String origin = exchange.getRequestHeaders().getFirst("Origin");
 
             // CORS: reflete origin com credentials em todos os requests
             if (origin != null && !origin.isBlank()) {
@@ -1096,8 +1181,7 @@ class ScanHarnessTest {
             }
 
             // CRLF: injeta Set-Cookie quando path contém CRLF percent-encoded
-            if (rawPath != null && (rawPath.toLowerCase().contains("%0a")
-                    || rawPath.toLowerCase().contains("%0d"))) {
+            if (rawPath != null && (rawPath.toLowerCase().contains("%0a") || rawPath.toLowerCase().contains("%0d"))) {
                 exchange.getResponseHeaders().add("Set-Cookie", "crlf=injection; Path=/; HttpOnly");
             }
 
@@ -1113,8 +1197,8 @@ class ScanHarnessTest {
 
             // OAuth: well-known discovery
             if (path.contains("openid-configuration") || path.contains("oauth-authorization-server")) {
-                String disc = "{\"issuer\":\"" + omBase + "\","
-                        + "\"authorization_endpoint\":\"" + omBase + "/authorize\"}";
+                String disc = "{\"issuer\":\"" + omBase + "\"," + "\"authorization_endpoint\":\"" + omBase
+                        + "/authorize\"}";
                 byte[] b = disc.getBytes();
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(200, b.length);
@@ -1125,11 +1209,12 @@ class ScanHarnessTest {
 
             // OAuth: authorize com redirect_uri bypass
             if (path.endsWith("/authorize") && query != null && query.contains("redirect_uri=")) {
-                String redir = java.util.Arrays.stream(query.split("&"))
-                        .filter(p -> p.startsWith("redirect_uri="))
-                        .map(p -> p.substring("redirect_uri=".length()))
-                        .findFirst().orElse("");
-                try { redir = java.net.URLDecoder.decode(redir, "UTF-8"); } catch (Exception ignored) {}
+                String redir = java.util.Arrays.stream(query.split("&")).filter(p -> p.startsWith("redirect_uri="))
+                        .map(p -> p.substring("redirect_uri=".length())).findFirst().orElse("");
+                try {
+                    redir = java.net.URLDecoder.decode(redir, "UTF-8");
+                } catch (Exception ignored) {
+                }
                 exchange.getResponseHeaders().set("Location", redir + "?code=z");
                 exchange.sendResponseHeaders(302, -1);
                 exchange.getResponseBody().close();
@@ -1159,8 +1244,10 @@ class ScanHarnessTest {
                     int eq = part.indexOf('=');
                     if (eq > 0) {
                         String val = part.substring(eq + 1);
-                        try { val = java.net.URLDecoder.decode(val, "UTF-8"); }
-                        catch (Exception ignored) {}
+                        try {
+                            val = java.net.URLDecoder.decode(val, "UTF-8");
+                        } catch (Exception ignored) {
+                        }
                         if (val.contains("evil.anarcry-probe.com")) {
                             exchange.getResponseHeaders().set("Location", val);
                             exchange.sendResponseHeaders(302, -1);
@@ -1182,8 +1269,7 @@ class ScanHarnessTest {
         // JWT HS256 assinado com segredo fraco "secret", sem claim exp
         String jwtHdr = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
-        String jwtPld = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString("{\"sub\":\"admin\"}".getBytes());
+        String jwtPld = Base64.getUrlEncoder().withoutPadding().encodeToString("{\"sub\":\"admin\"}".getBytes());
         Mac jwtMac = Mac.getInstance("HmacSHA256");
         jwtMac.init(new SecretKeySpec("secret".getBytes("UTF-8"), "HmacSHA256"));
         String jwtSig = Base64.getUrlEncoder().withoutPadding()
@@ -1191,34 +1277,31 @@ class ScanHarnessTest {
         String jwtToken = jwtHdr + "." + jwtPld + "." + jwtSig;
 
         List<Finding> collected = Collections.synchronizedList(new java.util.ArrayList<>());
-        List<String>  logLines  = Collections.synchronizedList(new java.util.ArrayList<>());
+        List<String> logLines = Collections.synchronizedList(new java.util.ArrayList<>());
         CountDownLatch latch = new CountDownLatch(1);
         ScanRunner runner = new ScanRunner(logLines::add, collected::add);
         runner.setOnScanFinish(latch::countDown);
 
         ScanContext ctx = new ScanContext(omBase, jwtToken,
-                Set.of("TLS","Headers","JWT","PQC","CORS","OAuth","OpenRedirect","SSRF","GraphQL","CRLF"));
+                Set.of("TLS", "Headers", "JWT", "PQC", "CORS", "OAuth", "OpenRedirect", "SSRF", "GraphQL", "CRLF"));
         runner.run(ctx);
 
         try {
             assertTrue(latch.await(90, TimeUnit.SECONDS), "Omnibus scan deve completar em 90s");
             runner.shutdown();
 
-            assertTrue(collected.size() >= 5,
-                    "Omnibus deve gerar ≥5 findings, gerou: " + collected.size());
+            assertTrue(collected.size() >= 5, "Omnibus deve gerar ≥5 findings, gerou: " + collected.size());
 
             long crits = collected.stream().filter(f -> f.severity() == Severity.CRITICAL).count();
-            assertTrue(crits >= 2,
-                    "Omnibus deve gerar ≥2 CRITICAL, gerou: " + crits);
+            assertTrue(crits >= 2, "Omnibus deve gerar ≥2 CRITICAL, gerou: " + crits);
 
-            Set<String> mods = collected.stream().map(Finding::module)
-                    .collect(java.util.stream.Collectors.toSet());
-            assertTrue(mods.contains("Headers"),       "Headers deve gerar findings");
-            assertTrue(mods.contains("CORS"),          "CORS deve detectar origin reflection");
-            assertTrue(mods.contains("CRLF"),          "CRLF deve detectar injeção");
-            assertTrue(mods.contains("SSRF"),          "SSRF deve detectar metadata exposure");
-            assertTrue(mods.contains("GraphQL"),       "GraphQL deve detectar introspection");
-            assertTrue(mods.contains("OpenRedirect"),  "OpenRedirect deve detectar redirect aberto");
+            Set<String> mods = collected.stream().map(Finding::module).collect(java.util.stream.Collectors.toSet());
+            assertTrue(mods.contains("Headers"), "Headers deve gerar findings");
+            assertTrue(mods.contains("CORS"), "CORS deve detectar origin reflection");
+            assertTrue(mods.contains("CRLF"), "CRLF deve detectar injeção");
+            assertTrue(mods.contains("SSRF"), "SSRF deve detectar metadata exposure");
+            assertTrue(mods.contains("GraphQL"), "GraphQL deve detectar introspection");
+            assertTrue(mods.contains("OpenRedirect"), "OpenRedirect deve detectar redirect aberto");
 
             assertTrue(logLines.stream().anyMatch(l -> l.contains("TLS") && l.contains("ignorado")),
                     "TLS deve ser ignorado em alvo HTTP");
@@ -1229,7 +1312,8 @@ class ScanHarnessTest {
         }
     }
 
-    @Test @Order(45)
+    @Test
+    @Order(45)
     void scanRunnerCleanServerNoFalsePositives() throws Exception {
         HttpServer clean = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         clean.createContext("/", exchange -> {
@@ -1243,7 +1327,8 @@ class ScanHarnessTest {
 
         List<Finding> found = Collections.synchronizedList(new java.util.ArrayList<>());
         CountDownLatch latch = new CountDownLatch(1);
-        ScanRunner runner = new ScanRunner(msg -> {}, found::add);
+        ScanRunner runner = new ScanRunner(msg -> {
+        }, found::add);
         runner.setOnScanFinish(latch::countDown);
 
         // Módulos de probe: nenhum deve gerar false-positive em servidor limpo
@@ -1254,16 +1339,15 @@ class ScanHarnessTest {
         try {
             assertTrue(latch.await(90, TimeUnit.SECONDS), "Clean scan deve completar em 90s");
             runner.shutdown();
-            assertTrue(found.isEmpty(),
-                    "Servidor limpo NÃO deve gerar findings, gerou: "
-                    + found.stream().map(f -> f.module() + ": " + f.title())
-                            .collect(java.util.stream.Collectors.joining(", ")));
+            assertTrue(found.isEmpty(), "Servidor limpo NÃO deve gerar findings, gerou: " + found.stream()
+                    .map(f -> f.module() + ": " + f.title()).collect(java.util.stream.Collectors.joining(", ")));
         } finally {
             clean.stop(0);
         }
     }
 
-    @Test @Order(46)
+    @Test
+    @Order(46)
     void e2eReportPipelineFromScanRunner() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -1282,7 +1366,8 @@ class ScanHarnessTest {
 
         List<Finding> collected = Collections.synchronizedList(new java.util.ArrayList<>());
         CountDownLatch latch = new CountDownLatch(1);
-        ScanRunner runner = new ScanRunner(msg -> {}, collected::add);
+        ScanRunner runner = new ScanRunner(msg -> {
+        }, collected::add);
         runner.setOnScanFinish(latch::countDown);
         runner.run(new ScanContext("http://127.0.0.1:" + port, "", Set.of("Headers", "CORS")));
 
@@ -1294,16 +1379,15 @@ class ScanHarnessTest {
             assertTrue(collected.stream().anyMatch(f -> f.severity() == Severity.CRITICAL),
                     "CORS deve gerar CRITICAL na pipeline E2E");
 
-            String mdFile = new ReportEngine().export(
-                    new java.util.ArrayList<>(collected), "http://127.0.0.1:" + port);
-            Path md   = Path.of(System.getProperty("user.dir")).resolve(mdFile);
+            String mdFile = new ReportEngine().export(new java.util.ArrayList<>(collected), "http://127.0.0.1:" + port);
+            Path md = Path.of(System.getProperty("user.dir")).resolve(mdFile);
             Path json = Path.of(System.getProperty("user.dir")).resolve(mdFile.replace(".md", ".json"));
             try {
-                assertTrue(Files.exists(md),   "Arquivo .md deve existir após export");
+                assertTrue(Files.exists(md), "Arquivo .md deve existir após export");
                 assertTrue(Files.exists(json), "Arquivo .json deve existir após export");
                 String mdContent = Files.readString(md);
                 assertTrue(mdContent.contains("127.0.0.1"), "MD deve conter o target URL");
-                assertTrue(mdContent.contains("CRITICAL"),  "MD deve conter finding CRITICAL");
+                assertTrue(mdContent.contains("CRITICAL"), "MD deve conter finding CRITICAL");
             } finally {
                 Files.deleteIfExists(md);
                 Files.deleteIfExists(json);
@@ -1317,16 +1401,20 @@ class ScanHarnessTest {
     // Web Cache Poisoning — Sprint 25
     // ─────────────────────────────────────────
 
-    @Test @Order(56)
+    @Test
+    @Order(56)
     void cachePoisoningReflectedCachedCritical() throws Exception {
-        // Simulates a real poisoned cache: first request with X-Forwarded-Host stores the value,
-        // subsequent requests (even without the header) keep returning the poisoned body.
-        java.util.concurrent.atomic.AtomicReference<String> cachedValue =
-                new java.util.concurrent.atomic.AtomicReference<>("ok");
+        // Simulates a real poisoned cache: first request with X-Forwarded-Host stores
+        // the value,
+        // subsequent requests (even without the header) keep returning the poisoned
+        // body.
+        java.util.concurrent.atomic.AtomicReference<String> cachedValue = new java.util.concurrent.atomic.AtomicReference<>(
+                "ok");
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             String xfh = exchange.getRequestHeaders().getFirst("X-Forwarded-Host");
-            if (xfh != null) cachedValue.set(xfh);
+            if (xfh != null)
+                cachedValue.set(xfh);
             byte[] body = cachedValue.get().getBytes();
             exchange.getResponseHeaders().set("X-Cache", "HIT from proxy");
             exchange.sendResponseHeaders(200, body.length);
@@ -1337,19 +1425,22 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CachePoisoning"));
-            List<Finding> findings = new CachePoisoningModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.CRITICAL
-                    && f.title().toLowerCase().contains("cache")),
+            List<Finding> findings = new CachePoisoningModule().scan(ctx, msg -> {
+            });
+            assertTrue(
+                    findings.stream().anyMatch(
+                            f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("cache")),
                     "X-Forwarded-Host refletido + X-Cache:HIT deve gerar CRITICAL");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(57)
+    @Test
+    @Order(57)
     void cachePoisoningReflectedNoCacheHigh() throws Exception {
-        // Potentially vulnerable: reflects X-Forwarded-Host in body but no cache indicators
+        // Potentially vulnerable: reflects X-Forwarded-Host in body but no cache
+        // indicators
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             String xfh = exchange.getRequestHeaders().getFirst("X-Forwarded-Host");
@@ -1362,17 +1453,19 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CachePoisoning"));
-            List<Finding> findings = new CachePoisoningModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.HIGH
-                    && f.title().toLowerCase().contains("cache")),
+            List<Finding> findings = new CachePoisoningModule().scan(ctx, msg -> {
+            });
+            assertTrue(
+                    findings.stream()
+                            .anyMatch(f -> f.severity() == Severity.HIGH && f.title().toLowerCase().contains("cache")),
                     "X-Forwarded-Host refletido sem cache deve gerar HIGH");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(58)
+    @Test
+    @Order(58)
     void cachePoisoningCleanNoFinding() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -1385,7 +1478,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CachePoisoning"));
-            List<Finding> findings = new CachePoisoningModule().scan(ctx, msg -> {});
+            List<Finding> findings = new CachePoisoningModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "Servidor que não reflete headers → sem finding");
         } finally {
             server.stop(0);
@@ -1396,9 +1490,11 @@ class ScanHarnessTest {
     // HTTP Request Smuggling — Sprint 26
     // ─────────────────────────────────────────
 
-    @Test @Order(59)
+    @Test
+    @Order(59)
     void reqSmugglingClTeDetected() throws Exception {
-        // Raw TCP server: hangs 5s when it receives both CL and TE headers (simulates CL.TE vulnerable backend)
+        // Raw TCP server: hangs 5s when it receives both CL and TE headers (simulates
+        // CL.TE vulnerable backend)
         java.net.ServerSocket rawServer = new java.net.ServerSocket(0);
         int rawPort = rawServer.getLocalPort();
         Thread serverThread = new Thread(() -> {
@@ -1414,23 +1510,25 @@ class ScanHarnessTest {
                 }
                 String resp = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
                 conn.getOutputStream().write(resp.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         });
         serverThread.setDaemon(true);
         serverThread.start();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + rawPort, "", Set.of("ReqSmuggling"));
             List<Finding> findings = new RequestSmugglingModule().scan(ctx, msg -> System.out.println("[SMUG] " + msg));
-            assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.CRITICAL
-                    && f.title().toLowerCase().contains("cl.te")),
+            assertTrue(
+                    findings.stream().anyMatch(
+                            f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("cl.te")),
                     "Servidor CL.TE deve gerar CRITICAL");
         } finally {
             rawServer.close();
         }
     }
 
-    @Test @Order(60)
+    @Test
+    @Order(60)
     void reqSmugglingCleanNoFinding() throws Exception {
         // Fast server: always responds quickly → no timing differential detected
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -1444,9 +1542,9 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("ReqSmuggling"));
-            List<Finding> findings = new RequestSmugglingModule().scan(ctx, msg -> {});
-            assertTrue(findings.isEmpty(),
-                    "Servidor rápido não deve gerar finding de request smuggling");
+            List<Finding> findings = new RequestSmugglingModule().scan(ctx, msg -> {
+            });
+            assertTrue(findings.isEmpty(), "Servidor rápido não deve gerar finding de request smuggling");
         } finally {
             server.stop(0);
         }
@@ -1456,10 +1554,13 @@ class ScanHarnessTest {
     // CRLF Sprint 28 — injeção via request headers
     // ─────────────────────────────────────────
 
-    @Test @Order(61)
+    @Test
+    @Order(61)
     void crlfHeaderInjectionDetected() throws Exception {
-        // Multi-connection raw TCP server: accepts all connections, reflects raw User-Agent in response headers.
-        // Path probes (via HttpClient) get a normal 200. Header probe (raw socket) gets CRLF echoed back.
+        // Multi-connection raw TCP server: accepts all connections, reflects raw
+        // User-Agent in response headers.
+        // Path probes (via HttpClient) get a normal 200. Header probe (raw socket) gets
+        // CRLF echoed back.
         java.net.ServerSocket rawServer = new java.net.ServerSocket(0);
         rawServer.setReuseAddress(true);
         int rawPort = rawServer.getLocalPort();
@@ -1473,15 +1574,17 @@ class ScanHarnessTest {
                             byte[] buf = new byte[4096];
                             int read = c.getInputStream().read(buf);
                             String req = read > 0
-                                    ? new String(buf, 0, read, java.nio.charset.StandardCharsets.ISO_8859_1) : "";
+                                    ? new String(buf, 0, read, java.nio.charset.StandardCharsets.ISO_8859_1)
+                                    : "";
                             StringBuilder resp = new StringBuilder("HTTP/1.1 200 OK\r\n");
                             // Vulnerable server: extracts User-Agent value without splitting on CRLF,
                             // then reflects it raw — CRLF in the value injects our marker as a new header
                             int uaIdx = req.indexOf("User-Agent: ");
                             if (uaIdx >= 0) {
                                 int valStart = uaIdx + "User-Agent: ".length();
-                                int valEnd   = req.indexOf("\r\nConnection:", valStart);
-                                if (valEnd < 0) valEnd = req.indexOf("\r\n\r\n", valStart);
+                                int valEnd = req.indexOf("\r\nConnection:", valStart);
+                                if (valEnd < 0)
+                                    valEnd = req.indexOf("\r\n\r\n", valStart);
                                 if (valEnd > valStart) {
                                     String uaRaw = req.substring(valStart, valEnd);
                                     // Reflecting raw bytes — CRLF in value breaks out into a new header
@@ -1489,11 +1592,14 @@ class ScanHarnessTest {
                                 }
                             }
                             resp.append("Content-Length: 2\r\n\r\nOK");
-                            c.getOutputStream().write(resp.toString()
-                                    .getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
-                        } catch (Exception ignored) {}
+                            c.getOutputStream()
+                                    .write(resp.toString().getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+                        } catch (Exception ignored) {
+                        }
                     }).start();
-                } catch (Exception ignored) { break; }
+                } catch (Exception ignored) {
+                    break;
+                }
             }
         });
         acceptLoop.setDaemon(true);
@@ -1501,18 +1607,20 @@ class ScanHarnessTest {
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + rawPort, "", Set.of("CRLF"));
             List<Finding> findings = new CrlfModule().scan(ctx, msg -> System.out.println("[CRLF] " + msg));
-            assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.CRITICAL
-                    && f.title().toLowerCase().contains("user-agent")),
+            assertTrue(
+                    findings.stream().anyMatch(
+                            f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("user-agent")),
                     "Servidor que reflete User-Agent com CRLF deve gerar CRITICAL");
         } finally {
             rawServer.close();
         }
     }
 
-    @Test @Order(62)
+    @Test
+    @Order(62)
     void crlfHeaderInjectionCleanNoFinding() throws Exception {
-        // Safe server: responds normally, never injects our marker into response headers
+        // Safe server: responds normally, never injects our marker into response
+        // headers
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             byte[] body = "ok".getBytes();
@@ -1524,9 +1632,9 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CRLF"));
-            List<Finding> findings = new CrlfModule().scan(ctx, msg -> {});
-            assertTrue(findings.isEmpty(),
-                    "Servidor que não reflete CRLF não deve gerar finding");
+            List<Finding> findings = new CrlfModule().scan(ctx, msg -> {
+            });
+            assertTrue(findings.isEmpty(), "Servidor que não reflete CRLF não deve gerar finding");
         } finally {
             server.stop(0);
         }
@@ -1544,24 +1652,15 @@ class ScanHarnessTest {
         long now = System.currentTimeMillis();
         X500Name subject = new X500Name("CN=localhost");
         ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSA").build(kp.getPrivate());
-        GeneralNames sans = new GeneralNames(new GeneralName[]{
-            new GeneralName(GeneralName.dNSName,  "localhost"),
-            new GeneralName(GeneralName.iPAddress, "127.0.0.1")
-        });
-        X509Certificate cert = new JcaX509CertificateConverter().getCertificate(
-            new JcaX509v3CertificateBuilder(
-                subject, BigInteger.ONE,
-                new Date(now), new Date(now + 365L * 86400_000L),
-                subject, kp.getPublic()
-            )
-            .addExtension(Extension.subjectAlternativeName, false, sans)
-            .build(signer)
-        );
+        GeneralNames sans = new GeneralNames(new GeneralName[]{new GeneralName(GeneralName.dNSName, "localhost"),
+                new GeneralName(GeneralName.iPAddress, "127.0.0.1")});
+        X509Certificate cert = new JcaX509CertificateConverter().getCertificate(new JcaX509v3CertificateBuilder(subject,
+                BigInteger.ONE, new Date(now), new Date(now + 365L * 86400_000L), subject, kp.getPublic())
+                .addExtension(Extension.subjectAlternativeName, false, sans).build(signer));
 
         KeyStore ks = KeyStore.getInstance("PKCS12");
         ks.load(null, null);
-        ks.setKeyEntry("test", kp.getPrivate(), "x".toCharArray(),
-                new java.security.cert.Certificate[]{cert});
+        ks.setKeyEntry("test", kp.getPrivate(), "x".toCharArray(), new java.security.cert.Certificate[]{cert});
 
         KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
         kmf.init(ks, "x".toCharArray());
@@ -1585,10 +1684,10 @@ class ScanHarnessTest {
     // ScanEvent — Sprint 7
     // ─────────────────────────────────────────
 
-    @Test @Order(47)
+    @Test
+    @Order(47)
     void scanEventModuleDoneFiresPerModule() throws Exception {
-        List<gg.effront.anarcry.scanner.ScanEvent> events =
-                Collections.synchronizedList(new java.util.ArrayList<>());
+        List<gg.effront.anarcry.scanner.ScanEvent> events = Collections.synchronizedList(new java.util.ArrayList<>());
         CountDownLatch latch = new CountDownLatch(1);
 
         // Two stub modules: JWT (alg:none — no network) + Headers (minimal server)
@@ -1604,7 +1703,9 @@ class ScanHarnessTest {
 
         try {
             String token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.";
-            ScanRunner runner = new ScanRunner(msg -> {}, f -> {});
+            ScanRunner runner = new ScanRunner(msg -> {
+            }, f -> {
+            });
             runner.setOnScanEvent(events::add);
             runner.setOnScanFinish(latch::countDown);
             runner.run(new ScanContext("http://127.0.0.1:" + port, token, Set.of("JWT", "Headers")));
@@ -1613,18 +1714,18 @@ class ScanHarnessTest {
             runner.shutdown();
 
             long moduleDoneCount = events.stream()
-                    .filter(e -> e.type() == gg.effront.anarcry.scanner.ScanEvent.Type.MODULE_DONE)
-                    .count();
+                    .filter(e -> e.type() == gg.effront.anarcry.scanner.ScanEvent.Type.MODULE_DONE).count();
             assertEquals(2, moduleDoneCount, "Deve disparar exatamente 2 MODULE_DONE para 2 módulos");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(48)
+    @Test
+    @Order(48)
     void scanEventIndexProgression() throws Exception {
-        List<gg.effront.anarcry.scanner.ScanEvent> doneEvents =
-                Collections.synchronizedList(new java.util.ArrayList<>());
+        List<gg.effront.anarcry.scanner.ScanEvent> doneEvents = Collections
+                .synchronizedList(new java.util.ArrayList<>());
         CountDownLatch latch = new CountDownLatch(1);
 
         // Three stub modules: JWT + CORS + CRLF (all HTTP, no TLS needed)
@@ -1640,7 +1741,9 @@ class ScanHarnessTest {
 
         try {
             String token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.";
-            ScanRunner runner = new ScanRunner(msg -> {}, f -> {});
+            ScanRunner runner = new ScanRunner(msg -> {
+            }, f -> {
+            });
             runner.setOnScanEvent(e -> {
                 if (e.type() == gg.effront.anarcry.scanner.ScanEvent.Type.MODULE_DONE)
                     doneEvents.add(e);
@@ -1654,8 +1757,7 @@ class ScanHarnessTest {
             assertEquals(3, doneEvents.size(), "Deve ter 3 MODULE_DONE events");
             // Com execução paralela a ordem de conclusão é não-determinística;
             // verifica apenas que os índices 1-3 estão todos presentes.
-            Set<Integer> indices = doneEvents.stream()
-                    .map(gg.effront.anarcry.scanner.ScanEvent::index)
+            Set<Integer> indices = doneEvents.stream().map(gg.effront.anarcry.scanner.ScanEvent::index)
                     .collect(java.util.stream.Collectors.toSet());
             assertEquals(Set.of(1, 2, 3), indices, "MODULE_DONE deve conter os índices 1, 2 e 3");
             doneEvents.forEach(e -> assertEquals(3, e.total(), "Total deve ser 3 em todos os events"));
@@ -1668,13 +1770,14 @@ class ScanHarnessTest {
     // XXE — Sprint 11
     // ─────────────────────────────────────────
 
-    @Test @Order(49)
+    @Test
+    @Order(49)
     void xxeFileReadDetected() throws Exception {
         // Server accepts XML and echoes entity expansion (file read simulation)
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/api/", exchange -> {
             String body = exchange.getRequestBody().readAllBytes().length > 0
-                    ? "myserver\n"  // simulates /etc/hostname being returned
+                    ? "myserver\n" // simulates /etc/hostname being returned
                     : "error";
             exchange.sendResponseHeaders(200, body.getBytes().length);
             exchange.getResponseBody().write(body.getBytes());
@@ -1684,16 +1787,17 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("XXE"));
-            List<Finding> findings = new XxeModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.CRITICAL && f.module().equals("XXE")),
+            List<Finding> findings = new XxeModule().scan(ctx, msg -> {
+            });
+            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.CRITICAL && f.module().equals("XXE")),
                     "Servidor vulnerável a XXE deve gerar CRITICAL");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(50)
+    @Test
+    @Order(50)
     void xxeCleanNoFinding() throws Exception {
         // Server returns 415 for XML (rejects it)
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -1705,7 +1809,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("XXE"));
-            List<Finding> findings = new XxeModule().scan(ctx, msg -> {});
+            List<Finding> findings = new XxeModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "Servidor rejeitando XML não deve gerar finding");
         } finally {
             server.stop(0);
@@ -1716,7 +1821,8 @@ class ScanHarnessTest {
     // SSTI — Sprint 12
     // ─────────────────────────────────────────
 
-    @Test @Order(51)
+    @Test
+    @Order(51)
     void sstiFreemarkerDetected() throws Exception {
         // Server echoes "2401" when query param contains ${7*7*7*7} (7^4)
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -1736,16 +1842,17 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("SSTI"));
-            List<Finding> findings = new SstiModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.CRITICAL && f.module().equals("SSTI")),
+            List<Finding> findings = new SstiModule().scan(ctx, msg -> {
+            });
+            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.CRITICAL && f.module().equals("SSTI")),
                     "Servidor que retorna 2401 deve gerar SSTI CRITICAL");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(52)
+    @Test
+    @Order(52)
     void sstiCleanNoFinding() throws Exception {
         // Server always returns the same text, never "49"
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -1759,7 +1866,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("SSTI"));
-            List<Finding> findings = new SstiModule().scan(ctx, msg -> {});
+            List<Finding> findings = new SstiModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "Servidor sem SSTI não deve gerar finding");
         } finally {
             server.stop(0);
@@ -1770,7 +1878,8 @@ class ScanHarnessTest {
     // IDOR — Sprint 13
     // ─────────────────────────────────────────
 
-    @Test @Order(53)
+    @Test
+    @Order(53)
     void idorDetectedCrossUser() throws Exception {
         // Server returns the same body regardless of which Bearer token is used
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -1783,18 +1892,18 @@ class ScanHarnessTest {
         server.start();
         int port = server.getAddress().getPort();
         try {
-            ScanContext ctx = new ScanContext(
-                    "http://127.0.0.1:" + port, "token1", Set.of("IDOR"), "token2");
-            List<Finding> findings = new IdorModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.HIGH && f.module().equals("IDOR")),
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "token1", Set.of("IDOR"), "token2");
+            List<Finding> findings = new IdorModule().scan(ctx, msg -> {
+            });
+            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.HIGH && f.module().equals("IDOR")),
                     "Servidor que retorna o mesmo recurso para tokens diferentes deve gerar IDOR HIGH");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(54)
+    @Test
+    @Order(54)
     void idorBlockedNoFinding() throws Exception {
         // Server returns 403 for token2 (correct authorization)
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -1812,9 +1921,9 @@ class ScanHarnessTest {
         server.start();
         int port = server.getAddress().getPort();
         try {
-            ScanContext ctx = new ScanContext(
-                    "http://127.0.0.1:" + port, "token1", Set.of("IDOR"), "token2");
-            List<Finding> findings = new IdorModule().scan(ctx, msg -> {});
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "token1", Set.of("IDOR"), "token2");
+            List<Finding> findings = new IdorModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "Servidor com autorização correta não deve gerar IDOR");
         } finally {
             server.stop(0);
@@ -1825,7 +1934,8 @@ class ScanHarnessTest {
     // Sprint 16 — CVSS, CWE Registry, Dedup
     // ─────────────────────────────────────────
 
-    @Test @Order(63)
+    @Test
+    @Order(63)
     void cvssCalculatorKnownVectors() {
         assertEquals(10.0, CvssCalculator.calculate("AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:N"), 0.1,
                 "AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:N deve ser 10.0");
@@ -1835,12 +1945,12 @@ class ScanHarnessTest {
                 "AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N deve ser 0.0");
     }
 
-    @Test @Order(64)
+    @Test
+    @Order(64)
     void cweRegistryMappedForAllModules() {
-        List<String> moduleIds = List.of(
-                "TLS", "Headers", "JWT", "PQC", "CORS", "OAuth", "OpenRedirect", "SSRF",
-                "GraphQL", "CRLF", "XXE", "SSTI", "IDOR", "HostHeader", "Actuator",
-                "MassAssign", "CachePoisoning", "ReqSmuggling");
+        List<String> moduleIds = List.of("TLS", "Headers", "JWT", "PQC", "CORS", "OAuth", "OpenRedirect", "SSRF",
+                "GraphQL", "CRLF", "XXE", "SSTI", "IDOR", "HostHeader", "Actuator", "MassAssign", "CachePoisoning",
+                "ReqSmuggling");
         for (String moduleId : moduleIds) {
             String[] entry = CweRegistry.forModule(moduleId);
             assertNotNull(entry, "forModule(" + moduleId + ") não deve retornar null");
@@ -1848,23 +1958,27 @@ class ScanHarnessTest {
         }
     }
 
-    @Test @Order(65)
+    @Test
+    @Order(65)
     void scanRunnerDeduplicatesDuplicateFindings() throws Exception {
-        Finding dup = new Finding("Mock", "/dup", "Dup Title", Severity.HIGH,
-                "ev", "imp", "rep", "rec",
-                "CWE-200", "Exposure of Sensitive Information",
-                "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3);
+        Finding dup = new Finding("Mock", "/dup", "Dup Title", Severity.HIGH, "ev", "imp", "rep", "rec", "CWE-200",
+                "Exposure of Sensitive Information", "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3);
 
         Scanner mockScanner = new Scanner() {
-            @Override public String id() { return "Mock"; }
-            @Override public List<Finding> scan(ScanContext ctx, java.util.function.Consumer<String> log) {
+            @Override
+            public String id() {
+                return "Mock";
+            }
+            @Override
+            public List<Finding> scan(ScanContext ctx, java.util.function.Consumer<String> log) {
                 return List.of(dup, dup);
             }
         };
 
         AtomicInteger counter = new AtomicInteger(0);
         CountDownLatch latch = new CountDownLatch(1);
-        ScanRunner runner = new ScanRunner(msg -> {}, f -> counter.incrementAndGet());
+        ScanRunner runner = new ScanRunner(msg -> {
+        }, f -> counter.incrementAndGet());
         runner.addModule(mockScanner);
         runner.setOnScanFinish(latch::countDown);
         runner.run(new ScanContext("https://example.com", "", Set.of()));
@@ -1878,13 +1992,14 @@ class ScanHarnessTest {
     // Crawler — Sprints 18-21
     // ─────────────────────────────────────────
 
-    @Test @Order(66)
+    @Test
+    @Order(66)
     void crawlerDiscoverOpenApi() throws Exception {
         // Server returns a minimal swagger.json at /swagger.json
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/swagger.json", exchange -> {
-            byte[] body = ("{\"swagger\":\"2.0\",\"info\":{\"title\":\"Test\",\"version\":\"1.0\"},"
-                    + "\"paths\":{}}").getBytes();
+            byte[] body = ("{\"swagger\":\"2.0\",\"info\":{\"title\":\"Test\",\"version\":\"1.0\"}," + "\"paths\":{}}")
+                    .getBytes();
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
@@ -1898,16 +2013,20 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("Crawler"));
-            List<Finding> findings = new CrawlerModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().anyMatch(f ->
-                    f.title().toLowerCase().contains("openapi") || f.title().toLowerCase().contains("swagger")),
+            List<Finding> findings = new CrawlerModule().scan(ctx, msg -> {
+            });
+            assertTrue(
+                    findings.stream()
+                            .anyMatch(f -> f.title().toLowerCase().contains("openapi")
+                                    || f.title().toLowerCase().contains("swagger")),
                     "CrawlerModule deve detectar OpenAPI/Swagger spec exposta");
         } finally {
             server.stop(0);
         }
     }
 
-    @Test @Order(67)
+    @Test
+    @Order(67)
     void crawlerWordlistSensitivePath() throws Exception {
         // Server returns 200 at /.env (sensitive path)
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -1925,7 +2044,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("Crawler"));
-            List<Finding> findings = new CrawlerModule().scan(ctx, msg -> {});
+            List<Finding> findings = new CrawlerModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.HIGH),
                     "CrawlerModule deve emitir finding HIGH para /.env acessível");
         } finally {
@@ -1933,29 +2053,30 @@ class ScanHarnessTest {
         }
     }
 
-    @Test @Order(68)
+    @Test
+    @Order(68)
     void scanConfigDelayIsRespected() {
         ScanConfig config = new ScanConfig(0, "", Set.of());
-        ScanContext ctx = new ScanContext("https://example.com", "", "", Set.of(), config, r -> {});
-        assertEquals(config, ctx.config(),
-                "ScanContext.config() deve retornar o ScanConfig fornecido");
-        assertEquals(0, ctx.config().delayMs(),
-                "ScanConfig.delayMs deve ser 0");
+        ScanContext ctx = new ScanContext("https://example.com", "", "", Set.of(), config, r -> {
+        });
+        assertEquals(config, ctx.config(), "ScanContext.config() deve retornar o ScanConfig fornecido");
+        assertEquals(0, ctx.config().delayMs(), "ScanConfig.delayMs deve ser 0");
     }
 
-    @Test @Order(69)
+    @Test
+    @Order(69)
     void scanConfigInScopeCheck() {
         ScanConfig config = new ScanConfig(0, "", Set.of("allowed.com"));
-        assertTrue(config.isInScope("allowed.com"),
-                "isInScope(\"allowed.com\") deve ser true");
-        assertFalse(config.isInScope("blocked.com"),
-                "isInScope(\"blocked.com\") deve ser false");
+        assertTrue(config.isInScope("allowed.com"), "isInScope(\"allowed.com\") deve ser true");
+        assertFalse(config.isInScope("blocked.com"), "isInScope(\"blocked.com\") deve ser false");
     }
 
-    @Test @Order(55)
+    @Test
+    @Order(55)
     void idorSkipsWhenNoToken2() throws Exception {
         // Server returns 403 for DELETE (no IDOR via deletion) and non-JSON for GraphQL
-        // Phase 1 is skipped (no token2); phases 2+3 should not generate findings on this server.
+        // Phase 1 is skipped (no token2); phases 2+3 should not generate findings on
+        // this server.
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             if ("DELETE".equals(exchange.getRequestMethod())) {
@@ -1974,9 +2095,11 @@ class ScanHarnessTest {
         server.start();
         int port = server.getAddress().getPort();
         try {
-            // No jwtToken2 provided — phase 1 skipped; phases 2+3 find no IDOR on this server
+            // No jwtToken2 provided — phase 1 skipped; phases 2+3 find no IDOR on this
+            // server
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "token1", Set.of("IDOR"));
-            List<Finding> findings = new IdorModule().scan(ctx, msg -> {});
+            List<Finding> findings = new IdorModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "IDOR sem jwtToken2 e server seguro deve retornar lista vazia");
         } finally {
             server.stop(0);

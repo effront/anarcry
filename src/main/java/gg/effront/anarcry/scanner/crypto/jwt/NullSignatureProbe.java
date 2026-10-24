@@ -25,11 +25,8 @@ public class NullSignatureProbe {
         log.accept("[~] JWT: probe null signature (CVE-2020-28042) → " + base);
         for (String path : AUTH_PATHS) {
             try {
-                HttpRequest req = HttpRequest.newBuilder()
-                        .uri(URI.create(base + path))
-                        .header("Authorization", "Bearer " + nullToken)
-                        .timeout(Duration.ofSeconds(5))
-                        .GET().build();
+                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(base + path))
+                        .header("Authorization", "Bearer " + nullToken).timeout(Duration.ofSeconds(5)).GET().build();
                 HttpResponse<Void> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.discarding(), "JWT");
                 log.accept("[~] JWT: null sig " + path + " → HTTP " + resp.statusCode());
                 if (resp.statusCode() == 200) {
@@ -40,9 +37,11 @@ public class NullSignatureProbe {
                     return Optional.of(Finding.of("JWT", base + path,
                             "Null signature aceita ativamente (CVE-2020-28042)", Severity.CRITICAL,
                             "Probe em " + base + path + " → HTTP 200 com signature vazia",
-                            "Servidor aceita tokens sem assinatura — o payload pode ser forjado livremente mantendo o algoritmo original",
+                            "Servidor aceita tokens sem assinatura — o payload pode ser forjado livremente mantendo o"
+                                    + "algoritmo original",
                             "curl -H 'Authorization: Bearer " + nullToken + "' " + base + path,
-                            "Rejeitar tokens cuja signature esteja ausente ou vazia; validar presença de signature para todos os algoritmos",
+                            "Rejeitar tokens cuja signature esteja ausente ou vazia; validar presença de signature para"
+                                    + "todos os algoritmos",
                             _cweId, _cweTitle, _cvssVector, _score));
                 }
             } catch (Exception e) {

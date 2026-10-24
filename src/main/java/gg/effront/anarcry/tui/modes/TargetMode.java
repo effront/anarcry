@@ -2,7 +2,14 @@ package gg.effront.anarcry.tui.modes;
 
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.TextColor;
-import com.googlecode.lanterna.gui2.*;
+import com.googlecode.lanterna.gui2.Borders;
+import com.googlecode.lanterna.gui2.Button;
+import com.googlecode.lanterna.gui2.Component;
+import com.googlecode.lanterna.gui2.Direction;
+import com.googlecode.lanterna.gui2.EmptySpace;
+import com.googlecode.lanterna.gui2.Label;
+import com.googlecode.lanterna.gui2.LinearLayout;
+import com.googlecode.lanterna.gui2.Panel;
 import gg.effront.anarcry.tui.PasteableTextBox;
 import gg.effront.anarcry.tui.panels.ModulesPanel;
 

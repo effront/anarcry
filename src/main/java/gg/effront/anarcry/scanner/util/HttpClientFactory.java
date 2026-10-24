@@ -6,13 +6,15 @@ import javax.net.ssl.SSLParameters;
 
 public final class HttpClientFactory {
 
-    // HTTP/2, follows redirects — general purpose (Headers, JWT, CORS, OAuth, GraphQL, CRLF, XXE, SSTI, IDOR)
+    // HTTP/2, follows redirects — general purpose (Headers, JWT, CORS, OAuth,
+    // GraphQL, CRLF, XXE, SSTI, IDOR)
     private static volatile HttpClient http2Instance;
 
     // HTTP/1.1, no redirect — for SSRF and OpenRedirect probing
     private static volatile HttpClient noRedirectInstance;
 
-    private HttpClientFactory() {}
+    private HttpClientFactory() {
+    }
 
     public static HttpClient http2() throws Exception {
         if (http2Instance == null) {
@@ -20,13 +22,9 @@ public final class HttpClientFactory {
                 if (http2Instance == null) {
                     SSLParameters params = new SSLParameters();
                     params.setEndpointIdentificationAlgorithm("");
-                    http2Instance = HttpClient.newBuilder()
-                            .sslContext(TlsUtil.sslContext(TlsUtil.trustAll()))
-                            .sslParameters(params)
-                            .followRedirects(HttpClient.Redirect.NORMAL)
-                            .version(HttpClient.Version.HTTP_2)
-                            .connectTimeout(Duration.ofSeconds(5))
-                            .build();
+                    http2Instance = HttpClient.newBuilder().sslContext(TlsUtil.sslContext(TlsUtil.trustAll()))
+                            .sslParameters(params).followRedirects(HttpClient.Redirect.NORMAL)
+                            .version(HttpClient.Version.HTTP_2).connectTimeout(Duration.ofSeconds(5)).build();
                 }
             }
         }
@@ -39,13 +37,9 @@ public final class HttpClientFactory {
                 if (noRedirectInstance == null) {
                     SSLParameters params = new SSLParameters();
                     params.setEndpointIdentificationAlgorithm("");
-                    noRedirectInstance = HttpClient.newBuilder()
-                            .sslContext(TlsUtil.sslContext(TlsUtil.trustAll()))
-                            .sslParameters(params)
-                            .followRedirects(HttpClient.Redirect.NEVER)
-                            .version(HttpClient.Version.HTTP_1_1)
-                            .connectTimeout(Duration.ofSeconds(5))
-                            .build();
+                    noRedirectInstance = HttpClient.newBuilder().sslContext(TlsUtil.sslContext(TlsUtil.trustAll()))
+                            .sslParameters(params).followRedirects(HttpClient.Redirect.NEVER)
+                            .version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(5)).build();
                 }
             }
         }
@@ -56,12 +50,8 @@ public final class HttpClientFactory {
     public static HttpClient followOne() throws Exception {
         SSLParameters params = new SSLParameters();
         params.setEndpointIdentificationAlgorithm("");
-        return HttpClient.newBuilder()
-                .sslContext(TlsUtil.sslContext(TlsUtil.trustAll()))
-                .sslParameters(params)
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofSeconds(5))
-                .build();
+        return HttpClient.newBuilder().sslContext(TlsUtil.sslContext(TlsUtil.trustAll())).sslParameters(params)
+                .followRedirects(HttpClient.Redirect.NORMAL).version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofSeconds(5)).build();
     }
 }

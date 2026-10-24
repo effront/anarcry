@@ -18,21 +18,20 @@ public class TlsVersionProbe {
 
     private static final int TIMEOUT_MS = 5000;
 
-    private String id() { return "TLS"; }
+    private String id() {
+        return "TLS";
+    }
 
     public List<Finding> probe(ScanContext ctx, Consumer<String> log) {
-        String _cweId     = CweRegistry.cweId(id());
-        String _cweTitle  = CweRegistry.cweTitle(id());
+        String _cweId = CweRegistry.cweId(id());
+        String _cweTitle = CweRegistry.cweTitle(id());
         String _cveVector = CweRegistry.cvssVector(id());
-        double _score     = CvssCalculator.calculate(_cveVector);
+        double _score = CvssCalculator.calculate(_cveVector);
         List<Finding> findings = new ArrayList<>();
         String host = ctx.host();
-        int port    = ctx.port();
+        int port = ctx.port();
 
-        String[][] tests = {
-            {"TLSv1",   "HIGH",   "-tls1"},
-            {"TLSv1.1", "MEDIUM", "-tls1_1"},
-        };
+        String[][] tests = {{"TLSv1", "HIGH", "-tls1"}, {"TLSv1.1", "MEDIUM", "-tls1_1"},};
 
         for (String[] test : tests) {
             String protocol = test[0];
@@ -44,8 +43,8 @@ public class TlsVersionProbe {
             synchronized (TlsUtil.PROP_LOCK) {
                 Runnable restore = TlsUtil.removeDisabled(protocol);
                 try {
-                    try (SSLSocket socket = TlsUtil.connectSocket(host, port,
-                            TlsUtil.sslContext(TlsUtil.trustAll()), TIMEOUT_MS)) {
+                    try (SSLSocket socket = TlsUtil.connectSocket(host, port, TlsUtil.sslContext(TlsUtil.trustAll()),
+                            TIMEOUT_MS)) {
                         socket.setEnabledProtocols(new String[]{protocol});
                         socket.startHandshake();
                         // Confirm the server actually used the weak protocol, not a fallback
@@ -56,17 +55,12 @@ public class TlsVersionProbe {
                         }
                     }
                     log.accept("[!] TLS: " + protocol + " aceito pelo servidor");
-                    findings.add(Finding.of(
-                        "TLS",
-                        host + ":" + port,
-                        protocol + " habilitado no servidor",
-                        severity,
-                        "Handshake bem-sucedido com " + protocol + " em " + host + ":" + port,
-                        "Protocolo obsoleto sujeito a ataques BEAST/POODLE/downgrade",
-                        "openssl s_client -connect " + host + ":" + port + " " + flag,
-                        "Desabilitar TLS 1.0 e TLS 1.1 na configuração do servidor",
-                        _cweId, _cweTitle, _cveVector, _score
-                    ));
+                    findings.add(Finding.of("TLS", host + ":" + port, protocol + " habilitado no servidor", severity,
+                            "Handshake bem-sucedido com " + protocol + " em " + host + ":" + port,
+                            "Protocolo obsoleto sujeito a ataques BEAST/POODLE/downgrade",
+                            "openssl s_client -connect " + host + ":" + port + " " + flag,
+                            "Desabilitar TLS 1.0 e TLS 1.1 na configuração do servidor", _cweId, _cweTitle, _cveVector,
+                            _score));
                 } catch (SSLException e) {
                     log.accept("[+] TLS: " + protocol + " rejeitado (ok)");
                 } catch (IOException e) {

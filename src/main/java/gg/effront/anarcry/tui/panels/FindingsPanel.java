@@ -1,8 +1,11 @@
 package gg.effront.anarcry.tui.panels;
 
 import com.googlecode.lanterna.TerminalSize;
-import com.googlecode.lanterna.TextColor;
-import com.googlecode.lanterna.gui2.*;
+import com.googlecode.lanterna.gui2.ActionListBox;
+import com.googlecode.lanterna.gui2.Direction;
+import com.googlecode.lanterna.gui2.Label;
+import com.googlecode.lanterna.gui2.LinearLayout;
+import com.googlecode.lanterna.gui2.Panel;
 import gg.effront.anarcry.model.Finding;
 
 import java.util.ArrayList;
@@ -12,11 +15,11 @@ import java.util.function.Consumer;
 
 public class FindingsPanel extends Panel {
 
-    private final ActionListBox      list;
-    private final Label              hintLabel;
-    private final Consumer<Finding>  onSelect;
-    private final List<Finding>      sortedFindings = new ArrayList<>();
-    private String                   severityFilter = null; // null = show all
+    private final ActionListBox list;
+    private final Label hintLabel;
+    private final Consumer<Finding> onSelect;
+    private final List<Finding> sortedFindings = new ArrayList<>();
+    private String severityFilter = null; // null = show all
 
     public FindingsPanel(int height, Consumer<Finding> onSelect) {
         super(new LinearLayout(Direction.VERTICAL));
@@ -45,9 +48,10 @@ public class FindingsPanel extends Panel {
     private void rebuildList() {
         list.clearItems();
         for (Finding f : sortedFindings) {
-            if (severityFilter != null && !f.severity().name().equals(severityFilter)) continue;
-            String label = String.format("  %-8s  %-20s  %-12s  %s",
-                    f.severity().name(), truncate(f.endpoint(), 20),
+            if (severityFilter != null && !f.severity().name().equals(severityFilter)) {
+                continue;
+            }
+            String label = String.format("  %-8s  %-20s  %-12s  %s", f.severity().name(), truncate(f.endpoint(), 20),
                     f.module().toUpperCase(), f.title());
             Finding captured = f;
             list.addItem(label, () -> onSelect.accept(captured));
@@ -55,18 +59,17 @@ public class FindingsPanel extends Panel {
     }
 
     private String truncate(String s, int max) {
-        if (s == null) return "";
+        if (s == null) {
+            return "";
+        }
         return s.length() <= max ? s : s.substring(0, max - 1) + "…";
     }
 
     private String buildHint() {
         String active = severityFilter != null ? severityFilter : "ALL";
-        return " [Enter] Detalhes  [C] Curl  │ Filtro: [1]" + mark("ALL", active)
-                + " [2]" + mark("CRITICAL", active)
-                + " [3]" + mark("HIGH",     active)
-                + " [4]" + mark("MEDIUM",   active)
-                + " [5]" + mark("LOW",      active)
-                + " [6]" + mark("INFO",     active);
+        return " [Enter] Detalhes  [C] Curl  │ Filtro: [1]" + mark("ALL", active) + " [2]" + mark("CRITICAL", active)
+                + " [3]" + mark("HIGH", active) + " [4]" + mark("MEDIUM", active) + " [5]" + mark("LOW", active)
+                + " [6]" + mark("INFO", active);
     }
 
     private static String mark(String label, String active) {

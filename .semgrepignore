@@ -1,0 +1,21 @@
+# Semgrep ignore — AnarCry
+
+# Build output
+build/
+.gradle/
+*.jar
+
+# Gradle wrapper (generated)
+gradle/
+gradlew
+gradlew.bat
+
+# Test harness: intentional payloads and helper utilities
+src/test/
+
+# Config files (not Java source)
+config/
+
+# Scan report outputs
+anarcry-report-*.json
+anarcry-report-*.md
