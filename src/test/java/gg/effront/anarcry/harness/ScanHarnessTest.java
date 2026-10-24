@@ -62,6 +62,14 @@ import gg.effront.anarcry.scanner.web.cachepoisoning.CachePoisoningModule;
 import gg.effront.anarcry.scanner.web.smuggling.RequestSmugglingModule;
 import gg.effront.anarcry.scanner.web.crawler.CrawlerModule;
 import gg.effront.anarcry.scanner.ScanConfig;
+import gg.effront.anarcry.scanner.web.xss.XssModule;
+import gg.effront.anarcry.scanner.web.sqli.SqlInjectionModule;
+import gg.effront.anarcry.scanner.web.lfi.LfiModule;
+import gg.effront.anarcry.scanner.web.cmdinject.CommandInjectionModule;
+import gg.effront.anarcry.scanner.web.massassign.MassAssignmentModule;
+import gg.effront.anarcry.scanner.util.HttpClientFactory;
+
+import java.lang.reflect.Field;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -2056,7 +2064,7 @@ class ScanHarnessTest {
     @Test
     @Order(68)
     void scanConfigDelayIsRespected() {
-        ScanConfig config = new ScanConfig(0, "", Set.of());
+        ScanConfig config = new ScanConfig(0, "", Set.of(), List.of(), "");
         ScanContext ctx = new ScanContext("https://example.com", "", "", Set.of(), config, r -> {
         });
         assertEquals(config, ctx.config(), "ScanContext.config() deve retornar o ScanConfig fornecido");
@@ -2066,9 +2074,278 @@ class ScanHarnessTest {
     @Test
     @Order(69)
     void scanConfigInScopeCheck() {
-        ScanConfig config = new ScanConfig(0, "", Set.of("allowed.com"));
+        ScanConfig config = new ScanConfig(0, "", Set.of("allowed.com"), List.of(), "");
         assertTrue(config.isInScope("allowed.com"), "isInScope(\"allowed.com\") deve ser true");
         assertFalse(config.isInScope("blocked.com"), "isInScope(\"blocked.com\") deve ser false");
+    }
+
+    // ─────────────────────────────────────────
+    // XSS / SQLi / LFI / CmdInjection — Sprint 30
+    // ─────────────────────────────────────────
+
+    @Test
+    @Order(70)
+    void xssReflectedDetected() throws Exception {
+        // Vulnerable server: /search reflects q param literally in HTML body
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            String query = exchange.getRequestURI().getRawQuery();
+            String reflected = "";
+            if (query != null) {
+                for (String part : query.split("&")) {
+                    if (part.startsWith("q=") || part.startsWith("search=") || part.startsWith("query=")
+                            || part.startsWith("s=") || part.startsWith("input=") || part.startsWith("term=")
+                            || part.startsWith("keyword=")) {
+                        try {
+                            reflected = java.net.URLDecoder.decode(part.substring(part.indexOf('=') + 1), "UTF-8");
+                        } catch (Exception ignored) {}
+                        break;
+                    }
+                }
+            }
+            byte[] body = ("<html><body>" + reflected + "</body></html>").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "text/html");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("XSS"));
+            List<Finding> findings = new XssModule().scan(ctx, msg -> {});
+            assertFalse(findings.isEmpty(), "XSS refletido deve gerar pelo menos um finding");
+            assertTrue(findings.stream().anyMatch(f ->
+                    f.severity() == Severity.HIGH || f.severity() == Severity.MEDIUM),
+                    "XSS refletido deve gerar HIGH ou MEDIUM");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(71)
+    void xssCleanNoFinding() throws Exception {
+        // Safe server: HTML-encodes all output (< -> &lt; > -> &gt;)
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            String query = exchange.getRequestURI().getRawQuery();
+            String reflected = "";
+            if (query != null) {
+                for (String part : query.split("&")) {
+                    if (part.contains("=")) {
+                        try {
+                            reflected = java.net.URLDecoder.decode(part.substring(part.indexOf('=') + 1), "UTF-8");
+                        } catch (Exception ignored) {}
+                        break;
+                    }
+                }
+            }
+            // HTML-encode: replace < and > and " and '
+            String safe = reflected
+                    .replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                    .replace("\"", "&quot;")
+                    .replace("'", "&#x27;");
+            byte[] body = ("<html><body>" + safe + "</body></html>").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "text/html");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("XSS"));
+            List<Finding> findings = new XssModule().scan(ctx, msg -> {});
+            assertTrue(findings.isEmpty(), "Servidor com HTML-encoding correto não deve gerar findings de XSS");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(72)
+    void sqliErrorDetected() throws Exception {
+        // Vulnerable server: returns SQL error message when URI contains single-quote
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            String rawQuery = exchange.getRequestURI().getRawQuery();
+            String decoded = "";
+            if (rawQuery != null) {
+                try {
+                    decoded = java.net.URLDecoder.decode(rawQuery, "UTF-8");
+                } catch (Exception ignored) {}
+            }
+            byte[] body;
+            if (decoded.contains("'")) {
+                body = "You have an error in your SQL syntax near \"'\" at line 1".getBytes();
+            } else {
+                body = "ok".getBytes();
+            }
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("SQLi"));
+            List<Finding> findings = new SqlInjectionModule().scan(ctx, msg -> {});
+            assertFalse(findings.isEmpty(), "SQLi com mensagem de erro SQL deve gerar finding");
+            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.CRITICAL),
+                    "SQLi por erro de sintaxe deve gerar CRITICAL");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(73)
+    void sqliCleanNoFinding() throws Exception {
+        // Safe server: always returns "ok" without SQL error messages
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            byte[] body = "ok".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("SQLi"));
+            List<Finding> findings = new SqlInjectionModule().scan(ctx, msg -> {});
+            assertTrue(findings.isEmpty(), "Servidor sem SQL errors não deve gerar findings de SQLi");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(74)
+    void lfiPasswdDetected() throws Exception {
+        // Vulnerable server: if URI contains "passwd", return /etc/passwd content
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            String rawQuery = exchange.getRequestURI().getRawQuery();
+            String decoded = "";
+            if (rawQuery != null) {
+                try {
+                    decoded = java.net.URLDecoder.decode(rawQuery, "UTF-8");
+                } catch (Exception ignored) {}
+            }
+            byte[] body;
+            if (decoded.contains("passwd") || decoded.contains("etc")) {
+                body = "root:x:0:0:/root:/bin/bash\ndaemon:x:1:1:/usr/sbin:/usr/sbin/nologin\n".getBytes();
+            } else {
+                body = "ok".getBytes();
+            }
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("LFI"));
+            List<Finding> findings = new LfiModule().scan(ctx, msg -> {});
+            assertFalse(findings.isEmpty(), "LFI retornando /etc/passwd deve gerar finding");
+            assertTrue(findings.stream().anyMatch(f ->
+                    f.severity() == Severity.CRITICAL || f.severity() == Severity.HIGH),
+                    "LFI com /etc/passwd deve gerar CRITICAL ou HIGH");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(75)
+    void lfiCleanNoFinding() throws Exception {
+        // Safe server: always returns "ok" 200
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            byte[] body = "ok".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("LFI"));
+            List<Finding> findings = new LfiModule().scan(ctx, msg -> {});
+            assertTrue(findings.isEmpty(), "Servidor limpo não deve gerar findings de LFI");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(76)
+    void cmdInjectionActiveDetected() throws Exception {
+        // Vulnerable server: /ping?host=... if body contains "; id" or "$(id)" returns uid output
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/ping", exchange -> {
+            String rawQuery = exchange.getRequestURI().getRawQuery();
+            String decoded = "";
+            if (rawQuery != null) {
+                try {
+                    decoded = java.net.URLDecoder.decode(rawQuery, "UTF-8");
+                } catch (Exception ignored) {}
+            }
+            byte[] body;
+            if (decoded.contains("; id") || decoded.contains("$(id)") || decoded.contains("`id`")
+                    || decoded.contains("| id") || decoded.contains("& id")
+                    || decoded.contains("127.0.0.1; id")) {
+                body = "PING 127.0.0.1: uid=33(www-data) gid=33(www-data) groups=33(www-data)\n".getBytes();
+            } else {
+                body = "PING 127.0.0.1: 56 data bytes\n".getBytes();
+            }
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.createContext("/", exchange -> {
+            byte[] body = "ok".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CmdInjection"));
+            List<Finding> findings = new CommandInjectionModule().scan(ctx, msg -> {});
+            assertFalse(findings.isEmpty(), "CmdInjection: servidor vulnerável deve gerar finding");
+            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.CRITICAL),
+                    "OS Command Injection confirmado deve gerar CRITICAL");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(77)
+    void cmdInjectionCleanNoFinding() throws Exception {
+        // Safe server: /ping always returns clean output without uid strings
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            byte[] body = "PING 127.0.0.1: 56 data bytes\n64 bytes from 127.0.0.1: icmp_seq=0 ttl=64\n".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CmdInjection"));
+            List<Finding> findings = new CommandInjectionModule().scan(ctx, msg -> {});
+            assertTrue(findings.isEmpty(), "Servidor limpo não deve gerar findings de CmdInjection");
+        } finally {
+            server.stop(0);
+        }
     }
 
     @Test
@@ -2103,6 +2380,166 @@ class ScanHarnessTest {
             assertTrue(findings.isEmpty(), "IDOR sem jwtToken2 e server seguro deve retornar lista vazia");
         } finally {
             server.stop(0);
+        }
+    }
+
+    // ─────────────────────────────────────────
+    // Sprint 19 — ScanConfig
+    // ─────────────────────────────────────────
+
+    @Test
+    @Order(78)
+    void scanConfigSessionCookieReturnsSetValue() {
+        ScanConfig cfg = new ScanConfig(0, "session=abc123", Set.of(), List.of(), "");
+        assertEquals("session=abc123", cfg.sessionCookie(),
+                "sessionCookie() deve retornar o valor definido no construtor");
+        assertTrue(cfg.isInScope("any.host.com"),
+                "Config com inScopeHosts vazio deve permitir qualquer host");
+    }
+
+    @Test
+    @Order(79)
+    void scanConfigScopeBlocksOutOfScopeHost() {
+        ScanConfig cfg = new ScanConfig(0, "", Set.of("api.target.com"), List.of(), "");
+        assertTrue(cfg.isInScope("api.target.com"), "host em escopo deve retornar true");
+        assertFalse(cfg.isInScope("evil.com"), "host fora do escopo deve retornar false");
+        assertFalse(cfg.isInScope(""), "string vazia não deve estar em escopo específico");
+    }
+
+    @Test
+    @Order(80)
+    void scanConfigDefaultsAllowAllHosts() {
+        ScanConfig defaults = ScanConfig.defaults();
+        assertTrue(defaults.isInScope("anything.com"),
+                "defaults() com inScopeHosts vazio deve permitir qualquer host");
+        assertTrue(defaults.isInScope("other.com"),
+                "defaults() não deve restringir nenhum host");
+    }
+
+    // ─────────────────────────────────────────
+    // Sprint 20 — MassAssignment + IDOR
+    // ─────────────────────────────────────────
+
+    @Test
+    @Order(81)
+    void massAssignNoFindingOnPlain200() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            byte[] body = "{\"status\":\"ok\"}".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("MassAssign"));
+            List<Finding> findings = new MassAssignmentModule().scan(ctx, msg -> {});
+            assertTrue(findings.stream().noneMatch(f ->
+                    f.severity() == Severity.CRITICAL || f.severity() == Severity.HIGH),
+                    "Servidor com resposta simples não deve gerar CRITICAL ou HIGH em MassAssign");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(82)
+    void massAssignMediumWhenAdminReflectedButNotPersisted() throws Exception {
+        // Mutation returns admin-like but not exact ADMIN_PATTERN match; GET returns plain role
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            byte[] body = "GET".equals(exchange.getRequestMethod())
+                    ? "{\"role\":\"user\",\"id\":\"1\"}".getBytes()
+                    : "{\"admin\":\"yes\",\"role\":\"elevated\",\"message\":\"updated\"}".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("MassAssign"));
+            List<Finding> findings = new MassAssignmentModule().scan(ctx, msg -> {});
+            assertTrue(findings.isEmpty() ||
+                    findings.stream().noneMatch(f -> f.severity() == Severity.CRITICAL),
+                    "MassAssign: campos admin-like sem match exato não devem gerar CRITICAL");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(83)
+    void idorModuleSkipsSmallErrorResponses() throws Exception {
+        // Both tokens receive short error body (< 50 chars) — isSimilar returns false
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            if ("DELETE".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(403, -1);
+                exchange.getResponseBody().close();
+                return;
+            }
+            byte[] body = "{\"error\":\"unauthorized\"}".getBytes(); // 24 chars < 50
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "token1", "token2",
+                    Set.of("IDOR"));
+            List<Finding> findings = new IdorModule().scan(ctx, msg -> {});
+            assertTrue(findings.isEmpty(),
+                    "IDOR não deve ser reportado quando respostas são erros curtos (< 50 chars)");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(84)
+    void idorCrossUserConfirmed() throws Exception {
+        // Both tokens receive identical large body — same resource accessible by different users
+        String userData = "{\"id\":\"1\",\"name\":\"Alice\",\"email\":\"alice@example.com\","
+                + "\"role\":\"user\",\"balance\":1000}";
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            if ("DELETE".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(403, -1);
+                exchange.getResponseBody().close();
+                return;
+            }
+            byte[] body = userData.getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "token1", "token2",
+                    Set.of("IDOR"));
+            List<Finding> findings = new IdorModule().scan(ctx, msg -> {});
+            assertTrue(findings.stream().anyMatch(f ->
+                    f.severity() == Severity.HIGH || f.severity() == Severity.CRITICAL),
+                    "IDOR deve ser detectado quando token2 acessa recurso de token1 (respostas idênticas)");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @AfterAll
+    static void tearDownHttpClients() throws Exception {
+        for (String fieldName : new String[]{"http2Instance", "noRedirectInstance"}) {
+            Field f = HttpClientFactory.class.getDeclaredField(fieldName);
+            f.setAccessible(true);
+            java.net.http.HttpClient hc = (java.net.http.HttpClient) f.get(null);
+            if (hc != null) {
+                hc.close();
+                f.set(null, null);
+            }
         }
     }
 }

