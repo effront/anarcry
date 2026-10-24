@@ -126,7 +126,9 @@ public class ModulesPanel extends Panel {
 
     public void setTarget(String target) { targetBox.setText(target); }
 
-    public void setJwt(String jwt) { if (jwt != null) jwtTokenBox.setText(jwt); }
+    public void setJwt(String jwt)   { if (jwt != null && !jwt.isBlank()) jwtTokenBox.setText(jwt); }
+
+    public void setJwt2(String jwt2) { if (jwt2 != null && !jwt2.isBlank()) jwtToken2Box.setText(jwt2); }
 
     public void setRequestLogCb(Consumer<RequestRecord> cb) { this.requestLogCb = cb != null ? cb : r -> {}; }
 

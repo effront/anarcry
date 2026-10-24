@@ -27,6 +27,8 @@ import gg.effront.anarcry.tui.panels.LogPanel;
 import gg.effront.anarcry.tui.panels.ModulesPanel;
 import gg.effront.anarcry.tui.panels.SiteMapPanel;
 
+import gg.effront.anarcry.EnvLoader;
+
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -54,8 +56,12 @@ public class AnarCryTui {
     private StatusBar          statusBar;
     private volatile Mode      currentMode = Mode.SCAN;
     private volatile boolean   scanning    = false;
+    private EnvLoader          envPreload  = null;
 
-    public void start() throws IOException {
+    public void start() throws IOException { start(null); }
+
+    public void start(EnvLoader env) throws IOException {
+        this.envPreload = env;
         var factory = new DefaultTerminalFactory();
         factory.setMouseCaptureMode(MouseCaptureMode.CLICK_RELEASE);
         TerminalScreen screen = (TerminalScreen) factory.createScreen();
@@ -226,6 +232,11 @@ public class AnarCryTui {
         if (modulesPanel == null) {
             modulesPanel = new ModulesPanel(leftW, logPanel, findingsPanel, scanRunner);
             modulesPanel.setRequestLogCb(requestCb);
+            if (envPreload != null && envPreload.hasTarget()) {
+                modulesPanel.setTarget(envPreload.target());
+                modulesPanel.setJwt(envPreload.jwt1());
+                modulesPanel.setJwt2(envPreload.jwt2());
+            }
         } else {
             modulesPanel.updateLogPanel(logPanel);
         }
