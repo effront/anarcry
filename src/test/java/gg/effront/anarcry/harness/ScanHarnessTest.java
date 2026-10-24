@@ -1648,9 +1648,12 @@ class ScanHarnessTest {
             runner.shutdown();
 
             assertEquals(3, doneEvents.size(), "Deve ter 3 MODULE_DONE events");
-            assertEquals(1, doneEvents.get(0).index(), "Primeiro MODULE_DONE deve ter index=1");
-            assertEquals(2, doneEvents.get(1).index(), "Segundo MODULE_DONE deve ter index=2");
-            assertEquals(3, doneEvents.get(2).index(), "Terceiro MODULE_DONE deve ter index=3");
+            // Com execução paralela a ordem de conclusão é não-determinística;
+            // verifica apenas que os índices 1-3 estão todos presentes.
+            Set<Integer> indices = doneEvents.stream()
+                    .map(gg.effront.anarcry.scanner.ScanEvent::index)
+                    .collect(java.util.stream.Collectors.toSet());
+            assertEquals(Set.of(1, 2, 3), indices, "MODULE_DONE deve conter os índices 1, 2 e 3");
             doneEvents.forEach(e -> assertEquals(3, e.total(), "Total deve ser 3 em todos os events"));
         } finally {
             server.stop(0);
