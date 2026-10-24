@@ -103,6 +103,10 @@ public class InfraModule implements Scanner {
         double _score = CvssCalculator.calculate(_cveVector);
 
         String host = ctx.host();
+        if (!host.matches("[a-zA-Z0-9._\\-]{1,253}")) {
+            log.accept("[!] Infra: host invalido — scan cancelado");
+            return findings;
+        }
         String portList = PROBE_PORTS.stream()
                 .map(p -> String.valueOf(p.port()))
                 .collect(Collectors.joining(","));
@@ -444,7 +448,8 @@ public class InfraModule implements Scanner {
                     "-o", "StrictHostKeyChecking=no",
                     "-o", "PreferredAuthentications=password",
                     "-o", "PubkeyAuthentication=no",
-                    "probe@" + host);
+                    "-l", "probe",
+                    host);
             pb.redirectErrorStream(true);
             Process p = pb.start();
             String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
