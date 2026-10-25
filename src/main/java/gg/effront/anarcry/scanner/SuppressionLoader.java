@@ -15,7 +15,8 @@ public final class SuppressionLoader {
 
     private static final String DEFAULT_FILE = ".anarcry-ignore.json";
 
-    private SuppressionLoader() {}
+    private SuppressionLoader() {
+    }
 
     public static List<Suppression> loadFromCwd() {
         return load(DEFAULT_FILE);
@@ -24,7 +25,8 @@ public final class SuppressionLoader {
     public static List<Suppression> load(String path) {
         try {
             String json = Files.readString(Paths.get(path));
-            Type listType = new TypeToken<List<Suppression>>() {}.getType();
+            Type listType = new TypeToken<List<Suppression>>() {
+            }.getType();
             List<Suppression> result = new Gson().fromJson(json, listType);
             return result != null ? Collections.unmodifiableList(result) : Collections.emptyList();
         } catch (IOException e) {

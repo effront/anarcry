@@ -29,13 +29,8 @@ public record ScanContext(String targetUrl, String jwtToken, String jwtToken2, S
         this(targetUrl, jwtToken, jwtToken2, enabledModules, ScanConfig.defaults(), requestLog);
     }
 
-    public ScanContext(
-            String targetUrl,
-            String jwtToken,
-            Set<String> enabledModules,
-            String jwtToken2,
-            ScanConfig config,
-            Consumer<RequestRecord> requestLog) {
+    public ScanContext(String targetUrl, String jwtToken, Set<String> enabledModules, String jwtToken2,
+            ScanConfig config, Consumer<RequestRecord> requestLog) {
         this(targetUrl, jwtToken, jwtToken2, enabledModules, config, requestLog);
     }
 

@@ -93,85 +93,84 @@ public class MassAssignmentModule implements Scanner {
                 int status = mutResp.statusCode();
                 String body = mutResp.body() != null ? mutResp.body() : "";
 
-                // CRITICAL: response reflects admin fields (skip HTML — SPA catch-all FP)
-                if ((status == 200 || status == 201) && !isHtml(body) && ADMIN_PATTERN.matcher(body).find()) {
-                    log.accept(
-                            "[!!] MassAssign: CRITICAL — " + ep.method() + " " + ep.path() + " refletiu campos admin");
+                // Only proceed for 200/201 non-HTML JSON responses
+                if ((status != 200 && status != 201) || body.isBlank() || isHtml(body)) {
+                    continue;
+                }
+
+                boolean mutHasAdmin = ADMIN_PATTERN.matcher(body).find();
+
+                // Establish baseline to avoid FP from pre-existing admin fields
+                String baselineBody = getResp.body() != null ? getResp.body() : "";
+                boolean baselineHasAdmin = ADMIN_PATTERN.matcher(baselineBody).find();
+
+                // GET verification: for create endpoints use /api/me, otherwise same path
+                boolean isCreateEndpoint = "POST".equals(ep.method()) && (ep.path().contains("register")
+                        || ep.path().contains("signup") || ep.path().equals("/api/users"));
+                Pattern idPat = Pattern.compile("\"id\"\\s*:\\s*\"?([^\"\\s,}]+)\"?");
+                Matcher idMatcher = idPat.matcher(body);
+                String resourceId = idMatcher.find() ? idMatcher.group(1) : null;
+                String verifyPath = isCreateEndpoint
+                        ? "/api/me"
+                        : (resourceId != null ? ep.path() + "/" + resourceId : ep.path());
+                String verifyUrl = baseUrl + verifyPath;
+
+                boolean persistedAdmin = false;
+                try {
+                    HttpRequest.Builder verifyBuilder = HttpRequest.newBuilder().uri(URI.create(verifyUrl))
+                            .timeout(Duration.ofSeconds(5)).GET();
+                    if (!ctx.jwtToken().isBlank()) {
+                        verifyBuilder.header("Authorization", "Bearer " + ctx.jwtToken());
+                    }
+                    HttpResponse<String> verifyResp = Http.send(ctx, hc, verifyBuilder.build(),
+                            HttpResponse.BodyHandlers.ofString(), id());
+                    String verifyBody = verifyResp.body() != null ? verifyResp.body() : "";
+                    if (verifyResp.statusCode() == 200 && ADMIN_PATTERN.matcher(verifyBody).find()
+                            && !baselineHasAdmin) {
+                        persistedAdmin = true;
+                        log.accept("[!!] MassAssign: CRITICAL — campo admin persistiu após GET em " + verifyUrl);
+                    }
+                } catch (Exception ignored) {
+                }
+
+                if (persistedAdmin) {
+                    // Confirmed persistence via GET — CRITICAL
                     findings.add(Finding.of("MassAssign", ep.path(),
-                            "Mass Assignment — campos privilegiados aceitos via " + ep.method() + " " + ep.path(),
+                            "Mass Assignment — campo admin persistido via " + ep.method() + " " + ep.path(),
                             Severity.CRITICAL,
-                            "URL: " + url + " | Método: " + ep.method() + " | Status: " + status + " | Body (300): "
-                                    + body.substring(0, Math.min(300, body.length())),
-                            "Servidor aceita e reflete campos como admin:true/role:admin no body de resposta — "
-                                    + "atacante pode escalar privilégios enviando campos extras na requisição",
+                            "URL: " + url + " | Método: " + ep.method() + " | Status: " + status + " | GET " + verifyUrl
+                                    + " confirmou campo admin (não estava no baseline)",
+                            "Servidor aceita E persiste campos privilegiados (admin/role) — "
+                                    + "confirmado via GET após mutação. Escalada de privilégios confirmada.",
                             ep.method() + " " + url + " -H 'Content-Type: application/json'"
-                                    + " -H 'Authorization: Bearer <TOKEN>'" + " -d '" + MASS_PAYLOAD + "'",
+                                    + " -H 'Authorization: Bearer <TOKEN>'" + " -d '" + MASS_PAYLOAD + "'\n"
+                                    + "# Confirmar: GET " + verifyUrl,
                             "Usar DTO explícito com @JsonIgnoreProperties(ignoreUnknown=false); "
                                     + "nunca mapear request body diretamente para entidade JPA; "
                                     + "allowlist de campos aceitos por endpoint",
                             _cweId, _cweTitle, _cveVector, _score));
-                    continue;
-                }
-
-                // Potential mass assignment: endpoint accepts JSON with 200/201
-                if ((status == 200 || status == 201) && !body.isBlank() && !isHtml(body)) {
-                    // Only report if baseline GET also returned something (endpoint is real)
-                    if (getResp.statusCode() == 200 || getResp.statusCode() == 404) {
-                        // Try to extract ID from mutation response to confirm persistence
-                        Pattern idPat = Pattern.compile("\"id\"\\s*:\\s*\"?([^\"\\s,}]+)\"?");
-                        Matcher idMatcher = idPat.matcher(body);
-                        String resourceId = idMatcher.find() ? idMatcher.group(1) : null;
-
-                        // Build GET URL: prefer /{id} suffix if we have an ID
-                        String verifyUrl = (resourceId != null) ? url + "/" + resourceId : url;
-                        boolean persisted = false;
-                        try {
-                            HttpRequest.Builder verifyBuilder = HttpRequest.newBuilder().uri(URI.create(verifyUrl))
-                                    .timeout(Duration.ofSeconds(5)).GET();
-                            if (!ctx.jwtToken().isBlank()) {
-                                verifyBuilder.header("Authorization", "Bearer " + ctx.jwtToken());
-                            }
-                            HttpResponse<String> verifyResp = Http.send(ctx, hc, verifyBuilder.build(),
-                                    HttpResponse.BodyHandlers.ofString(), id());
-                            String verifyBody = verifyResp.body() != null ? verifyResp.body() : "";
-                            if ((verifyResp.statusCode() == 200) && ADMIN_PATTERN.matcher(verifyBody).find()) {
-                                persisted = true;
-                                log.accept("[!!] MassAssign: HIGH — campo admin persistiu após GET em " + verifyUrl);
-                            }
-                        } catch (Exception ignored) {
-                        }
-
-                        if (persisted) {
-                            findings.add(Finding.of("MassAssign", ep.path(),
-                                    "Mass Assignment — campo persistido via " + ep.method() + " " + ep.path(),
-                                    Severity.HIGH,
-                                    "URL: " + url + " | Método: " + ep.method() + " | Status: " + status + " | GET "
-                                            + verifyUrl + " confirmou campo admin no body",
-                                    "Servidor aceita E persiste campos privilegiados (admin/role) — "
-                                            + "confirmado via GET após mutação. Escalada de privilégios confirmada.",
-                                    ep.method() + " " + url + " -H 'Content-Type: application/json'"
-                                            + " -H 'Authorization: Bearer <TOKEN>'" + " -d '" + MASS_PAYLOAD + "'\n"
-                                            + "# Confirmar: GET " + verifyUrl,
-                                    "Usar DTO explícito com @JsonIgnoreProperties(ignoreUnknown=false); "
-                                            + "nunca mapear request body diretamente para entidade JPA; "
-                                            + "allowlist de campos aceitos por endpoint"));
-                        } else {
-                            log.accept("[!] MassAssign: LOW — " + ep.method() + " " + ep.path()
-                                    + " aceita JSON mas persistência não confirmada (possível FP)");
-                            findings.add(Finding.of("MassAssign", ep.path(),
-                                    "Mass Assignment — possível FP (não persistiu) via " + ep.method() + " "
-                                            + ep.path(),
-                                    Severity.LOW,
-                                    "URL: " + url + " | Método: " + ep.method() + " | Status: " + status + " | GET "
-                                            + verifyUrl + " não confirmou campo admin",
-                                    "Endpoint aceita payload JSON com campos extras, mas GET subsequente não "
-                                            + "confirmou persistência — pode ser FP ou campo ignorado silenciosamente",
-                                    ep.method() + " " + url + " -H 'Content-Type: application/json'" + " -d '"
-                                            + MASS_PAYLOAD + "'",
-                                    "Verificar manualmente se campos como role/admin são persistidos; "
-                                            + "usar DTO com allowlist explícita de campos"));
-                        }
-                    }
+                } else if (mutHasAdmin) {
+                    // Mutation reflected admin fields but GET didn't confirm — suspicious, manual
+                    // review
+                    log.accept("[!] MassAssign: MEDIUM — " + ep.method() + " " + ep.path()
+                            + " refletiu campos admin mas GET não confirmou persistência");
+                    findings.add(Finding.of("MassAssign", ep.path(),
+                            "Mass Assignment — suspeito (refletido mas não persistido) via " + ep.method() + " "
+                                    + ep.path(),
+                            Severity.MEDIUM,
+                            "URL: " + url + " | Método: " + ep.method() + " | Status: " + status + " | Body (300): "
+                                    + body.substring(0, Math.min(300, body.length())) + " | GET " + verifyUrl
+                                    + " não confirmou campo admin",
+                            "Endpoint refletiu campos privilegiados na resposta da mutação, mas GET subsequente "
+                                    + "não confirmou persistência — requer revisão manual",
+                            ep.method() + " " + url + " -H 'Content-Type: application/json'"
+                                    + " -H 'Authorization: Bearer <TOKEN>'" + " -d '" + MASS_PAYLOAD + "'",
+                            "Verificar manualmente se campos como role/admin são aceitos; "
+                                    + "usar DTO com allowlist explícita de campos",
+                            _cweId, _cweTitle, _cveVector, _score));
+                } else {
+                    // No admin-related evidence — skip (FP avoidance)
+                    log.accept("[+] MassAssign: sem evidência de mass assignment em " + ep.method() + " " + ep.path());
                 }
 
             } catch (Exception e) {

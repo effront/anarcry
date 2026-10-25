@@ -5,11 +5,7 @@ import gg.effront.anarcry.model.Suppression;
 import java.util.List;
 import java.util.Set;
 
-public record ScanConfig(
-        int delayMs,
-        String sessionCookie,
-        Set<String> inScopeHosts,
-        List<Suppression> suppressions,
+public record ScanConfig(int delayMs, String sessionCookie, Set<String> inScopeHosts, List<Suppression> suppressions,
         String redirectRelayUrl) {
     public ScanConfig {
         if (delayMs < 0) {

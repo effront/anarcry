@@ -5,6 +5,7 @@ import gg.effront.anarcry.scanner.web.cors.CorsModule;
 import gg.effront.anarcry.scanner.web.crlf.CrlfModule;
 import gg.effront.anarcry.scanner.web.graphql.GraphQLModule;
 import gg.effront.anarcry.scanner.crypto.headers.HeadersModule;
+import gg.effront.anarcry.scanner.crypto.hsts.HSTSModule;
 import gg.effront.anarcry.scanner.web.idor.IdorModule;
 import gg.effront.anarcry.scanner.crypto.jwt.JwtModule;
 import gg.effront.anarcry.scanner.web.oauth.OAuthModule;
@@ -95,6 +96,9 @@ public class ScanRunner {
             }
             if (ctx.has("Headers")) {
                 modules.add(new HeadersModule());
+            }
+            if (ctx.has("HSTS")) {
+                modules.add(new HSTSModule());
             }
             if (ctx.has("JWT")) {
                 modules.add(new JwtModule());

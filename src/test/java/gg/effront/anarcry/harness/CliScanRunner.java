@@ -45,12 +45,14 @@ public class CliScanRunner {
     }
 
     // ──────────────────────────────────────────────────────
-    // All enabled modules — includes new Sprint 25/26/28
+    // All enabled modules — Sprint 22 (XSS/SQLi/LFI/CmdInjection) included
     // ──────────────────────────────────────────────────────
 
-    private static final Set<String> ALL_MODULES = Set.of("TLS", "Headers", "JWT", "PQC", "CORS", "OAuth",
+    private static final Set<String> ALL_MODULES = Set.of("TLS", "Headers", "HSTS", "JWT", "PQC", "CORS", "OAuth",
             "OpenRedirect", "SSRF", "GraphQL", "CRLF", "XXE", "SSTI", "IDOR", "HostHeader", "Actuator", "MassAssign",
-            "CachePoisoning", "ReqSmuggling");
+            "CachePoisoning", "ReqSmuggling", "XSS", "SQLi", "LFI", "CmdInjection");
+
+    private static final Set<String> REDIRECT_ONLY = Set.of("OpenRedirect");
 
     // ──────────────────────────────────────────────────────
     // Legacy test: prostaff.gg frontend (no JWT)
@@ -95,6 +97,49 @@ public class CliScanRunner {
         String jwt2 = env.getOrDefault("jwt2", "");
 
         runScan(target, jwt1, jwt2, ALL_MODULES, 10);
+    }
+
+    // ──────────────────────────────────────────────────────
+    // api.prostaff.gg — todos os módulos, ambos os JWTs
+    // Uso: ./gradlew test --tests "*.CliScanRunner.scanApi" --rerun
+    // ──────────────────────────────────────────────────────
+
+    @Test
+    void scanApi() throws Exception {
+        Map<String, String> env = loadEnv();
+        String jwt1 = env.getOrDefault("jwt1", "");
+        String jwt2 = env.getOrDefault("jwt2", "");
+
+        // Parseia multiplos targets separados por virgula
+        String raw = env.getOrDefault("target", "api.prostaff.gg");
+        List<String> targets = Arrays.stream(raw.split(",")).map(String::trim).filter(s -> !s.isEmpty())
+                .map(s -> s.startsWith("http") ? s : "https://" + s).toList();
+
+        for (String t : targets) {
+            System.out.println("\n▶ Scanning: " + t);
+            runScan(t, jwt1, jwt2, ALL_MODULES, 10);
+        }
+    }
+
+    // ──────────────────────────────────────────────────────
+    // OpenRedirect isolado — validacao rapida do modulo
+    // Uso: ./gradlew test --tests "*.CliScanRunner.scanRedirectOnly" --rerun
+    // ──────────────────────────────────────────────────────
+
+    @Test
+    void scanRedirectOnly() throws Exception {
+        Map<String, String> env = loadEnv();
+        String jwt1 = env.getOrDefault("jwt1", "");
+        String jwt2 = env.getOrDefault("jwt2", "");
+
+        String raw = env.getOrDefault("target", "api.prostaff.gg");
+        List<String> targets = Arrays.stream(raw.split(",")).map(String::trim).filter(s -> !s.isEmpty())
+                .map(s -> s.startsWith("http") ? s : "https://" + s).toList();
+
+        for (String t : targets) {
+            System.out.println("\n▶ OpenRedirect scan: " + t);
+            runScan(t, jwt1, jwt2, REDIRECT_ONLY, 3);
+        }
     }
 
     // ──────────────────────────────────────────────────────

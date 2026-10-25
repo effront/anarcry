@@ -70,16 +70,17 @@ public class IdorModule implements Scanner {
         log.accept("[~] IDOR: iniciando probes em " + base);
 
         // Discover real user ID from /api/me and similar endpoints
-        String discoveredId = (token1 != null && !token1.isBlank()) ? discoverUserId(ctx, hc, log) : null;
+        String discoveredId = (token1 != null && !token1.isBlank()) ? extractUserId(ctx, hc, base) : null;
 
-        // Build effective probe paths based on discovered ID
+        // Build effective probe paths: always prepend UUID-based paths if an ID was
+        // found
         List<String> effectivePaths;
-        if (discoveredId != null && !discoveredId.matches("\\d+")) {
-            // UUID discovered — build UUID-based paths
-            effectivePaths = List.of("/api/user/" + discoveredId, "/api/users/" + discoveredId,
-                    "/api/account/" + discoveredId, "/api/profile/" + discoveredId, "/api/v1/user/" + discoveredId,
-                    "/api/v1/users/" + discoveredId);
-            log.accept("[~] IDOR: usando UUID descoberto para probing: " + discoveredId);
+        if (discoveredId != null) {
+            List<String> uuidPaths = new ArrayList<>(List.of("/api/user/" + discoveredId, "/api/users/" + discoveredId,
+                    "/api/account/" + discoveredId, "/api/profile/" + discoveredId));
+            uuidPaths.addAll(ID_PATHS);
+            effectivePaths = uuidPaths;
+            log.accept("[~] IDOR: usando ID descoberto para probing: " + discoveredId);
         } else {
             effectivePaths = ID_PATHS;
         }
@@ -197,11 +198,9 @@ public class IdorModule implements Scanner {
         return findings;
     }
 
-    private String discoverUserId(ScanContext ctx, HttpClient hc, Consumer<String> log) {
-        String[] mePaths = {"/api/me", "/api/user/me", "/api/profile", "/api/v1/me", "/api/v1/user/me"};
-        Pattern idPat = Pattern.compile("\"id\"\\s*:\\s*\"?([a-f0-9\\-]{8,})\"?");
-        String base = (ctx.isHttps() ? "https" : "http") + "://" + ctx.host()
-                + (ctx.port() != (ctx.isHttps() ? 443 : 80) ? ":" + ctx.port() : "");
+    String extractUserId(ScanContext ctx, HttpClient hc, String base) {
+        String[] mePaths = {"/api/me", "/api/profile", "/api/user/me", "/api/account"};
+        Pattern idPat = Pattern.compile("\"(?:id|userId|_id|uuid|user_id)\"\\s*:\\s*\"?([A-Za-z0-9\\-_]{1,200})\"?");
         for (String p : mePaths) {
             try {
                 var req = HttpRequest.newBuilder().uri(URI.create(base + p))
@@ -211,7 +210,6 @@ public class IdorModule implements Scanner {
                 if (resp.statusCode() == 200 && resp.body() != null) {
                     Matcher m = idPat.matcher(resp.body());
                     if (m.find()) {
-                        log.accept("[~] IDOR: ID descoberto em " + p + " → " + m.group(1));
                         return m.group(1);
                     }
                 }
@@ -241,6 +239,9 @@ public class IdorModule implements Scanner {
 
     private boolean isSimilar(String a, String b) {
         if (a == null || b == null) {
+            return false;
+        }
+        if (a.length() < 50 || b.length() < 50) {
             return false;
         }
         if (a.strip().equals(b.strip())) {

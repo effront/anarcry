@@ -46,6 +46,8 @@ test {
     useJUnitPlatform {
         excludeTags 'integration'
     }
+    maxHeapSize = '512m'
+    jvmArgs '-XX:+UseG1GC', '-XX:MaxGCPauseMillis=200'
 }
 
 // ============================================================

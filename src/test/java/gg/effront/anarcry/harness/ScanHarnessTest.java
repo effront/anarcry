@@ -2098,12 +2098,14 @@ class ScanHarnessTest {
                             || part.startsWith("keyword=")) {
                         try {
                             reflected = java.net.URLDecoder.decode(part.substring(part.indexOf('=') + 1), "UTF-8");
-                        } catch (Exception ignored) {}
+                        } catch (Exception ignored) {
+                        }
                         break;
                     }
                 }
             }
-            byte[] body = ("<html><body>" + reflected + "</body></html>").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            byte[] body = ("<html><body>" + reflected + "</body></html>")
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "text/html");
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
@@ -2113,10 +2115,11 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("XSS"));
-            List<Finding> findings = new XssModule().scan(ctx, msg -> {});
+            List<Finding> findings = new XssModule().scan(ctx, msg -> {
+            });
             assertFalse(findings.isEmpty(), "XSS refletido deve gerar pelo menos um finding");
-            assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.HIGH || f.severity() == Severity.MEDIUM),
+            assertTrue(
+                    findings.stream().anyMatch(f -> f.severity() == Severity.HIGH || f.severity() == Severity.MEDIUM),
                     "XSS refletido deve gerar HIGH ou MEDIUM");
         } finally {
             server.stop(0);
@@ -2136,18 +2139,15 @@ class ScanHarnessTest {
                     if (part.contains("=")) {
                         try {
                             reflected = java.net.URLDecoder.decode(part.substring(part.indexOf('=') + 1), "UTF-8");
-                        } catch (Exception ignored) {}
+                        } catch (Exception ignored) {
+                        }
                         break;
                     }
                 }
             }
             // HTML-encode: replace < and > and " and '
-            String safe = reflected
-                    .replace("&", "&amp;")
-                    .replace("<", "&lt;")
-                    .replace(">", "&gt;")
-                    .replace("\"", "&quot;")
-                    .replace("'", "&#x27;");
+            String safe = reflected.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                    .replace("\"", "&quot;").replace("'", "&#x27;");
             byte[] body = ("<html><body>" + safe + "</body></html>").getBytes(java.nio.charset.StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "text/html");
             exchange.sendResponseHeaders(200, body.length);
@@ -2158,7 +2158,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("XSS"));
-            List<Finding> findings = new XssModule().scan(ctx, msg -> {});
+            List<Finding> findings = new XssModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "Servidor com HTML-encoding correto não deve gerar findings de XSS");
         } finally {
             server.stop(0);
@@ -2176,7 +2177,8 @@ class ScanHarnessTest {
             if (rawQuery != null) {
                 try {
                     decoded = java.net.URLDecoder.decode(rawQuery, "UTF-8");
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
             byte[] body;
             if (decoded.contains("'")) {
@@ -2192,7 +2194,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("SQLi"));
-            List<Finding> findings = new SqlInjectionModule().scan(ctx, msg -> {});
+            List<Finding> findings = new SqlInjectionModule().scan(ctx, msg -> {
+            });
             assertFalse(findings.isEmpty(), "SQLi com mensagem de erro SQL deve gerar finding");
             assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.CRITICAL),
                     "SQLi por erro de sintaxe deve gerar CRITICAL");
@@ -2216,7 +2219,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("SQLi"));
-            List<Finding> findings = new SqlInjectionModule().scan(ctx, msg -> {});
+            List<Finding> findings = new SqlInjectionModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "Servidor sem SQL errors não deve gerar findings de SQLi");
         } finally {
             server.stop(0);
@@ -2234,7 +2238,8 @@ class ScanHarnessTest {
             if (rawQuery != null) {
                 try {
                     decoded = java.net.URLDecoder.decode(rawQuery, "UTF-8");
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
             byte[] body;
             if (decoded.contains("passwd") || decoded.contains("etc")) {
@@ -2250,10 +2255,11 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("LFI"));
-            List<Finding> findings = new LfiModule().scan(ctx, msg -> {});
+            List<Finding> findings = new LfiModule().scan(ctx, msg -> {
+            });
             assertFalse(findings.isEmpty(), "LFI retornando /etc/passwd deve gerar finding");
-            assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.CRITICAL || f.severity() == Severity.HIGH),
+            assertTrue(
+                    findings.stream().anyMatch(f -> f.severity() == Severity.CRITICAL || f.severity() == Severity.HIGH),
                     "LFI com /etc/passwd deve gerar CRITICAL ou HIGH");
         } finally {
             server.stop(0);
@@ -2275,7 +2281,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("LFI"));
-            List<Finding> findings = new LfiModule().scan(ctx, msg -> {});
+            List<Finding> findings = new LfiModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "Servidor limpo não deve gerar findings de LFI");
         } finally {
             server.stop(0);
@@ -2285,7 +2292,8 @@ class ScanHarnessTest {
     @Test
     @Order(76)
     void cmdInjectionActiveDetected() throws Exception {
-        // Vulnerable server: /ping?host=... if body contains "; id" or "$(id)" returns uid output
+        // Vulnerable server: /ping?host=... if body contains "; id" or "$(id)" returns
+        // uid output
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/ping", exchange -> {
             String rawQuery = exchange.getRequestURI().getRawQuery();
@@ -2293,12 +2301,12 @@ class ScanHarnessTest {
             if (rawQuery != null) {
                 try {
                     decoded = java.net.URLDecoder.decode(rawQuery, "UTF-8");
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
             byte[] body;
             if (decoded.contains("; id") || decoded.contains("$(id)") || decoded.contains("`id`")
-                    || decoded.contains("| id") || decoded.contains("& id")
-                    || decoded.contains("127.0.0.1; id")) {
+                    || decoded.contains("| id") || decoded.contains("& id") || decoded.contains("127.0.0.1; id")) {
                 body = "PING 127.0.0.1: uid=33(www-data) gid=33(www-data) groups=33(www-data)\n".getBytes();
             } else {
                 body = "PING 127.0.0.1: 56 data bytes\n".getBytes();
@@ -2317,7 +2325,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CmdInjection"));
-            List<Finding> findings = new CommandInjectionModule().scan(ctx, msg -> {});
+            List<Finding> findings = new CommandInjectionModule().scan(ctx, msg -> {
+            });
             assertFalse(findings.isEmpty(), "CmdInjection: servidor vulnerável deve gerar finding");
             assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.CRITICAL),
                     "OS Command Injection confirmado deve gerar CRITICAL");
@@ -2341,7 +2350,8 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("CmdInjection"));
-            List<Finding> findings = new CommandInjectionModule().scan(ctx, msg -> {});
+            List<Finding> findings = new CommandInjectionModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(), "Servidor limpo não deve gerar findings de CmdInjection");
         } finally {
             server.stop(0);
@@ -2393,8 +2403,7 @@ class ScanHarnessTest {
         ScanConfig cfg = new ScanConfig(0, "session=abc123", Set.of(), List.of(), "");
         assertEquals("session=abc123", cfg.sessionCookie(),
                 "sessionCookie() deve retornar o valor definido no construtor");
-        assertTrue(cfg.isInScope("any.host.com"),
-                "Config com inScopeHosts vazio deve permitir qualquer host");
+        assertTrue(cfg.isInScope("any.host.com"), "Config com inScopeHosts vazio deve permitir qualquer host");
     }
 
     @Test
@@ -2410,10 +2419,8 @@ class ScanHarnessTest {
     @Order(80)
     void scanConfigDefaultsAllowAllHosts() {
         ScanConfig defaults = ScanConfig.defaults();
-        assertTrue(defaults.isInScope("anything.com"),
-                "defaults() com inScopeHosts vazio deve permitir qualquer host");
-        assertTrue(defaults.isInScope("other.com"),
-                "defaults() não deve restringir nenhum host");
+        assertTrue(defaults.isInScope("anything.com"), "defaults() com inScopeHosts vazio deve permitir qualquer host");
+        assertTrue(defaults.isInScope("other.com"), "defaults() não deve restringir nenhum host");
     }
 
     // ─────────────────────────────────────────
@@ -2434,9 +2441,11 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("MassAssign"));
-            List<Finding> findings = new MassAssignmentModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().noneMatch(f ->
-                    f.severity() == Severity.CRITICAL || f.severity() == Severity.HIGH),
+            List<Finding> findings = new MassAssignmentModule().scan(ctx, msg -> {
+            });
+            assertTrue(
+                    findings.stream()
+                            .noneMatch(f -> f.severity() == Severity.CRITICAL || f.severity() == Severity.HIGH),
                     "Servidor com resposta simples não deve gerar CRITICAL ou HIGH em MassAssign");
         } finally {
             server.stop(0);
@@ -2446,7 +2455,8 @@ class ScanHarnessTest {
     @Test
     @Order(82)
     void massAssignMediumWhenAdminReflectedButNotPersisted() throws Exception {
-        // Mutation returns admin-like but not exact ADMIN_PATTERN match; GET returns plain role
+        // Mutation returns admin-like but not exact ADMIN_PATTERN match; GET returns
+        // plain role
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             byte[] body = "GET".equals(exchange.getRequestMethod())
@@ -2460,9 +2470,9 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
         try {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("MassAssign"));
-            List<Finding> findings = new MassAssignmentModule().scan(ctx, msg -> {});
-            assertTrue(findings.isEmpty() ||
-                    findings.stream().noneMatch(f -> f.severity() == Severity.CRITICAL),
+            List<Finding> findings = new MassAssignmentModule().scan(ctx, msg -> {
+            });
+            assertTrue(findings.isEmpty() || findings.stream().noneMatch(f -> f.severity() == Severity.CRITICAL),
                     "MassAssign: campos admin-like sem match exato não devem gerar CRITICAL");
         } finally {
             server.stop(0);
@@ -2488,9 +2498,9 @@ class ScanHarnessTest {
         server.start();
         int port = server.getAddress().getPort();
         try {
-            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "token1", "token2",
-                    Set.of("IDOR"));
-            List<Finding> findings = new IdorModule().scan(ctx, msg -> {});
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "token1", "token2", Set.of("IDOR"));
+            List<Finding> findings = new IdorModule().scan(ctx, msg -> {
+            });
             assertTrue(findings.isEmpty(),
                     "IDOR não deve ser reportado quando respostas são erros curtos (< 50 chars)");
         } finally {
@@ -2501,7 +2511,8 @@ class ScanHarnessTest {
     @Test
     @Order(84)
     void idorCrossUserConfirmed() throws Exception {
-        // Both tokens receive identical large body — same resource accessible by different users
+        // Both tokens receive identical large body — same resource accessible by
+        // different users
         String userData = "{\"id\":\"1\",\"name\":\"Alice\",\"email\":\"alice@example.com\","
                 + "\"role\":\"user\",\"balance\":1000}";
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -2519,11 +2530,11 @@ class ScanHarnessTest {
         server.start();
         int port = server.getAddress().getPort();
         try {
-            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "token1", "token2",
-                    Set.of("IDOR"));
-            List<Finding> findings = new IdorModule().scan(ctx, msg -> {});
-            assertTrue(findings.stream().anyMatch(f ->
-                    f.severity() == Severity.HIGH || f.severity() == Severity.CRITICAL),
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "token1", "token2", Set.of("IDOR"));
+            List<Finding> findings = new IdorModule().scan(ctx, msg -> {
+            });
+            assertTrue(
+                    findings.stream().anyMatch(f -> f.severity() == Severity.HIGH || f.severity() == Severity.CRITICAL),
                     "IDOR deve ser detectado quando token2 acessa recurso de token1 (respostas idênticas)");
         } finally {
             server.stop(0);

@@ -17,7 +17,8 @@ class InfraModuleTest {
     void infraScanVps() throws Exception {
         String target = "https://api.prostaff.gg";
         ScanContext ctx = new ScanContext(target, "", "", Set.of("Infra"),
-                new ScanConfig(0, "", Set.of(), List.of(), ""), r -> {});
+                new ScanConfig(0, "", Set.of(), List.of(), ""), r -> {
+                });
 
         InfraModule module = new InfraModule();
         List<Finding> findings = module.scan(ctx, msg -> System.out.println(msg));
