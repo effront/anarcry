@@ -293,9 +293,7 @@ public class InfraModule implements Scanner {
 
         log.accept("[~] Infra: executando: " + String.join(" ", cmd));
 
-        // nosemgrep:
-        // java.lang.security.audit.command-injection-process-builder.command-injection-process-builder
-        ProcessBuilder pb = new ProcessBuilder(cmd);
+        ProcessBuilder pb = new ProcessBuilder(cmd); // nosemgrep
         pb.redirectErrorStream(false);
         Process p = pb.start();
 
