@@ -253,10 +253,11 @@ public class AnarCryTui {
         int chromeH = 2; // modeBar + statusBar
         int centerH = Math.max(5, term.getRows() - chromeH - findingsH - 4);
         int leftW = 34;
+        int siteMapH = Math.max(4, term.getRows() - chromeH - 4); // minus chrome + counter + hint + border
 
         LogPanel newLog = new LogPanel(centerH);
         FindingsPanel newFindings = new FindingsPanel(findingsH, this::showFindingDetail);
-        SiteMapPanel newSiteMap = new SiteMapPanel();
+        SiteMapPanel newSiteMap = new SiteMapPanel(siteMapH);
 
         synchronized (logHistory) {
             logHistory.forEach(newLog::log);
@@ -485,19 +486,27 @@ public class AnarCryTui {
         var dialog = new BasicWindow();
         dialog.setHints(Set.of(Window.Hint.CENTERED, Window.Hint.MODAL));
 
-        int w = Math.min(gui.getScreen().getTerminalSize().getColumns() - 6, 100);
+        TerminalSize term = gui.getScreen().getTerminalSize();
+        int w = Math.min(term.getColumns() - 6, 100);
         int textW = w - 4;
+        int viewH = Math.max(6, term.getRows() - 8); // room for border + buttons
+
+        // Collect all content lines
+        List<String> allLines = new ArrayList<>();
+        appendDetailLines(allLines, "Severidade", f.severity().name(), textW);
+        appendDetailLines(allLines, "Módulo", f.module(), textW);
+        appendDetailLines(allLines, "Endpoint", f.endpoint(), textW);
+        appendDetailLines(allLines, "Evidência", f.evidence(), textW);
+        appendDetailLines(allLines, "Impacto", f.impact(), textW);
+        appendDetailLines(allLines, "Reprodução", f.reproduction(), textW);
+        appendDetailLines(allLines, "Recomendação", f.recommendation(), textW);
+
+        var contentList = new com.googlecode.lanterna.gui2.ActionListBox(
+                new TerminalSize(w - 2, Math.min(allLines.size(), viewH)));
+        allLines.forEach(line -> contentList.addItem(line, () -> {}));
 
         var panel = new Panel(new LinearLayout(Direction.VERTICAL));
-
-        addDetailRow(panel, "Severidade", f.severity().name(), textW);
-        addDetailRow(panel, "Módulo", f.module(), textW);
-        addDetailRow(panel, "Endpoint", f.endpoint(), textW);
-        addDetailRow(panel, "Evidência", f.evidence(), textW);
-        addDetailRow(panel, "Impacto", f.impact(), textW);
-        addDetailRow(panel, "Reprodução", f.reproduction(), textW);
-        addDetailRow(panel, "Recomendação", f.recommendation(), textW);
-
+        panel.addComponent(contentList);
         panel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
 
         var buttons = new Panel(new LinearLayout(Direction.HORIZONTAL));
@@ -528,6 +537,15 @@ public class AnarCryTui {
 
         gui.addWindow(dialog);
         gui.setActiveWindow(dialog);
+    }
+
+    private static void appendDetailLines(List<String> lines, String label, String value, int textW) {
+        if (value == null || value.isBlank()) return;
+        lines.add(" " + label + ":");
+        for (String chunk : wrap(value, textW)) {
+            lines.add("   " + chunk);
+        }
+        lines.add("");
     }
 
     private void copyCurl(String text) {
@@ -569,17 +587,6 @@ public class AnarCryTui {
 
         addToLog("[!] Clipboard indisponível — pressione Ctrl+C no terminal para copiar:");
         addToLog("    " + text.lines().findFirst().orElse(text));
-    }
-
-    private static void addDetailRow(Panel panel, String label, String value, int textW) {
-        if (value == null || value.isBlank()) {
-            return;
-        }
-        panel.addComponent(new Label(" " + label + ":"));
-        for (String chunk : wrap(value, textW)) {
-            panel.addComponent(new Label("   " + chunk));
-        }
-        panel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
     }
 
     private static List<String> wrap(String text, int width) {

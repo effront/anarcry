@@ -20,14 +20,14 @@ public class SiteMapPanel extends Panel {
     private final Label counter;
     private final List<RequestRecord> records = new ArrayList<>();
 
-    public SiteMapPanel() {
+    public SiteMapPanel(int listHeight) {
         super(new LinearLayout(Direction.VERTICAL));
 
         counter = new Label("  0 requisições | 0 hosts ");
         counter.setForegroundColor(TextColor.ANSI.BLUE);
         addComponent(counter);
 
-        listBox = new ActionListBox();
+        listBox = new ActionListBox(new com.googlecode.lanterna.TerminalSize(0, Math.max(4, listHeight)));
         addComponent(listBox, LinearLayout.createLayoutData(LinearLayout.Alignment.Fill));
 
         Label hint = new Label("  Método  URL                                      Cód  Tam     Módulo");
