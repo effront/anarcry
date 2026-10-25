@@ -118,7 +118,8 @@ public class InfraModule implements Scanner {
                     log.accept("[~] Infra: OS: " + nmapScan.osGuess());
                     findings.add(Finding.of("Infra", host, "OS fingerprint detectado: " + nmapScan.osGuess(),
                             Severity.INFO, "nmap OS detection: " + nmapScan.osGuess(),
-                            "Informacao de OS exposta via fingerprint de rede — util para targeting de exploits especificos de versao",
+                            "Informacao de OS exposta via fingerprint de rede"
+                                    + " — util para targeting de exploits especificos de versao",
                             "nmap -O -Pn " + host, "Considerar TCP stack hardening para dificultar OS fingerprinting",
                             _cweId, _cweTitle, _cveVector, _score));
                 }
@@ -165,7 +166,8 @@ public class InfraModule implements Scanner {
                     "SSH exposto — " + (passwordEnabled ? "password auth habilitado" : "publickey only"), sev,
                     "Host: " + host + ":22 | Banner: " + banner + " | Auth methods: " + authMethods,
                     passwordEnabled
-                            ? "SSH exposto com autenticacao por senha habilitada — vulneravel a brute force e credential stuffing"
+                            ? "SSH exposto com autenticacao por senha habilitada"
+                                    + " — vulneravel a brute force e credential stuffing"
                             : "SSH exposto publicamente, apenas publickey aceita — risco de brute force baixo",
                     "ssh -o PreferredAuthentications=password -o BatchMode=yes user@" + host,
                     passwordEnabled
@@ -181,9 +183,11 @@ public class InfraModule implements Scanner {
                 log.accept("[!!] Infra: CRITICAL — Redis unauthenticated em " + host + ":6379");
                 findings.add(Finding.of("Infra", host + ":6379", "Redis exposto sem autenticacao", Severity.CRITICAL,
                         "Host: " + host + ":6379 | PING -> +PONG (sem autenticacao requerida)",
-                        "Redis acessivel sem senha — leitura/escrita arbitraria de todas as chaves; possivel RCE via CONFIG SET dir/dbfilename para escrever webshell ou cron",
+                        "Redis acessivel sem senha — leitura/escrita arbitraria de todas as chaves;"
+                                + " possivel RCE via CONFIG SET dir/dbfilename para escrever webshell ou cron",
                         "redis-cli -h " + host + " PING && redis-cli -h " + host + " INFO server",
-                        "Configurar requirepass no redis.conf; bind em loopback ou interface interna; bloquear porta 6379 no firewall",
+                        "Configurar requirepass no redis.conf; bind em loopback ou interface interna;"
+                                + " bloquear porta 6379 no firewall",
                         _cweId, _cweTitle, _cveVector, _score));
             }
         }
@@ -191,12 +195,15 @@ public class InfraModule implements Scanner {
         // MongoDB exposto
         if (openPorts.contains(27017)) {
             log.accept("[!] Infra: HIGH — MongoDB exposto em " + host + ":27017");
-            findings.add(Finding.of("Infra", host + ":27017", "MongoDB exposto — porta acessivel externamente",
-                    Severity.HIGH, "Host: " + host + ":27017 | porta TCP aberta sem restricao de rede detectada",
-                    "MongoDB na porta padrao exposto — verificar se autenticacao esta habilitada; versoes sem --auth aceitam qualquer conexao",
-                    "mongosh --host " + host + " --eval \"db.adminCommand({listDatabases:1})\"",
-                    "Habilitar autenticacao (security.authorization: enabled); bind em loopback; bloquear 27017 no firewall",
-                    _cweId, _cweTitle, _cveVector, _score));
+            findings.add(Finding
+                    .of("Infra", host + ":27017", "MongoDB exposto — porta acessivel externamente", Severity.HIGH,
+                            "Host: " + host + ":27017 | porta TCP aberta sem restricao de rede detectada",
+                            "MongoDB na porta padrao exposto — verificar se autenticacao esta habilitada;"
+                                    + " versoes sem --auth aceitam qualquer conexao",
+                            "mongosh --host " + host + " --eval \"db.adminCommand({listDatabases:1})\"",
+                            "Habilitar autenticacao (security.authorization: enabled);"
+                                    + " bind em loopback; bloquear 27017 no firewall",
+                            _cweId, _cweTitle, _cveVector, _score));
         }
 
         // etcd exposto
@@ -251,7 +258,8 @@ public class InfraModule implements Scanner {
                                 probe.name() + " exposto sem restricao de rede", probe.severity(),
                                 "URL: " + url + " | HTTP " + resp.statusCode() + " | Indicador: " + matchedIndicator,
                                 "Painel/servico de administracao acessivel sem restricao de rede — "
-                                        + "atacante com acesso ao IP pode autenticar, explorar ou pivotar para a infra interna",
+                                        + "atacante com acesso ao IP pode autenticar,"
+                                        + " explorar ou pivotar para a infra interna",
                                 "curl -sk " + url,
                                 "Bloquear porta " + probe.port()
                                         + " na interface externa (ufw deny in on <ext-if> to any port " + probe.port()

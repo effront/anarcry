@@ -115,12 +115,13 @@ public class HSTSModule implements Scanner {
             String hstsVal = getHeader(headers, "Strict-Transport-Security");
 
             if (hstsVal == null) {
-                findings.add(Finding.of(id(), ctx.targetUrl(), "HSTS ausente no response HTTPS", Severity.HIGH,
-                        evidence,
-                        "Sem Strict-Transport-Security, o browser não memoriza que o domínio exige HTTPS — SSLstrip trivial",
-                        "curl -sI " + ctx.targetUrl() + " | grep -i strict",
-                        "Adicionar: Strict-Transport-Security: max-age=31536000; includeSubDomains; preload", cweId,
-                        cweTitle, cvssVector, score));
+                findings.add(
+                        Finding.of(id(), ctx.targetUrl(), "HSTS ausente no response HTTPS", Severity.HIGH, evidence,
+                                "Sem Strict-Transport-Security, o browser nao memoriza"
+                                        + " que o dominio exige HTTPS — SSLstrip trivial",
+                                "curl -sI " + ctx.targetUrl() + " | grep -i strict",
+                                "Adicionar: Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
+                                cweId, cweTitle, cvssVector, score));
             } else {
                 long maxAge = parseMaxAge(hstsVal);
                 if (maxAge >= 0 && maxAge < MIN_MAX_AGE) {

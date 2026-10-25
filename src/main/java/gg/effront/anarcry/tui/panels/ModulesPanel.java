@@ -188,8 +188,9 @@ public class ModulesPanel extends Panel {
     }
 
     private static String infraLabel() {
-        if (!nmapOnPath())
+        if (!nmapOnPath()) {
             return "Infra";
+        }
         return rootProcess() ? "Infra [nmap+SYN]" : "Infra [nmap]";
     }
 
@@ -206,8 +207,9 @@ public class ModulesPanel extends Panel {
     private static boolean rootProcess() {
         try {
             for (String line : Files.readAllLines(Path.of("/proc/self/status"))) {
-                if (line.startsWith("Uid:"))
+                if (line.startsWith("Uid:")) {
                     return "0".equals(line.split("\\s+")[1]);
+                }
             }
         } catch (Exception ignored) {
         }

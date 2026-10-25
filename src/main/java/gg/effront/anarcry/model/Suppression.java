@@ -3,16 +3,21 @@ package gg.effront.anarcry.model;
 public record Suppression(String module, String titleContains, String reason, String date, String target) {
 
     public Suppression {
-        if (module == null)
+        if (module == null) {
             module = "";
-        if (titleContains == null)
+        }
+        if (titleContains == null) {
             titleContains = "";
-        if (reason == null)
+        }
+        if (reason == null) {
             reason = "";
-        if (date == null)
+        }
+        if (date == null) {
             date = "";
-        if (target == null)
+        }
+        if (target == null) {
             target = "";
+        }
     }
 
     public boolean matches(String findingModule, String findingTitle, String findingHost) {
