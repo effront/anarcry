@@ -10,6 +10,7 @@ import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.report.ReportEngine;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.crypto.headers.HeadersModule;
+import gg.effront.anarcry.scanner.crypto.hsts.HSTSModule;
 import gg.effront.anarcry.scanner.web.cors.CorsModule;
 import gg.effront.anarcry.scanner.web.crlf.CrlfModule;
 import gg.effront.anarcry.scanner.web.graphql.GraphQLModule;
@@ -287,8 +288,8 @@ class ScanHarnessTest {
         HttpsServer server = createTestHttpsServer(hdrs);
         int port = server.getAddress().getPort();
         try {
-            ScanContext ctx = new ScanContext("https://127.0.0.1:" + port, "", Set.of("Headers"));
-            List<Finding> findings = new HeadersModule().scan(ctx, msg -> {
+            ScanContext ctx = new ScanContext("https://127.0.0.1:" + port, "", Set.of("HSTS"));
+            List<Finding> findings = new HSTSModule().scan(ctx, msg -> {
             });
             assertTrue(findings.stream().anyMatch(f -> f.title().toLowerCase().contains("includesubdomains")),
                     "Deve reportar HSTS sem includeSubDomains");

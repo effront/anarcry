@@ -5,6 +5,7 @@ import gg.effront.anarcry.report.ReportEngine;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.ScanRunner;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -58,6 +59,7 @@ public class CliScanRunner {
     // Legacy test: prostaff.gg frontend (no JWT)
     // ──────────────────────────────────────────────────────
 
+    @Tag("integration")
     @Test
     void scanProstaff() throws Exception {
         Map<String, String> env = loadEnv();
@@ -74,6 +76,7 @@ public class CliScanRunner {
     // scraper.prostaff.gg — API backend, rich attack surface
     // ──────────────────────────────────────────────────────
 
+    @Tag("integration")
     @Test
     void scanScraper() throws Exception {
         Map<String, String> env = loadEnv();
@@ -87,6 +90,7 @@ public class CliScanRunner {
     // prostaff.gg frontend + all modules + both JWTs
     // ──────────────────────────────────────────────────────
 
+    @Tag("integration")
     @Test
     void scanProstaffAllModules() throws Exception {
         Map<String, String> env = loadEnv();
@@ -104,6 +108,7 @@ public class CliScanRunner {
     // Uso: ./gradlew test --tests "*.CliScanRunner.scanApi" --rerun
     // ──────────────────────────────────────────────────────
 
+    @Tag("integration")
     @Test
     void scanApi() throws Exception {
         Map<String, String> env = loadEnv();
@@ -126,6 +131,7 @@ public class CliScanRunner {
     // Uso: ./gradlew test --tests "*.CliScanRunner.scanRedirectOnly" --rerun
     // ──────────────────────────────────────────────────────
 
+    @Tag("integration")
     @Test
     void scanRedirectOnly() throws Exception {
         Map<String, String> env = loadEnv();
