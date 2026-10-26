@@ -1,0 +1,30 @@
+#!/bin/bash
+JAR="$(dirname "$(realpath "$0")")/build/libs/anarcry-1.1.jar"
+SELF="$(realpath "$0")"
+
+if [ ! -f "$JAR" ]; then
+    echo "AnarCry: JAR não encontrado. Execute: ./gradlew shadowJar"
+    exit 1
+fi
+
+# Se ainda não estamos num Kitty com o tamanho certo, abre janela dedicada
+if [ -z "$_ANARCRY_READY" ]; then
+    if command -v kitty &>/dev/null; then
+        export _ANARCRY_READY=1
+        exec kitty \
+            --override initial_window_width=220c \
+            --override initial_window_height=54c \
+            --title "AnarCry v1.1" \
+            bash "$SELF" "$@"
+    fi
+    # Kitty não disponível — fallback
+    printf '\e[8;54;220t'
+    if command -v xdotool &>/dev/null; then
+        WID=$(xdotool getactivewindow 2>/dev/null)
+        [ -n "$WID" ] && xdotool windowsize "$WID" 1460 920 2>/dev/null
+    fi
+    sleep 0.4
+    stty rows 54 cols 220 2>/dev/null
+fi
+
+exec java -jar "$JAR" "$@"
