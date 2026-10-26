@@ -1,0 +1,9 @@
+[
+  {
+    "module": "Headers",
+    "titleContains": "CSP style-src contém unsafe-inline",
+    "target": "prostaff.gg",
+    "reason": "Accepted risk (LOW): ~6000 React style={{}} props viram style=\"\" no SSR; AppHeader/PageLayout/AppSidebar usam inline styles em todas as rotas. Remover 'unsafe-inline' quebra o app inteiro. Impacto limitado: img-src restrita bloqueia CSS exfiltration; script-src estrito (nonce+strict-dynamic) impede execução de JS via CSS injection. Caminho de correção: migrar layouts compartilhados para Tailwind/CSS modules primeiro.",
+    "date": "2026-10-24"
+  }
+]

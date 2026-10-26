@@ -1,0 +1,171 @@
+package gg.effront.anarcry.scanner.web.xss;
+
+import gg.effront.anarcry.model.CvssCalculator;
+import gg.effront.anarcry.model.CweRegistry;
+import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.Severity;
+import gg.effront.anarcry.scanner.ScanContext;
+import gg.effront.anarcry.scanner.Scanner;
+import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.HttpClientFactory;
+
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.regex.Pattern;
+
+public class XssModule implements Scanner {
+
+    private static final List<String> PROBE_PATHS = List.of("/", "/search", "/api/search", "/q", "/filter", "/api/",
+            "/api/v1/", "/render", "/page");
+
+    private static final List<String> PARAMS = List.of("q", "query", "search", "name", "msg", "text", "content", "page",
+            "input", "s", "keyword", "filter");
+
+    // DOM sink patterns — dangerous assignments/calls that may receive
+    // attacker-controlled data
+    private static final Pattern DOM_SINKS = Pattern
+            .compile("innerHTML\\s*=|outerHTML\\s*=|document\\.write\\s*\\(|eval\\s*\\(|"
+                    + "location\\.href\\s*=|insertAdjacentHTML\\s*\\(|setTimeout\\s*\\(\\s*['\"]");
+
+    // Detects common HTML-encoding of '<' that indicates the app is escaping output
+    private static final Pattern HTML_ENCODED_LT = Pattern.compile("&lt;|&#x3[Cc];|&#60;");
+
+    @Override
+    public String id() {
+        return "XSS";
+    }
+
+    @Override
+    public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
+        String cweId = CweRegistry.cweId(id());
+        String cweTitle = CweRegistry.cweTitle(id());
+        String cvssVec = CweRegistry.cvssVector(id());
+        double score = CvssCalculator.calculate(cvssVec);
+
+        List<Finding> findings = new ArrayList<>();
+        HttpClient hc = HttpClientFactory.http2();
+
+        String scheme = ctx.isHttps() ? "https" : "http";
+        int defPort = ctx.isHttps() ? 443 : 80;
+        String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
+
+        log.accept("[~] XSS: iniciando probe em " + base);
+
+        // Phase 3 (DOM sink analysis) — fetch root page once and scan JS inline
+        String rootBody = fetchBody(ctx, hc, base + "/");
+        if (!rootBody.isEmpty()) {
+            var m = DOM_SINKS.matcher(rootBody);
+            if (m.find()) {
+                String sink = m.group().trim();
+                log.accept("[~] XSS DOM: sink '" + sink + "' encontrado em /");
+                findings.add(Finding.of(id(), "/", "DOM XSS — Sink Perigoso Detectado (" + sink + ")", Severity.INFO,
+                        "Sink '" + sink + "' encontrado no HTML/JS de " + base + "/",
+                        "Potential DOM-based XSS: o sink '" + sink + "' pode receber dados controláveis "
+                                + "pelo atacante via location.search, location.hash ou document.referrer "
+                                + "sem sanitização adequada.",
+                        "Inspecionar manualmente o JS de " + base + "/ e verificar se o sink "
+                                + "recebe dados de location.search / location.hash / referrer.",
+                        "Substituir innerHTML/outerHTML por textContent onde possível. "
+                                + "Sanitizar com DOMPurify antes de qualquer atribuição a sinks HTML. "
+                                + "Implementar Content-Security-Policy.",
+                        cweId, cweTitle, cvssVec, score));
+            }
+        }
+
+        // Phase 1 + 2: Canary reflection + HTML payload injection
+        outer : for (String path : PROBE_PATHS) {
+            for (String param : PARAMS) {
+                // Generate unique canary per (path, param) pair
+                String canary = "xsstest" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+
+                // Anti-FP: always fetch baseline before injection
+                String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=harmless");
+
+                // Phase 1: inject canary and check for verbatim reflection
+                String canaryEncoded = URLEncoder.encode(canary, "UTF-8");
+                String canaryBody = fetchBody(ctx, hc, base + path + "?" + param + "=" + canaryEncoded);
+
+                if (canaryBody.isEmpty() || !canaryBody.contains(canary) || baseline.contains(canary)) {
+                    continue; // not reflected, or coincidental baseline match
+                }
+
+                log.accept("[~] XSS: canary refletido em " + path + "?" + param);
+
+                // Phase 2: inject HTML payload — check for executable reflection
+                String htmlPayload = "<img src=x onerror=zz>";
+                String encodedHtml = URLEncoder.encode(htmlPayload, "UTF-8");
+                String payloadUrl = base + path + "?" + param + "=" + encodedHtml;
+                String payloadBody = fetchBody(ctx, hc, payloadUrl);
+                String endpoint = path + "?" + param + "=" + encodedHtml;
+
+                if (!payloadBody.isEmpty()) {
+                    boolean appEscapes = HTML_ENCODED_LT.matcher(payloadBody).find();
+
+                    if (!appEscapes && payloadBody.contains("onerror=zz")) {
+                        // Unencoded event handler in response — executable XSS confirmed → HIGH
+                        log.accept("[!!] XSS HIGH: '<img onerror=zz>' refletido sem encoding em " + endpoint);
+                        findings.add(Finding.of(id(), endpoint, "Reflected XSS — Payload Executável Refletido",
+                                Severity.HIGH,
+                                "Payload '" + htmlPayload + "' refletido sem encoding HTML em " + base + endpoint
+                                        + " | Canary: " + canary,
+                                "Reflected XSS confirmado: o atributo onerror= é refletido sem escape, "
+                                        + "permitindo execução de JavaScript arbitrário no contexto da página "
+                                        + "com acesso ao DOM, cookies não-HttpOnly e session storage.",
+                                "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
+                                        + htmlPayload + "'",
+                                "Escapar toda saída HTML com htmlspecialchars() / HtmlUtils.htmlEscape(). "
+                                        + "Implementar Content-Security-Policy com default-src 'self'. "
+                                        + "Validar e sanitizar entrada no servidor antes de renderizar.",
+                                cweId, cweTitle, cvssVec, score));
+                        break outer;
+                    } else if (!appEscapes && payloadBody.contains(canary)) {
+                        // Canary reflected but payload not rendered as executable — MEDIUM
+                        log.accept(
+                                "[~] XSS MEDIUM: canary refletido, payload HTML parcialmente escapado em " + endpoint);
+                        findings.add(Finding.of(id(), endpoint,
+                                "Reflected XSS (Potencial) — Reflexão de Input Sem Contexto Executável",
+                                Severity.MEDIUM,
+                                "Canary '" + canary + "' refletido em " + base + endpoint
+                                        + " | Payload HTML aparenta ser parcialmente escaped; "
+                                        + "contexto de injeção requer análise manual",
+                                "Input refletido detectado, mas o payload não resultou em evento handler "
+                                        + "executável neste contexto. Bypass pode ser possível em atributo, "
+                                        + "script block ou via codificação alternativa (HTML entities, Unicode).",
+                                "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "=" + canary
+                                        + "'",
+                                "Revisar o contexto de reflexão manualmente. "
+                                        + "Aplicar encoding específico ao contexto (HTML, JS, URL, CSS). "
+                                        + "Implementar CSP e sanitização server-side com allowlist.",
+                                cweId, cweTitle, cvssVec, score));
+                        break outer;
+                    }
+                }
+            }
+        }
+
+        if (findings.isEmpty()) {
+            log.accept("[+] XSS: nenhum injection detectado");
+        }
+
+        return findings;
+    }
+
+    private String fetchBody(ScanContext ctx, HttpClient hc, String url) {
+        try {
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6)).GET()
+                    .build();
+            HttpResponse<String> r = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
+            return r.body() != null ? r.body() : "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+}

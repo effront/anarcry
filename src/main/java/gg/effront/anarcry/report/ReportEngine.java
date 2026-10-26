@@ -3,6 +3,8 @@ package gg.effront.anarcry.report;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
+import gg.effront.anarcry.model.KnowledgeEntry;
 import gg.effront.anarcry.model.Severity;
 
 import java.io.IOException;
@@ -13,7 +15,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 
 public class ReportEngine {
 
@@ -48,10 +49,10 @@ public class ReportEngine {
         StringBuilder sb = new StringBuilder();
         sb.append("# AnarCry Report\n\n");
         sb.append("**Target:** ").append(targetUrl).append("  \n");
-        sb.append("**Data:** ").append(timestamp).append("  \n");
+        sb.append("**Date:** ").append(timestamp).append("  \n");
         sb.append("**Total findings:** ").append(findings.size()).append("\n\n");
 
-        sb.append("## Resumo\n\n");
+        sb.append("## Summary\n\n");
         for (Severity s : ORDER) {
             long count = findings.stream().filter(f -> f.severity() == s).count();
             if (count > 0) {
@@ -71,15 +72,15 @@ public class ReportEngine {
         }
         sb.append("\n");
 
-        sb.append("## Detalhes\n\n");
+        sb.append("## Details\n\n");
         for (Finding f : findings) {
             sb.append("### [").append(f.severity()).append("] ").append(f.title()).append("\n\n");
-            sb.append("**Módulo:** ").append(f.module()).append("  \n");
+            sb.append("**Module:** ").append(f.module()).append("  \n");
             sb.append("**Endpoint:** ").append(f.endpoint()).append("  \n");
-            sb.append("**Evidência:** ").append(f.evidence()).append("  \n");
-            sb.append("**Impacto:** ").append(f.impact()).append("  \n");
-            sb.append("**Reprodução:**\n```\n").append(f.reproduction()).append("\n```\n");
-            sb.append("**Recomendação:** ").append(f.recommendation()).append("  \n");
+            sb.append("**Evidence:** ").append(f.evidence()).append("  \n");
+            sb.append("**Impact:** ").append(f.impact()).append("  \n");
+            sb.append("**Reproduction:**\n```\n").append(f.reproduction()).append("\n```\n");
+            sb.append("**Recommendation:** ").append(f.recommendation()).append("  \n");
             sb.append("**CWE:** ").append(f.cweId()).append(" — ").append(f.cweTitle()).append("  \n");
             sb.append("**CVSS v3.1:** ").append(f.cvssScore()).append(" (").append(f.cvssVector()).append(")  \n");
             sb.append("\n---\n\n");
@@ -93,40 +94,64 @@ public class ReportEngine {
 
     public String exportH1(List<Finding> findings, String targetUrl, String programName) throws IOException {
         String date = LocalDate.now().toString();
+        KnowledgeBase kb = KnowledgeBase.getInstance();
         StringBuilder sb = new StringBuilder();
+
         for (Finding f : findings) {
-            sb.append("# [").append(f.severity()).append("] ").append(f.title()).append("\n\n");
+            KnowledgeEntry entry = kb.byModule(f.module()).orElse(null);
+            String kbTitle = entry != null ? entry.title() : f.title();
+            String kbSummary = entry != null ? entry.summary() : f.impact();
+            String kbDescription = entry != null ? entry.description() : "";
+            String kbImpact = entry != null ? entry.impact() : f.impact();
+            String kbRecommendation = entry != null ? entry.recommendation() : f.recommendation();
+
+            sb.append("# [").append(f.severity()).append("] ").append(kbTitle).append("\n\n");
             sb.append("**Program:** ").append(programName).append("\n");
             sb.append("**Asset:** ").append(targetUrl).append("\n");
             sb.append("**Severity:** ").append(h1SeverityLabel(f)).append(" (CVSS ")
                     .append(String.format("%.1f", f.cvssScore())).append(" — ").append(f.cvssVector()).append(")\n");
             sb.append("**Weakness:** ").append(f.cweId()).append(" — ").append(f.cweTitle()).append("\n\n");
 
-            sb.append("## Summary\n");
-            sb.append(f.impact()).append("\n\n");
+            sb.append("## Summary\n\n");
+            sb.append(kbSummary).append("\n\n");
 
-            sb.append("## Description\n");
-            sb.append(f.evidence()).append("\n\n");
+            sb.append("## Description\n\n");
+            sb.append(kbDescription).append("\n\n");
+            sb.append("### Observed Evidence\n\n");
+            sb.append("```\n").append(safe(f.evidence())).append("\n```\n\n");
 
-            sb.append("## Steps to Reproduce\n");
-            sb.append("```\n").append(f.reproduction()).append("\n```\n\n");
+            sb.append("## Steps to Reproduce\n\n");
+            sb.append("1. Navigate to the target asset: `").append(targetUrl).append("`\n");
+            String[] reproLines = safe(f.reproduction()).split("\n");
+            int step = 2;
+            for (String line : reproLines) {
+                String trimmed = line.trim();
+                if (!trimmed.isBlank()) {
+                    sb.append(step++).append(". ").append(trimmed).append("\n");
+                }
+            }
+            sb.append("\n");
 
-            sb.append("## Supporting Material\n");
+            sb.append("## Impact\n\n");
+            sb.append(kbImpact).append("\n\n");
+            sb.append("**Affected endpoint:** `").append(f.endpoint()).append("`\n\n");
+
+            sb.append("## Mitigation\n\n");
+            sb.append(kbRecommendation).append("\n\n");
+
+            sb.append("## Supporting Material\n\n");
             sb.append("- Scanner: AnarCry\n");
             sb.append("- Date: ").append(date).append("\n");
-            String evidSnippet = f.evidence() != null && f.evidence().length() > 200
-                    ? f.evidence().substring(0, 200)
-                    : f.evidence();
-            sb.append("- ").append(evidSnippet).append("\n\n");
+            sb.append("- Module: ").append(f.module()).append("\n\n");
 
-            sb.append("## Impact\n");
-            sb.append(f.impact()).append("\n\n");
             sb.append("---\n\n");
         }
+
         String markdown = sb.toString();
         String timestamp = LocalDateTime.now().format(FMT);
-        Files.writeString(Path.of("h1-report-" + timestamp + ".md"), markdown);
-        return markdown;
+        Path path = Path.of("h1-report-" + timestamp + ".md");
+        Files.writeString(path, markdown);
+        return path.toString();
     }
 
     private String h1SeverityLabel(Finding f) {
@@ -143,58 +168,59 @@ public class ReportEngine {
     // Bugcrowd export
     // -------------------------------------------------------------------------
 
-    private static final Map<String, String> VRT = Map.ofEntries(
-            Map.entry("SSRF", "server_security_misconfiguration.server_side_request_forgery"),
-            Map.entry("CORS", "broken_authentication_and_session_management.authentication_bypass.other"),
-            Map.entry("IDOR", "broken_access_control.insecure_direct_object_references"),
-            Map.entry("JWT",
-                    "broken_authentication_and_session_management.authentication_bypass.json_web_token_vulnerability"),
-            Map.entry("CRLF", "cross_site_scripting_xss.reflected_xss"),
-            Map.entry("ReqSmuggling", "server_security_misconfiguration.http_request_smuggling"),
-            Map.entry("XSS", "cross_site_scripting_xss.reflected_xss"), Map.entry("SQLi", "injection.sql_injection"),
-            Map.entry("LFI", "server_security_misconfiguration.path_traversal"),
-            Map.entry("CmdInjection", "injection.remote_code_execution.command_injection"),
-            Map.entry("SSTI", "injection.remote_code_execution.server_side_template_injection"),
-            Map.entry("XXE", "injection.xml_external_entity_injection"),
-            Map.entry("MassAssign", "broken_access_control.mass_assignment"),
-            Map.entry("CachePoisoning", "server_security_misconfiguration.web_cache_poisoning"),
-            Map.entry("HostHeader", "server_security_misconfiguration.host_header_injection"),
-            Map.entry("OpenRedirect", "broken_authentication_and_session_management.open_redirect"),
-            Map.entry("TLS", "cryptography_issues.weak_tls"),
-            Map.entry("Headers", "server_security_misconfiguration.missing_security_headers"),
-            Map.entry("OAuth", "broken_authentication_and_session_management.oauth_misconfiguration"),
-            Map.entry("GraphQL", "server_security_misconfiguration.graphql_misconfiguration"),
-            Map.entry("Actuator", "server_security_misconfiguration.sensitive_data_exposure"));
-
     public String exportBugcrowd(List<Finding> findings, String targetUrl) throws IOException {
+        KnowledgeBase kb = KnowledgeBase.getInstance();
         StringBuilder sb = new StringBuilder();
+
         for (Finding f : findings) {
-            String vrt = VRT.getOrDefault(f.module(), "other");
-            String evidenceSnippet = f.evidence() != null && f.evidence().length() > 300
-                    ? f.evidence().substring(0, 300)
-                    : f.evidence();
+            KnowledgeEntry entry = kb.byModule(f.module()).orElse(null);
+            String vrt = entry != null ? entry.vrtId() : "other";
+            String kbTitle = entry != null ? entry.title() : f.title();
+            String kbSummary = entry != null ? entry.summary() : f.impact();
+            String kbImpact = entry != null ? entry.impact() : f.impact();
+            String kbRecommendation = entry != null ? entry.recommendation() : f.recommendation();
 
-            sb.append("## ").append(f.title()).append("\n\n");
-            sb.append("**Classification:** ").append(vrt).append("\n");
-            sb.append("**Proof of Concept:** ").append(f.reproduction()).append("\n");
+            sb.append("## ").append(kbTitle).append("\n\n");
+            sb.append("**Classification (VRT):** `").append(vrt).append("`\n");
+            sb.append("**Severity:** ").append(f.severity()).append(" (CVSS ")
+                    .append(String.format("%.1f", f.cvssScore())).append(")\n");
+            sb.append("**Weakness:** ").append(f.cweId()).append(" — ").append(f.cweTitle()).append("\n");
+            sb.append("**Endpoint:** `").append(f.endpoint()).append("`\n\n");
 
-            sb.append("**Replication Steps:**\n");
-            String[] steps = f.reproduction().split("\n");
-            for (int i = 0; i < steps.length; i++) {
-                String step = steps[i].trim();
-                if (!step.isBlank()) {
-                    sb.append(i + 1).append(". ").append(step).append("\n");
+            sb.append("### Summary\n\n");
+            sb.append(kbSummary).append("\n\n");
+
+            sb.append("### Proof of Concept\n\n");
+            sb.append("**Evidence:**\n");
+            sb.append("```\n").append(safe(f.evidence())).append("\n```\n\n");
+            sb.append("**Reproduction:**\n");
+            sb.append("```\n").append(safe(f.reproduction())).append("\n```\n\n");
+
+            sb.append("### Replication Steps\n\n");
+            String[] steps = safe(f.reproduction()).split("\n");
+            int idx = 1;
+            for (String line : steps) {
+                String trimmed = line.trim();
+                if (!trimmed.isBlank()) {
+                    sb.append(idx++).append(". ").append(trimmed).append("\n");
                 }
             }
+            sb.append("\n");
 
-            sb.append("**Impact:** ").append(f.impact()).append("\n");
-            sb.append("**Evidence:** ").append(evidenceSnippet).append("\n\n");
+            sb.append("### Impact\n\n");
+            sb.append(kbImpact).append("\n\n");
+
+            sb.append("### Remediation\n\n");
+            sb.append(kbRecommendation).append("\n\n");
+
             sb.append("---\n\n");
         }
+
         String markdown = sb.toString();
         String timestamp = LocalDateTime.now().format(FMT);
-        Files.writeString(Path.of("bugcrowd-report-" + timestamp + ".md"), markdown);
-        return markdown;
+        Path path = Path.of("bugcrowd-report-" + timestamp + ".md");
+        Files.writeString(path, markdown);
+        return path.toString();
     }
 
     // -------------------------------------------------------------------------
@@ -217,5 +243,9 @@ public class ReportEngine {
 
     private String escape(String s) {
         return s == null ? "" : s.replace("|", "\\|").replace("\n", " ");
+    }
+
+    private static String safe(String s) {
+        return s == null ? "(no data)" : s;
     }
 }
