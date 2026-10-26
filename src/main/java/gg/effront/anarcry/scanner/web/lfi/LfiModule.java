@@ -71,8 +71,9 @@ public class LfiModule implements Scanner {
      */
     private record Payload(String value, boolean encode) {
         String asQueryValue() {
-            if (!encode)
+            if (!encode) {
                 return value;
+            }
             try {
                 return URLEncoder.encode(value, "UTF-8");
             } catch (Exception e) {

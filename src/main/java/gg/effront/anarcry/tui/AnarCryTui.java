@@ -676,8 +676,9 @@ public class AnarCryTui {
     }
 
     private static void appendDetailLines(List<String> lines, String label, String value, int textW) {
-        if (value == null || value.isBlank())
+        if (value == null || value.isBlank()) {
             return;
+        }
         lines.add(" " + label + ":");
         for (String chunk : wrap(value, textW)) {
             lines.add("   " + chunk);

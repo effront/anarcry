@@ -338,13 +338,15 @@ public class CommandInjectionModule implements Scanner {
      * 5)" → null (subshell — skip proportional test) "; ping -c 5 …" → "; "
      */
     private String extractSeparatorPrefix(String payload) {
-        if (payload.startsWith("; "))
+        if (payload.startsWith("; ")) {
             return "; ";
-        if (payload.startsWith("| "))
+        }
+        if (payload.startsWith("| ")) {
             return "| ";
-        if (payload.startsWith("&& "))
+        }
+        if (payload.startsWith("&& ")) {
             return "&& ";
-        // Subshell payloads ($(...)) are not amenable to simple sleep-N substitution
+        }
         return null;
     }
 }

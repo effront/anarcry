@@ -33,7 +33,7 @@ O problema é agravado por bibliotecas antigas, implementações caseiras, aceit
 ## Payloads and Bypasses
 ```text
 # Token original
-eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjMiLCJyb2xlIjoidXNlciJ9.<sig>
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjMiLCJyb2xlIjoidXNlciJ9.<sig> # nosemgrep: generic.secrets.security.detected-jwt-token
 
 # 1) alg:none (remover assinatura; manter o ponto final)
 {"alg":"none","typ":"JWT"}
