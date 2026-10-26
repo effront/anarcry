@@ -168,7 +168,7 @@ public class AnarCryTui {
                     window.close();
                     deliverEvent.set(false);
                 } else if (ch == 'e' || ch == 'E') {
-                    exportFindings();
+                    showExportMenu();
                     deliverEvent.set(false);
                 } else if (ch == '?') {
                     showActionPalette();
@@ -415,7 +415,7 @@ public class AnarCryTui {
             p.addComponent(severityBar("  LOW     ", l, total, TextColor.ANSI.BLUE));
             p.addComponent(severityBar("  INFO    ", i, total, TextColor.ANSI.WHITE));
             p.addComponent(new EmptySpace(new TerminalSize(1, 1)));
-            p.addComponent(new Button("[E] Exportar MD + JSON", this::exportFindings));
+            p.addComponent(new Button("[E] Export Report", this::showExportMenu));
         }
         return p.withBorder(Borders.singleLine("Relatório"));
     }
@@ -456,21 +456,156 @@ public class AnarCryTui {
         gg.effront.anarcry.tui.chrome.ActionPalette.show(gui);
     }
 
-    private void exportFindings() {
+    private void showExportMenu() {
         List<Finding> snapshot;
         synchronized (findingHistory) {
             snapshot = new ArrayList<>(findingHistory);
         }
         if (snapshot.isEmpty()) {
-            addToLog("[!] Nenhum finding para exportar");
+            addToLog("[!] No findings to export");
             return;
         }
+
+        var dialog = new BasicWindow("Export Report");
+        dialog.setHints(Set.of(Window.Hint.CENTERED));
+
+        var panel = new Panel(new LinearLayout(Direction.VERTICAL));
+        panel.addComponent(new Label(" Select export format:"));
+        panel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
+
+        var actions = new com.googlecode.lanterna.gui2.ActionListBox(new TerminalSize(36, 4));
+        actions.addItem("[1] AnarCry MD + JSON", () -> {
+            dialog.close();
+            exportAnarCry(snapshot);
+        });
+        actions.addItem("[2] HackerOne", () -> {
+            dialog.close();
+            promptProgramName(snapshot, "h1");
+        });
+        actions.addItem("[3] Bugcrowd", () -> {
+            dialog.close();
+            exportBugcrowd(snapshot);
+        });
+        actions.addItem("[4] JSON only", () -> {
+            dialog.close();
+            exportJson(snapshot);
+        });
+        panel.addComponent(actions);
+
+        panel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
+        panel.addComponent(new Button("Cancel [Esc]", dialog::close));
+
+        dialog.setComponent(panel.withBorder(Borders.singleLine("Export")));
+        dialog.addWindowListener(new WindowListenerAdapter() {
+            @Override
+            public void onInput(Window w2, KeyStroke ks, AtomicBoolean deliver) {
+                if (ks.getKeyType() == KeyType.Escape) {
+                    dialog.close();
+                    deliver.set(false);
+                } else if (ks.getKeyType() == KeyType.Character) {
+                    char c = ks.getCharacter();
+                    if (c == '1') {
+                        dialog.close();
+                        exportAnarCry(snapshot);
+                        deliver.set(false);
+                    } else if (c == '2') {
+                        dialog.close();
+                        promptProgramName(snapshot, "h1");
+                        deliver.set(false);
+                    } else if (c == '3') {
+                        dialog.close();
+                        exportBugcrowd(snapshot);
+                        deliver.set(false);
+                    } else if (c == '4') {
+                        dialog.close();
+                        exportJson(snapshot);
+                        deliver.set(false);
+                    }
+                }
+            }
+        });
+
+        gui.addWindow(dialog);
+        gui.setActiveWindow(dialog);
+    }
+
+    private void promptProgramName(List<Finding> snapshot, String platform) {
+        var dialog = new BasicWindow("Program Name");
+        dialog.setHints(Set.of(Window.Hint.CENTERED));
+
+        var panel = new Panel(new LinearLayout(Direction.VERTICAL));
+        panel.addComponent(new Label(" Enter the program name:"));
+        panel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
+        var input = new TextBox(new TerminalSize(36, 1));
+        panel.addComponent(input);
+        panel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
+
+        var buttons = new Panel(new LinearLayout(Direction.HORIZONTAL));
+        buttons.addComponent(new Button("Export", () -> {
+            String name = input.getText().isBlank() ? "unknown" : input.getText().trim();
+            dialog.close();
+            exportH1(snapshot, name);
+        }));
+        buttons.addComponent(new EmptySpace(new TerminalSize(2, 1)));
+        buttons.addComponent(new Button("Cancel", dialog::close));
+        panel.addComponent(buttons);
+
+        dialog.setComponent(panel.withBorder(Borders.singleLine("HackerOne")));
+        dialog.addWindowListener(new WindowListenerAdapter() {
+            @Override
+            public void onInput(Window w2, KeyStroke ks, AtomicBoolean deliver) {
+                if (ks.getKeyType() == KeyType.Escape) {
+                    dialog.close();
+                    deliver.set(false);
+                }
+            }
+        });
+
+        gui.addWindow(dialog);
+        gui.setActiveWindow(dialog);
+    }
+
+    private void exportAnarCry(List<Finding> snapshot) {
         String target = modulesPanel.getTarget();
         try {
             String mdFile = new ReportEngine().export(snapshot, target.isBlank() ? "unknown" : target);
-            addToLog("[+] Exportado: " + mdFile + " (+" + mdFile.replace(".md", ".json") + ")");
+            addToLog("[+] Exported: " + mdFile + " (+" + mdFile.replace(".md", ".json") + ")");
         } catch (Throwable t) {
-            addToLog("[!] Erro ao exportar: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+            addToLog("[!] Export error: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
+    }
+
+    private void exportH1(List<Finding> snapshot, String programName) {
+        String target = modulesPanel.getTarget();
+        try {
+            String file = new ReportEngine().exportH1(snapshot, target.isBlank() ? "unknown" : target, programName);
+            addToLog("[+] HackerOne report: " + file);
+        } catch (Throwable t) {
+            addToLog("[!] H1 export error: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
+    }
+
+    private void exportBugcrowd(List<Finding> snapshot) {
+        String target = modulesPanel.getTarget();
+        try {
+            String file = new ReportEngine().exportBugcrowd(snapshot, target.isBlank() ? "unknown" : target);
+            addToLog("[+] Bugcrowd report: " + file);
+        } catch (Throwable t) {
+            addToLog("[!] Bugcrowd export error: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
+    }
+
+    private void exportJson(List<Finding> snapshot) {
+        String target = modulesPanel.getTarget();
+        try {
+            String json = new ReportEngine().toJson(snapshot);
+            String timestamp = java.time.LocalDateTime.now()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+            java.nio.file.Path path = java.nio.file.Path.of("anarcry-findings-" + timestamp + ".json");
+            java.nio.file.Files.writeString(path, json);
+            addToLog("[+] JSON export: " + path);
+        } catch (Throwable t) {
+            addToLog("[!] JSON export error: " + t.getClass().getSimpleName() + ": " + t.getMessage());
         }
     }
 
@@ -503,7 +638,8 @@ public class AnarCryTui {
 
         var contentList = new com.googlecode.lanterna.gui2.ActionListBox(
                 new TerminalSize(w - 2, Math.min(allLines.size(), viewH)));
-        allLines.forEach(line -> contentList.addItem(line, () -> {}));
+        allLines.forEach(line -> contentList.addItem(line, () -> {
+        }));
 
         var panel = new Panel(new LinearLayout(Direction.VERTICAL));
         panel.addComponent(contentList);
@@ -540,7 +676,9 @@ public class AnarCryTui {
     }
 
     private static void appendDetailLines(List<String> lines, String label, String value, int textW) {
-        if (value == null || value.isBlank()) return;
+        if (value == null || value.isBlank()) {
+            return;
+        }
         lines.add(" " + label + ":");
         for (String chunk : wrap(value, textW)) {
             lines.add("   " + chunk);

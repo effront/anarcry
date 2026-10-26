@@ -101,6 +101,8 @@ jobs:
             --exclude '.gradle/' \
             --exclude 'gradle/' \
             --exclude 'src/test/' \
+            --exclude 'knowledge-base/' \
+            --exclude 'src/main/resources/knowledge_base.json' \
             || true
 
       - name: Parse Results

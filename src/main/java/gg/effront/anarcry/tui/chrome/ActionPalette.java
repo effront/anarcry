@@ -16,13 +16,13 @@ import java.util.Set;
 
 public class ActionPalette {
 
-    private static final List<String[]> ACTIONS = List.of(new String[]{"F1", "Modo SCAN — painel de módulos e log"},
-            new String[]{"F2", "Modo FINDINGS — tabela de achados"},
-            new String[]{"F3", "Modo DASHBOARD — resumo da sessão"},
-            new String[]{"F4", "Modo REPEATER — requisição/resposta"},
-            new String[]{"F5", "Modo NOTES — bloco de anotações"},
-            new String[]{"F6", "Modo RELATÓRIO — exportar JSON/MD"}, new String[]{"?", "Abrir este painel de ações"},
-            new String[]{"q", "Sair da aplicação"});
+    private static final List<String[]> ACTIONS = List.of(new String[]{"F1", "SCAN mode — modules and log"},
+            new String[]{"F2", "FINDINGS mode — findings table"},
+            new String[]{"F3", "DASHBOARD mode — session summary"},
+            new String[]{"F4", "REPEATER mode — request/response"}, new String[]{"F5", "NOTES mode — scratchpad"},
+            new String[]{"F6", "REPORT mode — export panel"},
+            new String[]{"E", "Export menu (AnarCry / H1 / Bugcrowd / JSON)"},
+            new String[]{"?", "Open this action palette"}, new String[]{"q", "Quit application"});
 
     public static void show(WindowBasedTextGUI gui) {
         BasicWindow dialog = new BasicWindow("Ações — AnarCry");
@@ -38,7 +38,7 @@ public class ActionPalette {
         }
 
         panel.addComponent(new EmptySpace());
-        panel.addComponent(new Button("Fechar", dialog::close)
+        panel.addComponent(new Button("Close", dialog::close)
                 .setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.END, GridLayout.Alignment.CENTER)));
 
         dialog.setComponent(panel.withBorder(Borders.singleLine()));
