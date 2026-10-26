@@ -42,7 +42,7 @@ public class HSTSModule implements Scanner {
             conn.setInstanceFollowRedirects(false);
             conn.setConnectTimeout(5000);
             conn.setReadTimeout(8000);
-            conn.setRequestProperty("User-Agent", "AnarCry/1.0");
+            conn.setRequestProperty("User-Agent", "AnarCry/1.1");
             if (!ctx.jwtToken().isBlank()) {
                 conn.setRequestProperty("Authorization", "Bearer " + ctx.jwtToken());
             }
@@ -98,7 +98,7 @@ public class HSTSModule implements Scanner {
             https.setInstanceFollowRedirects(true);
             https.setConnectTimeout(5000);
             https.setReadTimeout(8000);
-            https.setRequestProperty("User-Agent", "AnarCry/1.0");
+            https.setRequestProperty("User-Agent", "AnarCry/1.1");
 
             Map<String, List<String>> headers;
             int status;
