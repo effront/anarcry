@@ -22,6 +22,7 @@ public class ReportEngine {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final List<Severity> ORDER = List.of(Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW,
             Severity.INFO);
+    private static final Path REPORTS_DIR = Path.of("docs", "reports");
 
     public String export(List<Finding> findings, String targetUrl) throws IOException {
         String timestamp = LocalDateTime.now().format(FMT);
@@ -30,8 +31,9 @@ public class ReportEngine {
         List<Finding> sorted = findings.stream().sorted(Comparator.comparingInt(f -> ORDER.indexOf(f.severity())))
                 .toList();
 
-        Path mdPath = Path.of(base + ".md");
-        Path jsonPath = Path.of(base + ".json");
+        Files.createDirectories(REPORTS_DIR);
+        Path mdPath = REPORTS_DIR.resolve(base + ".md");
+        Path jsonPath = REPORTS_DIR.resolve(base + ".json");
 
         Files.writeString(mdPath, buildMarkdown(sorted, targetUrl, timestamp));
         Files.writeString(jsonPath, toJson(sorted));
@@ -148,7 +150,8 @@ public class ReportEngine {
 
         String markdown = sb.toString();
         String timestamp = LocalDateTime.now().format(FMT);
-        Path path = Path.of("h1-report-" + timestamp + ".md");
+        Files.createDirectories(REPORTS_DIR);
+        Path path = REPORTS_DIR.resolve("h1-report-" + timestamp + ".md");
         Files.writeString(path, markdown);
         return path.toString();
     }
@@ -216,7 +219,8 @@ public class ReportEngine {
 
         String markdown = sb.toString();
         String timestamp = LocalDateTime.now().format(FMT);
-        Path path = Path.of("bugcrowd-report-" + timestamp + ".md");
+        Files.createDirectories(REPORTS_DIR);
+        Path path = REPORTS_DIR.resolve("bugcrowd-report-" + timestamp + ".md");
         Files.writeString(path, markdown);
         return path.toString();
     }

@@ -5,11 +5,11 @@ build/
 # Gradle wrapper JAR must be committed for CI
 !gradle/wrapper/gradle-wrapper.jar
 
-# Scan reports (generated output — não versionar)
-anarcry-report-*.md
-anarcry-report-*.json
-h1-report-*.md
-bugcrowd-report-*.md
+# Scan reports (generated output)
+docs/reports/anarcry-report-*
+docs/reports/anarcry-findings-*
+docs/reports/h1-report-*
+docs/reports/bugcrowd-report-*
 
 # IDE
 .idea/
@@ -17,18 +17,7 @@ bugcrowd-report-*.md
 .vscode/
 .DS_Store
 
-# Pentest / planning notes (não fazem parte da ferramenta)
-findings-*.md
-pentest-*.md
-x8ogsg0s4gws0840w8kksokk*.txt
-"Plano de Correção*"
-compatibilidade.md
-arquitetura_*.md
-security-research-backlog.md
-PLANO.md
-PRD.md
-SPRINTS.md
-sprint-plan.md
+# Misc
 anarchrypto/
 public/
-docs/
+x8ogsg0s4gws0840w8kksokk*.txt
