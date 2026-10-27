@@ -68,9 +68,12 @@ public class SqlInjectionModule implements Scanner {
         int defPort = ctx.isHttps() ? 443 : 80;
         String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
-        log.accept("[~] SQLi: iniciando error-based e time-based em " + base);
+        log.accept("[~] SQLi: iniciando error-based e time-based em " + base + " (" + PATHS.size() + " paths × "
+                + PARAMS.size() + " params)");
 
-        outer : for (String path : PATHS) {
+        outer : for (int pi = 0; pi < PATHS.size(); pi++) {
+            String path = PATHS.get(pi);
+            log.accept("[~] SQLi: [" + (pi + 1) + "/" + PATHS.size() + "] " + path);
             for (String param : PARAMS) {
 
                 // ─── Phase 1: Error-Based ───────────────────────────────────────

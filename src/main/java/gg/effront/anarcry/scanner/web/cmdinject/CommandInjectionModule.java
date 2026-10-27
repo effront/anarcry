@@ -79,9 +79,12 @@ public class CommandInjectionModule implements Scanner {
         int defPort = ctx.isHttps() ? 443 : 80;
         String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
-        log.accept("[~] CmdInjection: iniciando varredura em " + base);
+        log.accept("[~] CmdInjection: iniciando varredura em " + base + " (" + PATHS.size() + " paths × "
+                + NETWORK_KEYWORDS.size() + " params)");
 
-        outer : for (String path : PATHS) {
+        outer : for (int pi = 0; pi < PATHS.size(); pi++) {
+            String path = PATHS.get(pi);
+            log.accept("[~] CmdInjection: [" + (pi + 1) + "/" + PATHS.size() + "] " + path);
             for (String param : NETWORK_KEYWORDS) {
 
                 // Only probe params whose name contains a network keyword (always true
