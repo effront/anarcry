@@ -23,6 +23,14 @@ import java.util.regex.Pattern;
 
 public class SsrfModule implements Scanner {
 
+    private static final int MAX_ACTIVE_PATHS = 20;
+
+    private static final java.util.regex.Pattern STATIC_ASSET = java.util.regex.Pattern
+            .compile("(?i)\\.(js|css|png|jpe?g|gif|svg|ico|woff2?|ttf|eot|map|webp|avif|mp[34]|webm)$");
+
+    private static final java.util.regex.Pattern HIGH_VALUE_PATH = java.util.regex.Pattern
+            .compile("(?i)(proxy|fetch|url|webhook|callback|redirect|load|import|ping|ssrf|resource|image)");
+
     // Common URL-bearing parameters
     private static final List<String> URL_PARAMS = List.of("url", "uri", "link", "src", "source", "fetch", "path",
             "proxy", "redirect", "resource", "dest", "target", "page", "html", "load", "document", "webhook_url",
@@ -100,10 +108,44 @@ public class SsrfModule implements Scanner {
         HttpClient hc = HttpClientFactory.noRedirect();
         HttpClient hcFollow = HttpClientFactory.followOne();
 
-        // Filter to only paths that exist (avoid 404 noise × 14 probes × 24 params)
+        List<String> probePaths = new ArrayList<>(PROBE_PATHS);
+        List<String> urlParams = new ArrayList<>(URL_PARAMS);
+        int crawlerPaths = 0;
+        int crawlerParams = 0;
+        if (!ctx.discoveredPaths().isEmpty()) {
+            List<String> highValue = new ArrayList<>();
+            List<String> normalValue = new ArrayList<>();
+            for (String dp : ctx.discoveredPaths().paths()) {
+                if (STATIC_ASSET.matcher(dp).find()) {
+                    continue;
+                }
+                if (probePaths.contains(dp)) {
+                    continue;
+                }
+                if (HIGH_VALUE_PATH.matcher(dp).find()) {
+                    highValue.add(dp);
+                } else {
+                    normalValue.add(dp);
+                }
+            }
+            probePaths.addAll(highValue);
+            probePaths.addAll(normalValue);
+            crawlerPaths = highValue.size() + normalValue.size();
+            for (String p : ctx.discoveredPaths().parameters()) {
+                if (!urlParams.contains(p)) {
+                    urlParams.add(p);
+                    crawlerParams++;
+                }
+            }
+            log.accept(
+                    "[~] SSRF: " + probePaths.size() + " paths (+" + crawlerPaths + " from Crawler, " + highValue.size()
+                            + " high-value), " + urlParams.size() + " params (+" + crawlerParams + " from Crawler)");
+        }
+
+        // Filter to only paths that exist (avoid 404 noise x 14 probes x 24 params)
         List<String> activePaths = new ArrayList<>();
-        log.accept("[~] SSRF: verificando " + PROBE_PATHS.size() + " paths em " + baseUrl);
-        for (String path : PROBE_PATHS) {
+        log.accept("[~] SSRF: verificando " + probePaths.size() + " paths em " + baseUrl);
+        for (String path : probePaths) {
             try {
                 HttpRequest baseline = HttpRequest.newBuilder().uri(URI.create(baseUrl + path))
                         .timeout(Duration.ofSeconds(4)).GET().build();
@@ -114,20 +156,25 @@ public class SsrfModule implements Scanner {
             } catch (Exception e) {
                 // Unreachable path — skip
             }
+            if (activePaths.size() >= MAX_ACTIVE_PATHS) {
+                log.accept("[~] SSRF: cap de " + MAX_ACTIVE_PATHS + " paths ativos atingido, pulando restantes");
+                break;
+            }
         }
 
         if (activePaths.isEmpty()) {
             log.accept("[+] SSRF: nenhum path acessível encontrado");
             return findings;
         }
-        log.accept("[~] SSRF: " + activePaths.size() + "/" + PROBE_PATHS.size() + " paths ativos — iniciando "
-                + (activePaths.size() * URL_PARAMS.size() * SSRF_PROBES.size()) + " probes");
+        long totalProbes = (long) activePaths.size() * urlParams.size() * SSRF_PROBES.size();
+        log.accept("[~] SSRF: " + activePaths.size() + "/" + probePaths.size() + " paths ativos — " + totalProbes
+                + " probes");
 
         outer : for (int pi = 0; pi < activePaths.size(); pi++) {
             String path = activePaths.get(pi);
-            log.accept("[~] SSRF: [" + (pi + 1) + "/" + activePaths.size() + "] " + path + " — " + URL_PARAMS.size()
+            log.accept("[~] SSRF: [" + (pi + 1) + "/" + activePaths.size() + "] " + path + " — " + urlParams.size()
                     + " params × " + SSRF_PROBES.size() + " probes");
-            for (String param : URL_PARAMS) {
+            for (String param : urlParams) {
                 for (SsrfProbe probe : SSRF_PROBES) {
                     try {
                         String encoded = URLEncoder.encode(probe.url(), "UTF-8");
