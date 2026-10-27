@@ -160,9 +160,12 @@ public class LfiModule implements Scanner {
         // -----------------------------------------------------------------------
         // Phase 1: Linux traversal
         // -----------------------------------------------------------------------
-        log.accept("[~] LFI: fase 1 — payloads Linux (etc/passwd)");
+        log.accept("[~] LFI: fase 1 — payloads Linux (etc/passwd) (" + PROBE_PATHS.size() + " paths × "
+                + FILE_PARAM_KEYWORDS.size() + " params)");
 
-        linuxOuter : for (String path : PROBE_PATHS) {
+        linuxOuter : for (int pi = 0; pi < PROBE_PATHS.size(); pi++) {
+            String path = PROBE_PATHS.get(pi);
+            log.accept("[~] LFI: [" + (pi + 1) + "/" + PROBE_PATHS.size() + "] " + path);
             // Probe the path without params to fingerprint PHP and Server header
             try {
                 HttpRequest probeReq = HttpRequest.newBuilder().uri(URI.create(base + path))
@@ -237,9 +240,12 @@ public class LfiModule implements Scanner {
         // Phase 2: Windows traversal (only if Linux not confirmed)
         // -----------------------------------------------------------------------
         if (!linuxConfirmed) {
-            log.accept("[~] LFI: fase 2 — payloads Windows (win.ini)");
+            log.accept("[~] LFI: fase 2 — payloads Windows (win.ini) (" + PROBE_PATHS.size() + " paths × "
+                    + FILE_PARAM_KEYWORDS.size() + " params)");
 
-            windowsOuter : for (String path : PROBE_PATHS) {
+            windowsOuter : for (int wi = 0; wi < PROBE_PATHS.size(); wi++) {
+                String path = PROBE_PATHS.get(wi);
+                log.accept("[~] LFI win: [" + (wi + 1) + "/" + PROBE_PATHS.size() + "] " + path);
                 for (String param : FILE_PARAM_KEYWORDS) {
                     String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=index");
                     if (WINDOWS_PATTERN.matcher(baseline).find()) {

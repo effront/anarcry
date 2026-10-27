@@ -64,6 +64,8 @@ public class LogPanel extends Panel {
             lbl.setForegroundColor(cl.color());
             linesPanel.addComponent(lbl);
         }
+        linesPanel.invalidate();
+        invalidate();
     }
 
     private static TextColor colorFor(String msg) {

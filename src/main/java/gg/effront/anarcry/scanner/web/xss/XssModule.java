@@ -81,7 +81,10 @@ public class XssModule implements Scanner {
         }
 
         // Phase 1 + 2: Canary reflection + HTML payload injection
-        outer : for (String path : PROBE_PATHS) {
+        log.accept("[~] XSS: " + PROBE_PATHS.size() + " paths × " + PARAMS.size() + " params");
+        outer : for (int pi = 0; pi < PROBE_PATHS.size(); pi++) {
+            String path = PROBE_PATHS.get(pi);
+            log.accept("[~] XSS: [" + (pi + 1) + "/" + PROBE_PATHS.size() + "] " + path);
             for (String param : PARAMS) {
                 // Generate unique canary per (path, param) pair
                 String canary = "xsstest" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);

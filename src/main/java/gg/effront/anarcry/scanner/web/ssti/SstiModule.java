@@ -86,9 +86,12 @@ public class SstiModule implements Scanner {
         int defPort = ctx.isHttps() ? 443 : 80;
         String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
-        log.accept("[~] SSTI: injetando payloads matemáticos em " + base);
+        log.accept("[~] SSTI: injetando payloads matemáticos em " + base + " (" + PROBE_PATHS.size() + " paths × "
+                + PARAMS.size() + " params × " + DETECTION_PROBES.size() + " engines)");
 
-        outer : for (String path : PROBE_PATHS) {
+        outer : for (int pi = 0; pi < PROBE_PATHS.size(); pi++) {
+            String path = PROBE_PATHS.get(pi);
+            log.accept("[~] SSTI: [" + (pi + 1) + "/" + PROBE_PATHS.size() + "] " + path);
             for (String param : PARAMS) {
                 String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=test");
                 for (SstiProbe probe : DETECTION_PROBES) {
