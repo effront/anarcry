@@ -109,6 +109,7 @@ public class ModulesPanel extends Panel {
         reconLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.CYAN);
         addComponent(reconLabel);
         addComponent(crawlerCheck);
+        addComponent(infraCheck);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
         Label cryptoLabel = new Label("── CRYPTO ──────────────");
@@ -138,7 +139,6 @@ public class ModulesPanel extends Panel {
         addComponent(cachePoisoningCheck);
         addComponent(reqSmugglingCheck);
         addComponent(idorCheck);
-        addComponent(infraCheck);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
         addComponent(new Label("─".repeat(width - 2)));

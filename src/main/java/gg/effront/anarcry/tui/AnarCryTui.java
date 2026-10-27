@@ -83,7 +83,7 @@ public class AnarCryTui {
         this.envPreload = env;
         var factory = new DefaultTerminalFactory();
         factory.setMouseCaptureMode(MouseCaptureMode.CLICK_RELEASE);
-        factory.setInitialTerminalSize(new TerminalSize(180, 62));
+        factory.setPreferTerminalEmulator(false);
         TerminalScreen screen = (TerminalScreen) factory.createScreen();
         screen.startScreen();
 
@@ -624,7 +624,9 @@ public class AnarCryTui {
             String json = new ReportEngine().toJson(snapshot);
             String timestamp = java.time.LocalDateTime.now()
                     .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
-            java.nio.file.Path path = java.nio.file.Path.of("anarcry-findings-" + timestamp + ".json");
+            java.nio.file.Path reportsDir = java.nio.file.Path.of("docs", "reports");
+            java.nio.file.Files.createDirectories(reportsDir);
+            java.nio.file.Path path = reportsDir.resolve("anarcry-findings-" + timestamp + ".json");
             java.nio.file.Files.writeString(path, json);
             addToLog("[+] JSON export: " + path);
         } catch (Throwable t) {
