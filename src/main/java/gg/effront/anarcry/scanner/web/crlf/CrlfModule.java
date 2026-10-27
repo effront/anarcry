@@ -193,7 +193,7 @@ public class CrlfModule implements Scanner {
             sslSocket.startHandshake();
             return sslSocket;
         } else {
-            Socket socket = new Socket();
+            Socket socket = new Socket(); // nosemgrep: unencrypted-socket
             socket.setSoTimeout(timeoutMs);
             socket.connect(new InetSocketAddress(host, port), timeoutMs);
             return socket;

@@ -8,6 +8,8 @@ build/
 # Scan reports (generated output — não versionar)
 anarcry-report-*.md
 anarcry-report-*.json
+h1-report-*.md
+bugcrowd-report-*.md
 
 # IDE
 .idea/

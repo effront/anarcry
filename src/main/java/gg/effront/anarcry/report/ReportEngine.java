@@ -99,13 +99,12 @@ public class ReportEngine {
 
         for (Finding f : findings) {
             KnowledgeEntry entry = kb.byModule(f.module()).orElse(null);
-            String kbTitle = entry != null ? entry.title() : f.title();
             String kbSummary = entry != null ? entry.summary() : f.impact();
             String kbDescription = entry != null ? entry.description() : "";
             String kbImpact = entry != null ? entry.impact() : f.impact();
             String kbRecommendation = entry != null ? entry.recommendation() : f.recommendation();
 
-            sb.append("# [").append(f.severity()).append("] ").append(kbTitle).append("\n\n");
+            sb.append("# [").append(f.severity()).append("] ").append(f.title()).append("\n\n");
             sb.append("**Program:** ").append(programName).append("\n");
             sb.append("**Asset:** ").append(targetUrl).append("\n");
             sb.append("**Severity:** ").append(h1SeverityLabel(f)).append(" (CVSS ")
@@ -175,12 +174,11 @@ public class ReportEngine {
         for (Finding f : findings) {
             KnowledgeEntry entry = kb.byModule(f.module()).orElse(null);
             String vrt = entry != null ? entry.vrtId() : "other";
-            String kbTitle = entry != null ? entry.title() : f.title();
             String kbSummary = entry != null ? entry.summary() : f.impact();
             String kbImpact = entry != null ? entry.impact() : f.impact();
             String kbRecommendation = entry != null ? entry.recommendation() : f.recommendation();
 
-            sb.append("## ").append(kbTitle).append("\n\n");
+            sb.append("## ").append(f.title()).append("\n\n");
             sb.append("**Classification (VRT):** `").append(vrt).append("`\n");
             sb.append("**Severity:** ").append(f.severity()).append(" (CVSS ")
                     .append(String.format("%.1f", f.cvssScore())).append(")\n");
