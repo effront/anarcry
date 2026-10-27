@@ -7,31 +7,31 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 public record ScanContext(String targetUrl, String jwtToken, String jwtToken2, Set<String> enabledModules,
-        ScanConfig config, Consumer<RequestRecord> requestLog) {
+        ScanConfig config, Consumer<RequestRecord> requestLog, DiscoveredPaths discoveredPaths) {
 
     public ScanContext(String targetUrl, String jwtToken, Set<String> enabledModules) {
         this(targetUrl, jwtToken, "", enabledModules, ScanConfig.defaults(), r -> {
-        });
+        }, new DiscoveredPaths());
     }
 
     public ScanContext(String targetUrl, String jwtToken, String jwtToken2, Set<String> enabledModules) {
         this(targetUrl, jwtToken, jwtToken2, enabledModules, ScanConfig.defaults(), r -> {
-        });
+        }, new DiscoveredPaths());
     }
 
     public ScanContext(String targetUrl, String jwtToken, Set<String> enabledModules, String jwtToken2) {
         this(targetUrl, jwtToken, jwtToken2, enabledModules, ScanConfig.defaults(), r -> {
-        });
+        }, new DiscoveredPaths());
     }
 
     public ScanContext(String targetUrl, String jwtToken, Set<String> enabledModules, String jwtToken2,
             Consumer<RequestRecord> requestLog) {
-        this(targetUrl, jwtToken, jwtToken2, enabledModules, ScanConfig.defaults(), requestLog);
+        this(targetUrl, jwtToken, jwtToken2, enabledModules, ScanConfig.defaults(), requestLog, new DiscoveredPaths());
     }
 
     public ScanContext(String targetUrl, String jwtToken, Set<String> enabledModules, String jwtToken2,
             ScanConfig config, Consumer<RequestRecord> requestLog) {
-        this(targetUrl, jwtToken, jwtToken2, enabledModules, config, requestLog);
+        this(targetUrl, jwtToken, jwtToken2, enabledModules, config, requestLog, new DiscoveredPaths());
     }
 
     public String host() {
