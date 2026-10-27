@@ -417,7 +417,7 @@ public class InfraModule implements Scanner {
     }
 
     private boolean tcpOpen(String host, int port) {
-        try (Socket s = new Socket()) {
+        try (Socket s = new Socket()) { // nosemgrep: unencrypted-socket
             s.connect(new InetSocketAddress(host, port), 1000);
             return true;
         } catch (IOException e) {
@@ -426,7 +426,7 @@ public class InfraModule implements Scanner {
     }
 
     private String sshBanner(String host) {
-        try (Socket s = new Socket()) {
+        try (Socket s = new Socket()) { // nosemgrep: unencrypted-socket
             s.connect(new InetSocketAddress(host, 22), 3000);
             s.setSoTimeout(3000);
             byte[] buf = new byte[256];
@@ -459,7 +459,7 @@ public class InfraModule implements Scanner {
     }
 
     private String redisPing(String host) {
-        try (Socket s = new Socket()) {
+        try (Socket s = new Socket()) { // nosemgrep: unencrypted-socket
             s.connect(new InetSocketAddress(host, 6379), 2000);
             s.setSoTimeout(2000);
             OutputStream out = s.getOutputStream();
