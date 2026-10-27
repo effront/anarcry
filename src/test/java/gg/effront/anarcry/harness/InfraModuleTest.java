@@ -16,7 +16,7 @@ class InfraModuleTest {
     @Test
     void infraScanVps() throws Exception {
         String target = "https://api.prostaff.gg";
-        ScanContext ctx = new ScanContext(target, "", "", Set.of("Infra"),
+        ScanContext ctx = new ScanContext(target, "", Set.of("Infra"), "",
                 new ScanConfig(0, "", Set.of(), List.of(), ""), r -> {
                 });
 

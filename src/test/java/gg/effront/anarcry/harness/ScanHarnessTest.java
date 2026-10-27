@@ -2066,7 +2066,7 @@ class ScanHarnessTest {
     @Order(68)
     void scanConfigDelayIsRespected() {
         ScanConfig config = new ScanConfig(0, "", Set.of(), List.of(), "");
-        ScanContext ctx = new ScanContext("https://example.com", "", "", Set.of(), config, r -> {
+        ScanContext ctx = new ScanContext("https://example.com", "", Set.of(), "", config, r -> {
         });
         assertEquals(config, ctx.config(), "ScanContext.config() deve retornar o ScanConfig fornecido");
         assertEquals(0, ctx.config().delayMs(), "ScanConfig.delayMs deve ser 0");
