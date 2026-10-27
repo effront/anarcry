@@ -3,6 +3,7 @@ package gg.effront.anarcry.scanner.web.cmdinject;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -17,6 +18,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -79,8 +81,11 @@ public class CommandInjectionModule implements Scanner {
         int defPort = ctx.isHttps() ? 443 : 80;
         String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
+        List<String> activePayloads = mergeKbPayloads(false);
+        List<String> sleepPayloads = mergeKbPayloads(true);
         log.accept("[~] CmdInjection: iniciando varredura em " + base + " (" + PATHS.size() + " paths × "
-                + NETWORK_KEYWORDS.size() + " params)");
+                + NETWORK_KEYWORDS.size() + " params, " + activePayloads.size() + " active + " + sleepPayloads.size()
+                + " sleep payloads)");
 
         outer : for (int pi = 0; pi < PATHS.size(); pi++) {
             String path = PATHS.get(pi);
@@ -104,7 +109,7 @@ public class CommandInjectionModule implements Scanner {
                 }
 
                 // ── Phase 1: Active output-based injection ───────────────────────
-                for (String payload : ACTIVE_PAYLOADS) {
+                for (String payload : activePayloads) {
                     String injected = "testvalue" + payload;
                     String encoded;
                     try {
@@ -151,7 +156,7 @@ public class CommandInjectionModule implements Scanner {
                 // ── Phase 2: Time-based blind injection ─────────────────────────
                 long baselineMs = measureBaselineRtt(ctx, hc, base, path, param);
 
-                for (String sleepPayload : SLEEP_PAYLOADS) {
+                for (String sleepPayload : sleepPayloads) {
                     long elapsed = measureElapsed(ctx, hc, base, path, param, sleepPayload);
 
                     if (elapsed <= baselineMs + TIMING_THRESHOLD_MS) {
@@ -202,6 +207,20 @@ public class CommandInjectionModule implements Scanner {
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
+
+    private static final java.util.regex.Pattern TIME_BASED_CMD = java.util.regex.Pattern
+            .compile("(?i)sleep|ping -c|timeout");
+
+    private List<String> mergeKbPayloads(boolean timeBased) {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(timeBased ? SLEEP_PAYLOADS : ACTIVE_PAYLOADS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            boolean isTimeBased = TIME_BASED_CMD.matcher(kbp).find();
+            if (isTimeBased == timeBased) {
+                merged.add(kbp);
+            }
+        }
+        return List.copyOf(merged);
+    }
 
     /**
      * Returns true if {@code paramName} (lowercased) contains any NETWORK_KEYWORD.

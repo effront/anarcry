@@ -3,6 +3,7 @@ package gg.effront.anarcry.scanner.web.xss;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -19,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class XssModule implements Scanner {
@@ -37,6 +39,12 @@ public class XssModule implements Scanner {
 
     // Detects common HTML-encoding of '<' that indicates the app is escaping output
     private static final Pattern HTML_ENCODED_LT = Pattern.compile("&lt;|&#x3[Cc];|&#60;");
+
+    private static final Pattern ALERT_CALL = Pattern.compile("alert\\([^)]*\\)");
+    private static final Pattern EVENT_HANDLER = Pattern.compile("on(error|load|click|focus|toggle|mouseover|input)=");
+
+    private record XssPayload(String template, String marker) {
+    }
 
     @Override
     public String id() {
@@ -80,8 +88,12 @@ public class XssModule implements Scanner {
             }
         }
 
+        // Build Phase 2 payload list: hardcoded + KB-enriched
+        List<XssPayload> phase2Payloads = buildXssPayloads();
+        log.accept("[~] XSS: " + PROBE_PATHS.size() + " paths × " + PARAMS.size() + " params × " + phase2Payloads.size()
+                + " payloads");
+
         // Phase 1 + 2: Canary reflection + HTML payload injection
-        log.accept("[~] XSS: " + PROBE_PATHS.size() + " paths × " + PARAMS.size() + " params");
         outer : for (int pi = 0; pi < PROBE_PATHS.size(); pi++) {
             String path = PROBE_PATHS.get(pi);
             log.accept("[~] XSS: [" + (pi + 1) + "/" + PROBE_PATHS.size() + "] " + path);
@@ -102,24 +114,28 @@ public class XssModule implements Scanner {
 
                 log.accept("[~] XSS: canary refletido em " + path + "?" + param);
 
-                // Phase 2: inject HTML payload — check for executable reflection
-                String htmlPayload = "<img src=x onerror=zz>";
-                String encodedHtml = URLEncoder.encode(htmlPayload, "UTF-8");
-                String payloadUrl = base + path + "?" + param + "=" + encodedHtml;
-                String payloadBody = fetchBody(ctx, hc, payloadUrl);
-                String endpoint = path + "?" + param + "=" + encodedHtml;
+                // Phase 2: try payloads until one confirms executable XSS
+                boolean anyUnescaped = false;
+                for (XssPayload xp : phase2Payloads) {
+                    String htmlPayload = xp.template();
+                    String marker = xp.marker();
+                    String encodedHtml = URLEncoder.encode(htmlPayload, "UTF-8");
+                    String payloadUrl = base + path + "?" + param + "=" + encodedHtml;
+                    String payloadBody = fetchBody(ctx, hc, payloadUrl);
+                    String endpoint = path + "?" + param + "=" + encodedHtml;
 
-                if (!payloadBody.isEmpty()) {
+                    if (payloadBody.isEmpty()) {
+                        continue;
+                    }
                     boolean appEscapes = HTML_ENCODED_LT.matcher(payloadBody).find();
 
-                    if (!appEscapes && payloadBody.contains("onerror=zz")) {
-                        // Unencoded event handler in response — executable XSS confirmed → HIGH
-                        log.accept("[!!] XSS HIGH: '<img onerror=zz>' refletido sem encoding em " + endpoint);
+                    if (!appEscapes && payloadBody.contains(marker)) {
+                        log.accept("[!!] XSS HIGH: '" + htmlPayload + "' refletido sem encoding em " + endpoint);
                         findings.add(Finding.of(id(), endpoint, "Reflected XSS — Payload Executável Refletido",
                                 Severity.HIGH,
                                 "Payload '" + htmlPayload + "' refletido sem encoding HTML em " + base + endpoint
-                                        + " | Canary: " + canary,
-                                "Reflected XSS confirmado: o atributo onerror= é refletido sem escape, "
+                                        + " | Canary: " + canary + " | Marker: " + marker,
+                                "Reflected XSS confirmado: o payload é refletido sem escape, "
                                         + "permitindo execução de JavaScript arbitrário no contexto da página "
                                         + "com acesso ao DOM, cookies não-HttpOnly e session storage.",
                                 "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
@@ -129,27 +145,29 @@ public class XssModule implements Scanner {
                                         + "Validar e sanitizar entrada no servidor antes de renderizar.",
                                 cweId, cweTitle, cvssVec, score));
                         break outer;
-                    } else if (!appEscapes && payloadBody.contains(canary)) {
-                        // Canary reflected but payload not rendered as executable — MEDIUM
-                        log.accept(
-                                "[~] XSS MEDIUM: canary refletido, payload HTML parcialmente escapado em " + endpoint);
-                        findings.add(Finding.of(id(), endpoint,
-                                "Reflected XSS (Potencial) — Reflexão de Input Sem Contexto Executável",
-                                Severity.MEDIUM,
-                                "Canary '" + canary + "' refletido em " + base + endpoint
-                                        + " | Payload HTML aparenta ser parcialmente escaped; "
-                                        + "contexto de injeção requer análise manual",
-                                "Input refletido detectado, mas o payload não resultou em evento handler "
-                                        + "executável neste contexto. Bypass pode ser possível em atributo, "
-                                        + "script block ou via codificação alternativa (HTML entities, Unicode).",
-                                "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "=" + canary
-                                        + "'",
-                                "Revisar o contexto de reflexão manualmente. "
-                                        + "Aplicar encoding específico ao contexto (HTML, JS, URL, CSS). "
-                                        + "Implementar CSP e sanitização server-side com allowlist.",
-                                cweId, cweTitle, cvssVec, score));
-                        break outer;
                     }
+                    if (!appEscapes) {
+                        anyUnescaped = true;
+                    }
+                }
+
+                if (anyUnescaped) {
+                    String endpoint = path + "?" + param + "=" + canary;
+                    log.accept("[~] XSS MEDIUM: canary refletido, nenhum payload confirmou execução em " + endpoint);
+                    findings.add(Finding.of(id(), endpoint,
+                            "Reflected XSS (Potencial) — Reflexão de Input Sem Contexto Executável", Severity.MEDIUM,
+                            "Canary '" + canary + "' refletido em " + base + endpoint + " | " + phase2Payloads.size()
+                                    + " payloads testados sem execução confirmada; "
+                                    + "contexto de injeção requer análise manual",
+                            "Input refletido detectado, mas nenhum payload resultou em evento handler "
+                                    + "executável neste contexto. Bypass pode ser possível em atributo, "
+                                    + "script block ou via codificação alternativa (HTML entities, Unicode).",
+                            "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "=" + canary + "'",
+                            "Revisar o contexto de reflexão manualmente. "
+                                    + "Aplicar encoding específico ao contexto (HTML, JS, URL, CSS). "
+                                    + "Implementar CSP e sanitização server-side com allowlist.",
+                            cweId, cweTitle, cvssVec, score));
+                    break outer;
                 }
             }
         }
@@ -159,6 +177,30 @@ public class XssModule implements Scanner {
         }
 
         return findings;
+    }
+
+    private List<XssPayload> buildXssPayloads() {
+        List<XssPayload> payloads = new ArrayList<>();
+        payloads.add(new XssPayload("<img src=x onerror=zz>", "onerror=zz"));
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            if (!kbp.contains("<")) {
+                continue;
+            }
+            Matcher ev = EVENT_HANDLER.matcher(kbp);
+            if (ev.find()) {
+                String handler = ev.group();
+                String adapted = ALERT_CALL.matcher(kbp).replaceFirst("xzz");
+                if (!adapted.equals(kbp)) {
+                    payloads.add(new XssPayload(adapted, handler + "xzz"));
+                } else {
+                    payloads.add(new XssPayload(kbp, handler));
+                }
+            } else if (kbp.contains("<script>")) {
+                String adapted = ALERT_CALL.matcher(kbp).replaceFirst("xzz");
+                payloads.add(new XssPayload(adapted, "<script>xzz"));
+            }
+        }
+        return List.copyOf(payloads);
     }
 
     private String fetchBody(ScanContext ctx, HttpClient hc, String url) {

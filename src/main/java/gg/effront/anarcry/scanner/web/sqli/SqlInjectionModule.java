@@ -3,6 +3,7 @@ package gg.effront.anarcry.scanner.web.sqli;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -16,6 +17,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -68,8 +70,9 @@ public class SqlInjectionModule implements Scanner {
         int defPort = ctx.isHttps() ? 443 : 80;
         String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
+        List<String> errorPayloads = mergeKbErrorPayloads();
         log.accept("[~] SQLi: iniciando error-based e time-based em " + base + " (" + PATHS.size() + " paths × "
-                + PARAMS.size() + " params)");
+                + PARAMS.size() + " params, " + errorPayloads.size() + " error payloads)");
 
         outer : for (int pi = 0; pi < PATHS.size(); pi++) {
             String path = PATHS.get(pi);
@@ -84,7 +87,7 @@ public class SqlInjectionModule implements Scanner {
                     continue;
                 }
 
-                for (String payload : ERROR_PAYLOADS) {
+                for (String payload : errorPayloads) {
                     String encoded = URLEncoder.encode(payload, "UTF-8");
                     String url = base + path + "?" + param + "=" + encoded;
                     try {
@@ -201,6 +204,18 @@ public class SqlInjectionModule implements Scanner {
         } catch (Exception e) {
             return "";
         }
+    }
+
+    private static final Pattern TIME_BASED_KEYWORD = Pattern.compile("(?i)sleep|pg_sleep|waitfor|benchmark|delay");
+
+    private List<String> mergeKbErrorPayloads() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(ERROR_PAYLOADS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            if (!TIME_BASED_KEYWORD.matcher(kbp).find()) {
+                merged.add(kbp);
+            }
+        }
+        return List.copyOf(merged);
     }
 
     /** Returns elapsed ms, or -1 on connection error (not timeout). */
