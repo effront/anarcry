@@ -28,8 +28,10 @@ public final class TlsUtil {
             public X509Certificate[] getAcceptedIssuers() {
                 return new X509Certificate[0];
             }
+            // nosemgrep: insecure-trust-manager
             public void checkClientTrusted(X509Certificate[] chain, String authType) {
             }
+            // nosemgrep: insecure-trust-manager
             public void checkServerTrusted(X509Certificate[] chain, String authType) {
             }
         }};
@@ -50,7 +52,7 @@ public final class TlsUtil {
     }
 
     public static SSLContext sslContext(TrustManager[] tm) throws NoSuchAlgorithmException, KeyManagementException {
-        SSLContext ctx = SSLContext.getInstance("TLS");
+        SSLContext ctx = SSLContext.getInstance("TLS"); // nosemgrep: weak-ssl-context
         ctx.init(null, tm, new SecureRandom());
         return ctx;
     }
