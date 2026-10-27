@@ -44,6 +44,10 @@ public class ModulesPanel extends Panel {
     private final CheckBox hostHeaderCheck;
     private final CheckBox actuatorCheck;
     private final CheckBox massAssignCheck;
+    private final CheckBox crawlerCheck;
+    private final CheckBox hstsCheck;
+    private final CheckBox cachePoisoningCheck;
+    private final CheckBox reqSmugglingCheck;
     private final CheckBox infraCheck;
     private final PasteableTextBox targetBox;
     private final PasteableTextBox jwtTokenBox;
@@ -54,7 +58,7 @@ public class ModulesPanel extends Panel {
         this.logPanel = logPanel;
         this.scanRunner = scanRunner;
 
-        setPreferredSize(new TerminalSize(width, 1));
+        setPreferredSize(new TerminalSize(width, 48));
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
 
@@ -90,14 +94,29 @@ public class ModulesPanel extends Panel {
         actuatorCheck.setChecked(true);
         massAssignCheck = new CheckBox("MassAssign");
         massAssignCheck.setChecked(true);
+        crawlerCheck = new CheckBox("Crawler");
+        crawlerCheck.setChecked(true);
+        hstsCheck = new CheckBox("HSTS");
+        hstsCheck.setChecked(true);
+        cachePoisoningCheck = new CheckBox("CachePoisoning");
+        cachePoisoningCheck.setChecked(true);
+        reqSmugglingCheck = new CheckBox("ReqSmuggling");
+        reqSmugglingCheck.setChecked(true);
         infraCheck = new CheckBox(infraLabel());
         infraCheck.setChecked(false);
 
+        Label reconLabel = new Label("── RECON ───────────────");
+        reconLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.CYAN);
+        addComponent(reconLabel);
+        addComponent(crawlerCheck);
+
+        addComponent(new EmptySpace(new TerminalSize(1, 1)));
         Label cryptoLabel = new Label("── CRYPTO ──────────────");
         cryptoLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.BLUE);
         addComponent(cryptoLabel);
         addComponent(tlsCheck);
         addComponent(headersCheck);
+        addComponent(hstsCheck);
         addComponent(jwtCheck);
         addComponent(pqcCheck);
 
@@ -113,10 +132,12 @@ public class ModulesPanel extends Panel {
         addComponent(crlfCheck);
         addComponent(xxeCheck);
         addComponent(sstiCheck);
-        addComponent(idorCheck);
         addComponent(hostHeaderCheck);
         addComponent(actuatorCheck);
         addComponent(massAssignCheck);
+        addComponent(cachePoisoningCheck);
+        addComponent(reqSmugglingCheck);
+        addComponent(idorCheck);
         addComponent(infraCheck);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
@@ -276,6 +297,18 @@ public class ModulesPanel extends Panel {
         }
         if (infraCheck.isChecked()) {
             modules.add("Infra");
+        }
+        if (crawlerCheck.isChecked()) {
+            modules.add("Crawler");
+        }
+        if (hstsCheck.isChecked()) {
+            modules.add("HSTS");
+        }
+        if (cachePoisoningCheck.isChecked()) {
+            modules.add("CachePoisoning");
+        }
+        if (reqSmugglingCheck.isChecked()) {
+            modules.add("ReqSmuggling");
         }
 
         if (modules.isEmpty()) {
