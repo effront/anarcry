@@ -9,6 +9,7 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -54,6 +55,15 @@ public final class KnowledgeBase {
 
     public int size() {
         return byId.size();
+    }
+
+    public List<String> filteredPayloads(String moduleId) {
+        return byModule(moduleId).map(e -> e.payloads().stream().filter(p -> !isComment(p)).toList()).orElse(List.of());
+    }
+
+    private static boolean isComment(String line) {
+        String s = line.strip();
+        return s.startsWith("# ") || s.equals("#") || s.startsWith("-- ") || s.equals("--") || s.startsWith("<!--");
     }
 
     private static final class Holder {
