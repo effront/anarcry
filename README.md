@@ -90,7 +90,8 @@
 |  06 - Testing                                        |
 |  07 - Architecture                                   |
 |  08 - Knowledge Base                                 |
-|  09 - Ethical Use                                    |
+|  09 - Changelog                                      |
+|  10 - Ethical Use                                    |
 +------------------------------------------------------+
 ```
 
@@ -100,13 +101,13 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.0.jar
+java -jar build/libs/anarcry-1.2.jar
 ```
 
 With `.env.local` for pre-configured targets:
 
 ```bash
-java -jar build/libs/anarcry-1.0.jar --env .env.local
+java -jar build/libs/anarcry-1.2.jar --env .env.local
 ```
 
 ---
@@ -210,15 +211,15 @@ Two operational modes: **Target** (main scan interface) and **Repeater** (HTTP r
 | [Start]       |                                                       |
 | [Stop]        |                                                       |
 +---------------+---+---------------------------------------------------+
-| FINDINGS          |  FINDING DETAIL                                    |
-| >CRIT 10.0 SSRF   |  Module: SSRF                                      |
-|  CRIT  9.1 JWT    |  Endpoint: /api/fetch?url=                         |
-|  CRIT  9.1 CORS   |  Evidence: Response contains ami-id                |
-|  HIGH  8.1 JWT    |  Impact: Internal network access                   |
-|  [Enter] Detail   |  Reproduction: curl -X GET ...                     |
+| FINDINGS          |  FINDING DETAIL                                   |
+| >CRIT 10.0 SSRF   |  Module: SSRF                                     |
+|  CRIT  9.1 JWT    |  Endpoint: /api/fetch?url=                        |
+|  CRIT  9.1 CORS   |  Evidence: Response contains ami-id               |
+|  HIGH  8.1 JWT    |  Impact: Internal network access                  |
+|  [Enter] Detail   |  Reproduction: curl -X GET ...                    |
 +-------------------+---------------------------------------------------+
-| target: https://t.com | C:3 H:1 M:0 L:0 | [====----] 8/20 | [E]xport   |
-+----------------------------------------------------------------------- +
+| target: https://t.com | C:3 H:1 M:0 L:0 | [====----] 8/20 | [E]xport  |
++-----------------------------------------------------------------------+
 ```
 
 **Key bindings:**
@@ -232,6 +233,7 @@ Two operational modes: **Target** (main scan interface) and **Repeater** (HTTP r
 | `Enter` | Finding detail (modal with evidence + curl) |
 | `C` | Copy curl to clipboard |
 | `PgUp/PgDn` | Scroll log |
+| `S` | Expand module progress to log (during scan) |
 | `F8` | Event log drawer |
 
 ---
@@ -272,6 +274,7 @@ src/main/java/gg/effront/anarcry/
 |   +-- Scanner.java                Interface: id() + scan(ScanContext, Consumer<String>)
 |   +-- ScanRunner.java             Orchestrator: parallel execution (thread pool,
 |   |                                parallelism=4), dedup, suppression, callbacks
+|   +-- DiscoveredPaths.java        Thread-safe container for Crawler-discovered paths
 |   +-- ScanContext.java            Record: targetUrl, jwtToken(s), enabledModules, config
 |   +-- ScanConfig.java            Scope rules, suppression list, delay, relay URL
 |   +-- ScanEvent.java             Progress events
@@ -299,8 +302,9 @@ src/main/java/gg/effront/anarcry/
 
 ```
 ScanRunner.run(ScanContext)
-  -> filter enabled modules via ctx.has()
-  -> submit each module to thread pool (parallelism=4)
+  -> Phase 1: run Crawler (blocking) to populate DiscoveredPaths
+  -> Phase 2: submit remaining modules to thread pool (parallelism=4)
+     -> modules consume Crawler-discovered paths for smarter probing
   -> each module: Scanner.scan() -> List<Finding>
   -> deduplicate by module|endpoint|title
   -> apply suppressions from ScanConfig
@@ -325,7 +329,25 @@ ScanRunner.run(ScanContext)
 
 ---
 
-## 09 - Ethical Use
+## 09 - Changelog
+
+### v1.2
+
+- **Two-phase scan**: Crawler runs first (Phase 1), then all other modules execute in parallel consuming Crawler-discovered paths via `DiscoveredPaths`
+- **Crawler-enriched modules**: SSRF, IDOR, and MassAssignment now merge Crawler-discovered paths and parameters for broader attack surface coverage
+- **SSRF optimization**: static asset filtering, high-value path prioritization, and cap of 20 active paths to prevent probe explosion
+- **Per-path progress logging**: SSTI, CmdInjection, SQLi, XSS, and LFI modules log `[X/N] path` progress per iteration
+- **Animated status bar**: active module names with animated dots, expandable via `S` key or status bar click
+- **LogPanel fix**: disappearing logs after scan resolved via Lanterna `invalidate()` calls
+- **New TUI checkboxes**: Crawler, HSTS, CachePoisoning, ReqSmuggling added to ModulesPanel
+
+### v1.1
+
+- Initial public release with 25 attack modules, CVSS v3.1 auto-scoring, HackerOne/Bugcrowd export, and TUI
+
+---
+
+## 10 - Ethical Use
 
 AnarCry is designed for **authorized security testing** only:
 

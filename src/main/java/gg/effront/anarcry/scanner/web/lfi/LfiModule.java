@@ -3,6 +3,7 @@ package gg.effront.anarcry.scanner.web.lfi;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -17,6 +18,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -157,12 +159,18 @@ public class LfiModule implements Scanner {
         String confirmedPayload = null;
         String serverHeader = null;
 
+        List<Payload> linuxPayloads = mergeKbPayloads(false);
+        List<Payload> windowsPayloads = mergeKbPayloads(true);
+
         // -----------------------------------------------------------------------
         // Phase 1: Linux traversal
         // -----------------------------------------------------------------------
-        log.accept("[~] LFI: fase 1 — payloads Linux (etc/passwd)");
+        log.accept("[~] LFI: fase 1 — " + linuxPayloads.size() + " Linux payloads (" + PROBE_PATHS.size() + " paths × "
+                + FILE_PARAM_KEYWORDS.size() + " params)");
 
-        linuxOuter : for (String path : PROBE_PATHS) {
+        linuxOuter : for (int pi = 0; pi < PROBE_PATHS.size(); pi++) {
+            String path = PROBE_PATHS.get(pi);
+            log.accept("[~] LFI: [" + (pi + 1) + "/" + PROBE_PATHS.size() + "] " + path);
             // Probe the path without params to fingerprint PHP and Server header
             try {
                 HttpRequest probeReq = HttpRequest.newBuilder().uri(URI.create(base + path))
@@ -194,7 +202,7 @@ public class LfiModule implements Scanner {
                     continue;
                 }
 
-                for (Payload payload : PAYLOADS_LINUX) {
+                for (Payload payload : linuxPayloads) {
                     String qv = payload.asQueryValue();
                     String testUrl = base + path + "?" + param + "=" + qv;
                     try {
@@ -237,16 +245,19 @@ public class LfiModule implements Scanner {
         // Phase 2: Windows traversal (only if Linux not confirmed)
         // -----------------------------------------------------------------------
         if (!linuxConfirmed) {
-            log.accept("[~] LFI: fase 2 — payloads Windows (win.ini)");
+            log.accept("[~] LFI: fase 2 — " + windowsPayloads.size() + " Windows payloads (" + PROBE_PATHS.size()
+                    + " paths × " + FILE_PARAM_KEYWORDS.size() + " params)");
 
-            windowsOuter : for (String path : PROBE_PATHS) {
+            windowsOuter : for (int wi = 0; wi < PROBE_PATHS.size(); wi++) {
+                String path = PROBE_PATHS.get(wi);
+                log.accept("[~] LFI win: [" + (wi + 1) + "/" + PROBE_PATHS.size() + "] " + path);
                 for (String param : FILE_PARAM_KEYWORDS) {
                     String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=index");
                     if (WINDOWS_PATTERN.matcher(baseline).find()) {
                         continue;
                     }
 
-                    for (Payload payload : PAYLOADS_WINDOWS) {
+                    for (Payload payload : windowsPayloads) {
                         String qv = payload.asQueryValue();
                         String testUrl = base + path + "?" + param + "=" + qv;
                         try {
@@ -441,6 +452,33 @@ public class LfiModule implements Scanner {
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private static final Pattern WINDOWS_PATH = Pattern.compile("(?i)windows|win\\.ini|boot\\.ini");
+
+    private List<Payload> mergeKbPayloads(boolean windows) {
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        List<Payload> base = windows ? PAYLOADS_WINDOWS : PAYLOADS_LINUX;
+        List<Payload> merged = new ArrayList<>(base);
+        for (Payload p : base) {
+            seen.add(p.value());
+        }
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            if (seen.contains(kbp)) {
+                continue;
+            }
+            boolean isWindows = WINDOWS_PATH.matcher(kbp).find();
+            if (isWindows != windows) {
+                continue;
+            }
+            if (kbp.startsWith("php://") || kbp.startsWith("data:") || kbp.startsWith("expect:")) {
+                continue;
+            }
+            boolean preEncoded = kbp.contains("%");
+            merged.add(new Payload(kbp, !preEncoded));
+            seen.add(kbp);
+        }
+        return List.copyOf(merged);
+    }
 
     /** Fetches URL body, returning empty string on any error. */
     private String fetchBody(ScanContext ctx, HttpClient hc, String url) {

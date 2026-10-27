@@ -83,6 +83,7 @@ public class AnarCryTui {
         this.envPreload = env;
         var factory = new DefaultTerminalFactory();
         factory.setMouseCaptureMode(MouseCaptureMode.CLICK_RELEASE);
+        factory.setInitialTerminalSize(new TerminalSize(180, 62));
         TerminalScreen screen = (TerminalScreen) factory.createScreen();
         screen.startScreen();
 
@@ -117,6 +118,12 @@ public class AnarCryTui {
         });
 
         scanRunner = new ScanRunner(logCb, findingCb);
+        statusBar.setGuiInvoker(r -> gui.getGUIThread().invokeLater(r));
+        statusBar.setOnExpandRequest(() -> {
+            addToLog("[*] --- Status dos módulos ---");
+            statusBar.dumpModuleStatus(this::addToLog);
+        });
+
         scanRunner.setOnScanStart(() -> gui.getGUIThread().invokeLater(() -> {
             scanning = true;
             modeBar.setScanning(true);
@@ -125,14 +132,20 @@ public class AnarCryTui {
         scanRunner.setOnScanFinish(() -> gui.getGUIThread().invokeLater(() -> {
             scanning = false;
             modeBar.setScanning(false);
+            statusBar.scanDone();
         }));
-        scanRunner.setOnScanEvent(e -> {
-            if (e.type() == ScanEvent.Type.MODULE_DONE || e.type() == ScanEvent.Type.SCAN_DONE) {
-                gui.getGUIThread().invokeLater(() -> statusBar.setModuleProgress(e.index(), e.total()));
+        scanRunner.setOnScanEvent(e -> gui.getGUIThread().invokeLater(() -> {
+            if (e.type() == ScanEvent.Type.MODULE_START) {
+                statusBar.moduleStarted(e.moduleId());
+            } else if (e.type() == ScanEvent.Type.MODULE_DONE) {
+                statusBar.moduleDone(e.moduleId());
+                statusBar.setModuleProgress(e.index(), e.total());
+            } else if (e.type() == ScanEvent.Type.SCAN_DONE) {
+                statusBar.setModuleProgress(e.index(), e.total());
             }
-        });
+        }));
 
-        logHistory.add("[*] AnarCry v1.1 — pronto");
+        logHistory.add("[*] AnarCry v1.2 — pronto");
         logHistory.add("[*] Configure o alvo e pressione Iniciar para começar");
 
         buildPanels(screen.getTerminalSize());
@@ -172,6 +185,9 @@ public class AnarCryTui {
                     deliverEvent.set(false);
                 } else if (ch == '?') {
                     showActionPalette();
+                    deliverEvent.set(false);
+                } else if ((ch == 's' || ch == 'S') && scanning) {
+                    statusBar.expandProgress();
                     deliverEvent.set(false);
                 } else if (currentMode == Mode.FINDINGS && ch >= '1' && ch <= '6') {
                     String filter = switch (ch) {
@@ -217,6 +233,13 @@ public class AnarCryTui {
                 } else if (kt == KeyType.F8) {
                     EventLogDrawer.show(gui, logHistory);
                     hasBeenHandled.set(true);
+                } else if (keyStroke instanceof MouseAction ma && ma.getActionType() == MouseActionType.CLICK_RELEASE
+                        && scanning) {
+                    TerminalSize ts = gui.getScreen().getTerminalSize();
+                    if (ma.getPosition().getRow() >= ts.getRows() - 1) {
+                        statusBar.expandProgress();
+                        hasBeenHandled.set(true);
+                    }
                 } else if (currentMode == Mode.SCAN) {
                     if (kt == KeyType.PageUp) {
                         logPanel.scrollUp(8);
@@ -252,7 +275,7 @@ public class AnarCryTui {
         int findingsH = 10;
         int chromeH = 2; // modeBar + statusBar
         int centerH = Math.max(5, term.getRows() - chromeH - findingsH - 4);
-        int leftW = 34;
+        int leftW = 22;
         int siteMapH = Math.max(4, term.getRows() - chromeH - 4); // minus chrome + counter + hint + border
 
         LogPanel newLog = new LogPanel(centerH);

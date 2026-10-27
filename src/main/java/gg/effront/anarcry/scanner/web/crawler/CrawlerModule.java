@@ -1,6 +1,8 @@
 package gg.effront.anarcry.scanner.web.crawler;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
+import gg.effront.anarcry.model.KnowledgeEntry;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -62,6 +64,25 @@ public class CrawlerModule implements Scanner {
 
         log.accept("[~] Crawler: analisando " + base);
 
+        // 0. Aggregate crawlerHints from KB for all enabled modules
+        Set<String> kbPaths = new LinkedHashSet<>();
+        Set<String> kbParameters = new LinkedHashSet<>();
+        for (String mod : ctx.enabledModules()) {
+            KnowledgeBase.getInstance().byModule(mod).ifPresent(entry -> {
+                KnowledgeEntry.CrawlerHints hints = entry.crawlerHints();
+                if (hints != null) {
+                    if (hints.paths() != null) {
+                        kbPaths.addAll(hints.paths());
+                    }
+                    if (hints.parameters() != null) {
+                        kbParameters.addAll(hints.parameters());
+                    }
+                }
+            });
+        }
+        log.accept("[~] Crawler: " + kbPaths.size() + " KB hint paths merged from " + ctx.enabledModules().size()
+                + " modules");
+
         // 1. GET targetUrl — extrair paths do HTML
         try {
             var req = HttpRequest.newBuilder().uri(URI.create(ctx.targetUrl())).timeout(Duration.ofSeconds(8)).GET()
@@ -95,6 +116,10 @@ public class CrawlerModule implements Scanner {
             }
         }
 
+        // 2b. Merge KB paths into probe set (WORDLIST + KB hints, deduped)
+        Set<String> mergedProbeSet = new LinkedHashSet<>(WORDLIST);
+        mergedProbeSet.addAll(kbPaths);
+
         // 3. OpenAPI discovery
         for (String p : OPENAPI_PATHS) {
             try {
@@ -114,11 +139,18 @@ public class CrawlerModule implements Scanner {
             }
         }
 
-        // 4. Wordlist probing
+        // 4. Wordlist + KB probing
         int found200 = 0;
-        for (String p : WORDLIST) {
+        long delayMs = ctx.config().delayMs() > 0 ? ctx.config().delayMs() : 100;
+        for (String p : mergedProbeSet) {
             if (OPENAPI_PATHS.contains(p)) {
                 continue; // já verificado
+            }
+            try {
+                Thread.sleep(delayMs);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
             }
             try {
                 var req = HttpRequest.newBuilder().uri(URI.create(base + p)).timeout(Duration.ofSeconds(4)).GET()
@@ -143,8 +175,27 @@ public class CrawlerModule implements Scanner {
             }
         }
 
+        // 5. Cap discovered paths at 500
+        if (discovered.size() > 500) {
+            Set<String> capped = new LinkedHashSet<>();
+            int count = 0;
+            for (String path : discovered) {
+                if (count >= 500) {
+                    break;
+                }
+                capped.add(path);
+                count++;
+            }
+            discovered = capped;
+            log.accept("[~] Crawler: capped discovered paths to 500");
+        }
+
         log.accept(
                 "[+] Crawler: " + discovered.size() + " paths descobertos, " + found200 + " da wordlist responderam");
+
+        // 6. Push results to ctx.discoveredPaths()
+        ctx.discoveredPaths().addPaths(discovered);
+        ctx.discoveredPaths().addParameters(kbParameters);
 
         if (findings.isEmpty()) {
             log.accept("[+] Crawler: nenhum endpoint sensível ou spec exposta");

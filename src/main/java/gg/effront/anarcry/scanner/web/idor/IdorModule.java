@@ -82,7 +82,19 @@ public class IdorModule implements Scanner {
             effectivePaths = uuidPaths;
             log.accept("[~] IDOR: usando ID descoberto para probing: " + discoveredId);
         } else {
-            effectivePaths = ID_PATHS;
+            effectivePaths = new ArrayList<>(ID_PATHS);
+        }
+
+        if (!ctx.discoveredPaths().isEmpty()) {
+            for (String dp : ctx.discoveredPaths().paths()) {
+                if (dp.matches(".*/(?:api|v[0-9])/.*") && !effectivePaths.contains(dp)) {
+                    effectivePaths.add(dp);
+                    effectivePaths.add(dp + "/1");
+                    effectivePaths.add(dp + "/2");
+                }
+            }
+            log.accept("[~] IDOR: " + effectivePaths.size() + " paths (+" + ctx.discoveredPaths().pathCount()
+                    + " from Crawler)");
         }
 
         // Phase 1: cross-user GET (requires two tokens)

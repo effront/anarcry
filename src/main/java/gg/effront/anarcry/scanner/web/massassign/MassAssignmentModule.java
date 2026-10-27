@@ -59,9 +59,24 @@ public class MassAssignmentModule implements Scanner {
         String baseUrl = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
         HttpClient hc = HttpClientFactory.noRedirect();
-        log.accept("[~] MassAssign: testando " + ENDPOINTS.size() + " endpoints em " + baseUrl);
 
-        for (Endpoint ep : ENDPOINTS) {
+        List<Endpoint> endpoints = new ArrayList<>(ENDPOINTS);
+        if (!ctx.discoveredPaths().isEmpty()) {
+            for (String dp : ctx.discoveredPaths().paths()) {
+                if (dp.matches(".*/(user|profile|account|me|settings).*")) {
+                    if (endpoints.stream().noneMatch(e -> e.path().equals(dp))) {
+                        endpoints.add(new Endpoint("PUT", dp));
+                        endpoints.add(new Endpoint("PATCH", dp));
+                    }
+                }
+            }
+            log.accept("[~] MassAssign: " + endpoints.size() + " endpoints (+" + (endpoints.size() - ENDPOINTS.size())
+                    + " from Crawler)");
+        }
+
+        log.accept("[~] MassAssign: testando " + endpoints.size() + " endpoints em " + baseUrl);
+
+        for (Endpoint ep : endpoints) {
             String url = baseUrl + ep.path();
             try {
                 // Step 1: GET baseline to see if endpoint exists
