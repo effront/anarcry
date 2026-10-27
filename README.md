@@ -42,6 +42,10 @@
 
 ```
 +---------------------------------------------------------------------------+
+|  RECON                                                                    |
+|  [x] Crawler         -- HTML/JS path extraction, wordlist, OpenAPI        |
+|  [ ] Infra           -- port scan, SSH/Redis/Docker/panel fingerprint     |
+|                                                                           |
 |  CRYPTO / INFRASTRUCTURE                                                  |
 |  [x] TLS             -- version, weak cipher suites, expired cert, SHA-1  |
 |  [x] Headers         -- CSP, X-Frame-Options, cookies, CORP/CORB          |
@@ -69,8 +73,6 @@
 |  [x] MassAssign      -- JSON mass assignment on REST endpoints            |
 |  [x] CachePoisoning  -- unkeyed headers reflected and cached              |
 |  [x] ReqSmuggling    -- CL.TE and TE.CL HTTP request smuggling            |
-|  [x] Crawler         -- HTML/JS path extraction, wordlist, OpenAPI        |
-|  [ ] Infra           -- port scan, SSH/Redis/Docker/panel fingerprint     |
 +---------------------------------------------------------------------------+
 ```
 
@@ -135,12 +137,12 @@ java -jar build/libs/anarcry-1.2.jar --env .env.local
 
 ## 03 - Export Formats
 
-| Format | How to use | Destination |
+| Format | How to use | Output |
 |---|---|---|
-| Markdown + JSON | `[E]` in TUI -> option 1 | Internal report |
-| HackerOne | `[E]` in TUI -> option 2 | H1 submission (KB-enriched) |
-| Bugcrowd | `[E]` in TUI -> option 3 | Bugcrowd submission (VRT mapped) |
-| JSON only | `[E]` in TUI -> option 4 | Burp / external scripts |
+| Markdown + JSON | `[E]` in TUI -> option 1 | `docs/reports/anarcry-report-*.md` + `.json` |
+| HackerOne | `[E]` in TUI -> option 2 | `docs/reports/h1-report-*.md` (KB-enriched) |
+| Bugcrowd | `[E]` in TUI -> option 3 | `docs/reports/bugcrowd-report-*.md` (VRT mapped) |
+| JSON only | `[E]` in TUI -> option 4 | `docs/reports/anarcry-findings-*.json` |
 
 HackerOne and Bugcrowd exports are enriched from the Knowledge Base with detailed descriptions, impact statements, remediation guidance, and VRT classification.
 
@@ -290,6 +292,7 @@ src/main/java/gg/effront/anarcry/
 |                                   ReqSmuggling, Crawler, Infra
 +-- report/
 |   +-- ReportEngine.java          MD+JSON / HackerOne / Bugcrowd (KB-enriched)
+|                                   All reports saved to docs/reports/
 +-- tui/
     +-- AnarCryTui.java            Main TUI window (Lanterna)
     +-- PasteableTextBox.java      Custom text box with paste support
