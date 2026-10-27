@@ -156,49 +156,98 @@ public class ScanRunner {
             }
             modules.addAll(customModules);
 
-            int moduleCount = modules.size();
+            List<Scanner> enrichers = new ArrayList<>();
+            List<Scanner> scanners = new ArrayList<>();
+            for (Scanner m : modules) {
+                if ("Crawler".equals(m.id())) {
+                    enrichers.add(m);
+                } else {
+                    scanners.add(m);
+                }
+            }
+
+            int moduleCount = enrichers.size() + scanners.size();
             eventCb.accept(new ScanEvent(ScanEvent.Type.SCAN_START, null, 0, moduleCount));
 
             int[] total = {0};
+
+            // Phase 1: Reconnaissance (blocking)
+            for (int i = 0; i < enrichers.size(); i++) {
+                final Scanner enricher = enrichers.get(i);
+                final int moduleIndex = i + 1;
+                eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_START, enricher.id(), moduleIndex, moduleCount));
+                logCb.accept("[*] Phase 1: Reconnaissance — " + enricher.id());
+                try {
+                    List<Finding> findings = enricher.scan(ctx, logCb);
+                    for (Finding f : findings) {
+                        String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
+                        if (seenFindings.add(dedupKey)) {
+                            if (ctx.config().isSuppressed(f.module(), f.title(), ctx.host())) {
+                                logCb.accept("[~] suppressed: " + f.module() + " — " + f.title());
+                            } else {
+                                findingCb.accept(f);
+                                total[0]++;
+                            }
+                        } else {
+                            logCb.accept("[~] dedup: ignorado finding duplicado — " + f.module() + " " + f.title());
+                        }
+                    }
+                    logCb.accept("[+] " + enricher.id() + ": " + findings.size() + " finding(s), "
+                            + ctx.discoveredPaths().pathCount() + " paths, " + ctx.discoveredPaths().parameterCount()
+                            + " params discovered");
+                } catch (Exception e) {
+                    logCb.accept("[!] " + enricher.id() + " erro: " + e.getMessage());
+                }
+                eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, enricher.id(), moduleIndex, moduleCount));
+            }
+
+            // Phase 2: Scanner modules (parallel)
+            int enricherCount = enrichers.size();
             List<CompletableFuture<?>> futures = new ArrayList<>();
 
-            for (int i = 0; i < modules.size(); i++) {
-                final Scanner module = modules.get(i);
-                final int moduleIndex = i + 1;
-                eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_START, module.id(), moduleIndex, moduleCount));
-                logCb.accept("[*] Modulo " + module.id() + " iniciado");
+            if (!scanners.isEmpty()) {
+                logCb.accept("[*] Phase 2: " + scanners.size() + " scanner modules (parallel)");
 
-                CompletableFuture<List<Finding>> future = CompletableFuture.supplyAsync(() -> {
-                    try {
-                        return module.scan(ctx, logCb);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }, modulePool);
+                for (int i = 0; i < scanners.size(); i++) {
+                    final Scanner module = scanners.get(i);
+                    final int moduleIndex = enricherCount + i + 1;
+                    eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_START, module.id(), moduleIndex, moduleCount));
+                    logCb.accept("[*] Modulo " + module.id() + " iniciado");
 
-                futures.add(future.whenComplete((findings, ex) -> {
-                    if (ex != null) {
-                        logCb.accept("[!] " + module.id() + " erro: " + ex.getMessage());
-                    } else {
-                        for (Finding f : findings) {
-                            String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
-                            if (seenFindings.add(dedupKey)) {
-                                if (ctx.config().isSuppressed(f.module(), f.title(), ctx.host())) {
-                                    logCb.accept("[~] suppressed: " + f.module() + " — " + f.title());
-                                } else {
-                                    findingCb.accept(f);
-                                    synchronized (total) {
-                                        total[0]++;
-                                    }
-                                }
-                            } else {
-                                logCb.accept("[~] dedup: ignorado finding duplicado — " + f.module() + " " + f.title());
-                            }
+                    CompletableFuture<List<Finding>> future = CompletableFuture.supplyAsync(() -> {
+                        try {
+                            return module.scan(ctx, logCb);
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
                         }
-                        logCb.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
-                    }
-                    eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, module.id(), moduleIndex, moduleCount));
-                }));
+                    }, modulePool);
+
+                    futures.add(future.whenComplete((findings, ex) -> {
+                        if (ex != null) {
+                            logCb.accept("[!] " + module.id() + " erro: " + ex.getMessage());
+                        } else {
+                            for (Finding f : findings) {
+                                String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
+                                if (seenFindings.add(dedupKey)) {
+                                    if (ctx.config().isSuppressed(f.module(), f.title(), ctx.host())) {
+                                        logCb.accept("[~] suppressed: " + f.module() + " — " + f.title());
+                                    } else {
+                                        findingCb.accept(f);
+                                        synchronized (total) {
+                                            total[0]++;
+                                        }
+                                    }
+                                } else {
+                                    logCb.accept(
+                                            "[~] dedup: ignorado finding duplicado — " + f.module() + " " + f.title());
+                                }
+                            }
+                            logCb.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
+                        }
+                        eventCb.accept(
+                                new ScanEvent(ScanEvent.Type.MODULE_DONE, module.id(), moduleIndex, moduleCount));
+                    }));
+                }
             }
 
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
