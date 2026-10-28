@@ -49,7 +49,7 @@ import javax.swing.text.JTextComponent;
 
 public class AnarCryGui {
 
-    private static final String FRAME_TITLE = "AnarCry v1.2";
+    private static final String FRAME_TITLE = "AnarCry v1.3";
     private static final int FRAME_WIDTH = 1400;
     private static final int FRAME_HEIGHT = 950;
     private static final int MODULES_PANEL_WIDTH = 260;
@@ -396,7 +396,7 @@ public class AnarCryGui {
 
         JMenuItem about = new JMenuItem("About AnarCry");
         about.addActionListener(e -> JOptionPane.showMessageDialog(frame,
-                "AnarCry v1.2\nSecurity Scanner\nAuthorized testing only.", "About", JOptionPane.INFORMATION_MESSAGE));
+                "AnarCry v1.3\nSecurity Scanner\nAuthorized testing only.", "About", JOptionPane.INFORMATION_MESSAGE));
         menu.add(about);
 
         return menu;
