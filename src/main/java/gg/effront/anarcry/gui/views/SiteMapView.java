@@ -1,9 +1,12 @@
 package gg.effront.anarcry.gui.views;
 
+import gg.effront.anarcry.gui.PrivacyFilter;
+
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.net.URI;
 import java.util.Enumeration;
+
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTree;
@@ -32,6 +35,11 @@ public class SiteMapView extends JPanel {
         tree.setShowsRootHandles(true);
         tree.setCellRenderer(new SiteMapCellRenderer());
         add(new JScrollPane(tree), BorderLayout.CENTER);
+
+        PrivacyFilter.addListener(() -> SwingUtilities.invokeLater(() -> {
+            treeModel.reload();
+            tree.expandPath(new TreePath(rootNode.getPath()));
+        }));
     }
 
     /** Set the root node label to the target URL. */
@@ -107,7 +115,11 @@ public class SiteMapView extends JPanel {
         @Override
         public Component getTreeCellRendererComponent(JTree t, Object value, boolean sel, boolean expanded,
                 boolean leaf, int row, boolean hasFocus) {
-            super.getTreeCellRendererComponent(t, value, sel, expanded, leaf, row, hasFocus);
+            Object display = value;
+            if (value instanceof DefaultMutableTreeNode node && node.getParent() == null) {
+                display = new DefaultMutableTreeNode(PrivacyFilter.apply(String.valueOf(node.getUserObject())));
+            }
+            super.getTreeCellRendererComponent(t, display, sel, expanded, leaf, row, hasFocus);
             if (leaf) {
                 setIcon(UIManager.getIcon("FileView.fileIcon"));
             } else {

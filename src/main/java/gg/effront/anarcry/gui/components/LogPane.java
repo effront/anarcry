@@ -1,7 +1,10 @@
 package gg.effront.anarcry.gui.components;
 
+import gg.effront.anarcry.gui.PrivacyFilter;
+
 import java.awt.Color;
 import java.awt.Font;
+
 import javax.swing.JScrollPane;
 import javax.swing.JTextPane;
 import javax.swing.SwingUtilities;
@@ -43,13 +46,14 @@ public class LogPane extends JScrollPane {
      */
     public void log(String message) {
         SwingUtilities.invokeLater(() -> {
+            String display = PrivacyFilter.apply(message);
             AttributeSet attrs = attrsFor(message);
             Document doc = textPane.getDocument();
             try {
                 if (doc.getLength() > 0) {
                     doc.insertString(doc.getLength(), "\n", attrs);
                 }
-                doc.insertString(doc.getLength(), message, attrs);
+                doc.insertString(doc.getLength(), display, attrs);
             } catch (BadLocationException ignored) {
                 // should not happen
             }
