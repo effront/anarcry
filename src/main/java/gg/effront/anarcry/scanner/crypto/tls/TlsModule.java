@@ -25,7 +25,7 @@ public class TlsModule implements Scanner {
         double _score = CvssCalculator.calculate(_cveVector);
         List<Finding> results = new ArrayList<>();
         if (!ctx.isHttps()) {
-            log.accept("[!] TLS: alvo não é HTTPS — módulo TLS ignorado");
+            log.accept("[!] TLS: alvo não é HTTPS -- módulo TLS ignorado");
             return results;
         }
         results.addAll(new TlsVersionProbe().probe(ctx, log));

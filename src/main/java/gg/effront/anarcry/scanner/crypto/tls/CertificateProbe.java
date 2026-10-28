@@ -68,7 +68,7 @@ public class CertificateProbe {
                     log.accept("[!] CERT: certificado expira em breve: " + expiry);
                     findings.add(
                             Finding.of("TLS", host + ":" + port, "Certificado SSL expirando em breve", Severity.HIGH,
-                                    evidence, "Certificado expira em menos de 30 dias — risco de indisponibilidade",
+                                    evidence, "Certificado expira em menos de 30 dias -- risco de indisponibilidade",
                                     "openssl s_client -connect " + host + ":" + port + " | openssl x509 -noout -dates",
                                     "Renovar o certificado antes da expiração", _cweId, _cweTitle, _cveVector, _score));
                 }
@@ -77,7 +77,7 @@ public class CertificateProbe {
             if (issuer.equals(subject)) {
                 log.accept("[!] CERT: certificado auto-assinado");
                 findings.add(Finding.of("TLS", host + ":" + port, "Certificado auto-assinado", Severity.MEDIUM,
-                        evidence, "Não validado por CA confiável — usuários receberão aviso de segurança",
+                        evidence, "Não validado por CA confiável -- usuários receberão aviso de segurança",
                         "openssl s_client -connect " + host + ":" + port + " -showcerts",
                         "Emitir certificado por CA reconhecida (ex: Let's Encrypt)", _cweId, _cweTitle, _cveVector,
                         _score));
@@ -86,7 +86,7 @@ public class CertificateProbe {
             if (cert.getPublicKey() instanceof RSAPublicKey rsa) {
                 int bits = rsa.getModulus().bitLength();
                 if (bits < 2048) {
-                    log.accept("[!] CERT: chave RSA fraca — " + bits + " bits");
+                    log.accept("[!] CERT: chave RSA fraca -- " + bits + " bits");
                     findings.add(Finding.of("TLS", host + ":" + port, "Chave RSA fraca (< 2048 bits)", Severity.HIGH,
                             evidence + " | Tamanho chave: " + bits + " bits",
                             "Chave RSA < 2048 bits é vulnerável a fatoração",

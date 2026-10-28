@@ -40,7 +40,7 @@ public class EventLogDrawer {
         filterLabel.setBackgroundColor(TextColor.ANSI.WHITE_BRIGHT);
         panel.addComponent(filterLabel);
 
-        // log list — height bounded so it doesn't overflow the terminal
+        // log list -- height bounded so it doesn't overflow the terminal
         int termH = gui.getScreen().getTerminalSize().getRows();
         ActionListBox listBox = new ActionListBox(new com.googlecode.lanterna.TerminalSize(0, Math.max(5, termH - 6)));
         panel.addComponent(listBox, LinearLayout.createLayoutData(LinearLayout.Alignment.Fill));

@@ -139,7 +139,7 @@ public class ReportView extends JPanel {
             sb.append("<p><b>Impact:</b> ").append(esc(f.impact())).append("</p>");
             sb.append("<p><b>Reproduction:</b></p><pre>").append(esc(f.reproduction())).append("</pre>");
             sb.append("<p><b>Recommendation:</b> ").append(esc(f.recommendation())).append("</p>");
-            sb.append("<p><b>CWE:</b> ").append(esc(f.cweId())).append(" — ").append(esc(f.cweTitle())).append("</p>");
+            sb.append("<p><b>CWE:</b> ").append(esc(f.cweId())).append(" -- ").append(esc(f.cweTitle())).append("</p>");
             sb.append("<p><b>CVSS:</b> ").append(String.format("%.1f", f.cvssScore())).append(" (")
                     .append(esc(f.cvssVector())).append(")</p>");
             sb.append("<hr>");

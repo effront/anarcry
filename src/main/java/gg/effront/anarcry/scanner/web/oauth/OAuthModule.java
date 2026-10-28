@@ -72,14 +72,14 @@ public class OAuthModule implements Scanner {
                     }
                     findings.add(Finding.of("OAuth", baseUrl + wk, "OAuth / OpenID Connect endpoint descoberto",
                             Severity.INFO, "Well-known: " + baseUrl + wk + " | authorize: " + authorizeEndpoint,
-                            "Endpoint OAuth identificado — verificar state, PKCE e redirect_uri whitelist",
+                            "Endpoint OAuth identificado -- verificar state, PKCE e redirect_uri whitelist",
                             "curl " + baseUrl + wk,
                             "Auditar: state obrigatório, PKCE habilitado, redirect_uri em whitelist estrita", _cweId,
                             _cweTitle, _cveVector, _score));
                     break;
                 }
             } catch (Exception e) {
-                log.accept("[~] OAuth: " + wk + " — " + e.getMessage());
+                log.accept("[~] OAuth: " + wk + " -- " + e.getMessage());
             }
         }
 
@@ -98,14 +98,14 @@ public class OAuthModule implements Scanner {
                         authorizeEndpoint = baseUrl + path;
                         findings.add(Finding.of("OAuth", authorizeEndpoint, "OAuth authorize endpoint descoberto",
                                 Severity.INFO, "URL: " + authorizeEndpoint + " | HTTP " + resp.statusCode(),
-                                "Endpoint de autorização OAuth identificado — auditar segurança do fluxo",
+                                "Endpoint de autorização OAuth identificado -- auditar segurança do fluxo",
                                 "curl '" + authorizeEndpoint + "?response_type=code&client_id=test'",
                                 "Exigir state e PKCE; validar redirect_uri contra whitelist estrita", _cweId, _cweTitle,
                                 _cveVector, _score));
                         break;
                     }
                 } catch (Exception e) {
-                    log.accept("[~] OAuth: " + path + " — " + e.getMessage());
+                    log.accept("[~] OAuth: " + path + " -- " + e.getMessage());
                 }
             }
         }
@@ -149,12 +149,12 @@ public class OAuthModule implements Scanner {
 
             if ((status == 301 || status == 302 || status == 307 || status == 308)
                     && location.startsWith(EVIL_REDIRECT)) {
-                log.accept("[!] OAuth: CRÍTICO — redirect_uri bypass confirmado → " + location);
+                log.accept("[!] OAuth: CRÍTICO -- redirect_uri bypass confirmado → " + location);
                 return Optional.of(Finding.of("OAuth", endpoint,
-                        "OAuth redirect_uri bypass — roubo de código de autorização", Severity.CRITICAL,
+                        "OAuth redirect_uri bypass -- roubo de código de autorização", Severity.CRITICAL,
                         "Endpoint: " + endpoint + " | redirect_uri injetada: " + EVIL_REDIRECT + " | Location: "
                                 + location,
-                        "Servidor redireciona o código de autorização para URL controlada pelo atacante — "
+                        "Servidor redireciona o código de autorização para URL controlada pelo atacante -- "
                                 + "permite roubo de sessão OAuth completo",
                         "# 1. Enviar vítima para:\n" + url + "\n"
                                 + "# 2. O código chega em evil.anarcry-probe.com/callback\n"
@@ -164,7 +164,7 @@ public class OAuthModule implements Scanner {
                         _cweId, _cweTitle, _cveVector, _score));
             }
         } catch (Exception e) {
-            log.accept("[~] OAuth: redirect_uri probe — " + e.getMessage());
+            log.accept("[~] OAuth: redirect_uri probe -- " + e.getMessage());
         }
         return Optional.empty();
     }
@@ -181,7 +181,8 @@ public class OAuthModule implements Scanner {
         } catch (Exception e) {
             encodedCb = "https%3A%2F%2Fcallback.example.com";
         }
-        // Request WITHOUT state — if server redirects back with code and no state error
+        // Request WITHOUT state -- if server redirects back with code and no state
+        // error
         // → HIGH
         String url = endpoint + "?response_type=code&client_id=anarcry-test" + "&redirect_uri=" + encodedCb;
         try {
@@ -196,26 +197,26 @@ public class OAuthModule implements Scanner {
 
             // Successful auth redirect with code but no state = state not enforced
             if ((status == 302 || status == 301) && location.contains("code=") && !location.contains("state=")) {
-                log.accept("[!] OAuth: HIGH — state param ausente na resposta de autorização");
+                log.accept("[!] OAuth: HIGH -- state param ausente na resposta de autorização");
                 return Optional.of(Finding.of("OAuth", endpoint,
-                        "OAuth state parameter não exigido — CSRF no fluxo de autorização", Severity.HIGH,
+                        "OAuth state parameter não exigido -- CSRF no fluxo de autorização", Severity.HIGH,
                         "Endpoint: " + endpoint + " | Resposta sem state: HTTP " + status + " Location=" + location,
-                        "Fluxo OAuth aceita requisições sem state — atacante pode forçar troca de código "
+                        "Fluxo OAuth aceita requisições sem state -- atacante pode forçar troca de código "
                                 + "via CSRF e assumir a sessão OAuth da vítima",
-                        "# CSRF PoC — iframe/link enviado para vítima:\n" + url,
+                        "# CSRF PoC -- iframe/link enviado para vítima:\n" + url,
                         "Exigir e validar o parâmetro state em todos os requests de autorização; usar PKCE como"
                                 + "complemento",
                         _cweId, _cweTitle, _cveVector, _score));
             }
 
-            // Explicit error about state being required — server is SAFE for this check
+            // Explicit error about state being required -- server is SAFE for this check
             if (body.contains("state") && (body.contains("required") || body.contains("missing")
                     || body.contains("invalid") || status == 400 || status == 422)) {
                 log.accept("[+] OAuth: state obrigatório validado pelo servidor");
             }
 
         } catch (Exception e) {
-            log.accept("[~] OAuth: state probe — " + e.getMessage());
+            log.accept("[~] OAuth: state probe -- " + e.getMessage());
         }
         return Optional.empty();
     }

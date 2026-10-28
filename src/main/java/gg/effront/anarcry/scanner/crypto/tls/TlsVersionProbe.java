@@ -50,7 +50,7 @@ public class TlsVersionProbe {
                         // Confirm the server actually used the weak protocol, not a fallback
                         String actual = socket.getSession().getProtocol();
                         if (!actual.equals(protocol)) {
-                            log.accept("[+] TLS: " + protocol + " — servidor negociou " + actual + " (ok)");
+                            log.accept("[+] TLS: " + protocol + " -- servidor negociou " + actual + " (ok)");
                             continue;
                         }
                     }

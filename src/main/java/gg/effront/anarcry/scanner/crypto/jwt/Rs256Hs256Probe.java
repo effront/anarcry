@@ -30,7 +30,7 @@ public class Rs256Hs256Probe {
 
     public Optional<Finding> probe(String[] parts, ScanContext ctx, String base, HttpClient hc, Consumer<String> log) {
         if (!ctx.isHttps()) {
-            log.accept("[~] JWT: RS256→HS256 — requer HTTPS para extrair chave pública, pulando");
+            log.accept("[~] JWT: RS256→HS256 -- requer HTTPS para extrair chave pública, pulando");
             return Optional.empty();
         }
         log.accept("[~] JWT: probe RS256→HS256 key confusion (CVE-2016-5431) → " + ctx.host());
@@ -42,13 +42,13 @@ public class Rs256Hs256Probe {
             socket.close();
 
             if (certs.length == 0) {
-                log.accept("[~] JWT: RS256→HS256 — nenhum cert TLS obtido");
+                log.accept("[~] JWT: RS256→HS256 -- nenhum cert TLS obtido");
                 return Optional.empty();
             }
 
             X509Certificate cert = (X509Certificate) certs[0];
             byte[] derKey = cert.getPublicKey().getEncoded();
-            // PEM-encoded SubjectPublicKeyInfo — used as HMAC secret to mimic server's
+            // PEM-encoded SubjectPublicKeyInfo -- used as HMAC secret to mimic server's
             // confusion
             String b64Key = Base64.getMimeEncoder(64, new byte[]{'\n'}).encodeToString(derKey);
             String pemKey = "-----BEGIN PUBLIC KEY-----\n" + b64Key + "\n-----END PUBLIC KEY-----\n";
@@ -80,7 +80,7 @@ public class Rs256Hs256Probe {
                                 "RS256→HS256 key confusion aceita ativamente (CVE-2016-5431)", Severity.CRITICAL,
                                 "Probe em " + base + path
                                         + " → HTTP 200 com token HS256 assinado via chave pública TLS",
-                                "Servidor usa a chave pública RSA como segredo HMAC — qualquer um com acesso à chave"
+                                "Servidor usa a chave pública RSA como segredo HMAC -- qualquer um com acesso à chave"
                                         + "pública pode forjar tokens",
                                 "# 1. Extrair chave pública:\nopenssl s_client -connect " + ctx.host() + ":"
                                         + ctx.port() + " | openssl x509 -pubkey -noout > pub.pem\n"
@@ -90,11 +90,11 @@ public class Rs256Hs256Probe {
                                 _cweId, _cweTitle, _cvssVector, _score));
                     }
                 } catch (Exception e) {
-                    log.accept("[~] JWT: RS256→HS256 " + path + " — " + e.getMessage());
+                    log.accept("[~] JWT: RS256→HS256 " + path + " -- " + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            log.accept("[~] JWT: RS256→HS256 — " + e.getMessage());
+            log.accept("[~] JWT: RS256→HS256 -- " + e.getMessage());
         }
         return Optional.empty();
     }

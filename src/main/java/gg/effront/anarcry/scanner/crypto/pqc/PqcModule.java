@@ -31,7 +31,7 @@ public class PqcModule implements Scanner {
         List<Finding> findings = new ArrayList<>();
 
         if (!ctx.isHttps()) {
-            log.accept("[~] PQC: alvo não é HTTPS — módulo ignorado");
+            log.accept("[~] PQC: alvo não é HTTPS -- módulo ignorado");
             return findings;
         }
 
@@ -53,8 +53,8 @@ public class PqcModule implements Scanner {
                 cipher = socket.getSession().getCipherSuite();
             }
             tls13ok = true;
-            log.accept("[+] PQC: TLS 1.3 suportado — cipher: " + cipher);
-            findings.add(Finding.of("PQC", host + ":" + port, "TLS 1.3 suportado — base para PQC", Severity.INFO,
+            log.accept("[+] PQC: TLS 1.3 suportado -- cipher: " + cipher);
+            findings.add(Finding.of("PQC", host + ":" + port, "TLS 1.3 suportado -- base para PQC", Severity.INFO,
                     "Protocolo: " + proto + " | Cipher: " + cipher + " | Host: " + evidence,
                     "TLS 1.3 é prerequisito para negociação de grupos pós-quânticos",
                     "openssl s_client -connect " + host + ":" + port + " -tls1_3",
@@ -62,14 +62,14 @@ public class PqcModule implements Scanner {
                     _cveVector, _score));
         } catch (Exception e) {
             log.accept("[!] PQC: TLS 1.3 não suportado: " + e.getMessage());
-            findings.add(Finding.of("PQC", host + ":" + port, "TLS 1.3 não suportado — PQC indisponível", Severity.LOW,
+            findings.add(Finding.of("PQC", host + ":" + port, "TLS 1.3 não suportado -- PQC indisponível", Severity.LOW,
                     "Erro: " + e.getMessage() + " | Host: " + evidence,
                     "Sem TLS 1.3, não é possível negociar grupos de chaves pós-quânticas",
                     "openssl s_client -connect " + host + ":" + port + " -tls1_3",
                     "Habilitar TLS 1.3 no servidor como prerequisito para PQC", _cweId, _cweTitle, _cveVector, _score));
         }
 
-        // Step 2: X25519MLKEM768 probe (Java 27 PQC — JEP 496)
+        // Step 2: X25519MLKEM768 probe (Java 27 PQC -- JEP 496)
         if (tls13ok) {
             log.accept("[~] PQC: testando X25519MLKEM768 (ML-KEM-768 híbrido)");
             String namedGroupsProp = "jdk.tls.namedGroups";
@@ -91,7 +91,7 @@ public class PqcModule implements Scanner {
             } catch (Exception e) {
                 log.accept("[~] PQC: X25519MLKEM768 não suportado: " + e.getMessage());
                 findings.add(
-                        Finding.of("PQC", host + ":" + port, "X25519MLKEM768 não suportado — considerar migração PQC",
+                        Finding.of("PQC", host + ":" + port, "X25519MLKEM768 não suportado -- considerar migração PQC",
                                 Severity.INFO, "X25519MLKEM768 rejeitado ou não suportado em " + evidence,
                                 "O servidor não suporta troca de chaves híbrida pós-quântica",
                                 "Verificar suporte: openssl s_client -connect " + host + ":" + port

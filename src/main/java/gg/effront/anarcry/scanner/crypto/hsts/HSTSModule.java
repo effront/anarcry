@@ -59,18 +59,18 @@ public class HSTSModule implements Scanner {
 
             if (status == 200) {
                 findings.add(Finding.of(id(), ctx.targetUrl(),
-                        "API serve conteúdo via HTTP sem redirect — JWT em plaintext", Severity.CRITICAL, evidence,
+                        "API serve conteúdo via HTTP sem redirect -- JWT em plaintext", Severity.CRITICAL, evidence,
                         "Servidor retorna 200 em HTTP: credenciais e dados transmitidos sem cifração",
                         "curl -sI " + httpUrl, "Forçar HTTPS em todas as rotas e adicionar HSTS", cweId, cweTitle,
                         cvssVector, score));
             } else if (status / 100 == 3) {
                 if (!ctx.jwtToken().isBlank()) {
                     // Validado via tcpdump: Authorization header é enviado no request HTTP
-                    // antes do redirect chegar — um MITM intercepta o token sem processar o 3xx
+                    // antes do redirect chegar -- um MITM intercepta o token sem processar o 3xx
                     findings.add(Finding.of(id(), ctx.targetUrl(),
                             "JWT transmitido em plaintext antes do redirect HTTP " + status, Severity.HIGH, evidence,
                             "Authorization: Bearer enviado em TCP plaintext antes do " + status
-                                    + " — MITM intercepta o token sem precisar quebrar TLS. "
+                                    + " -- MITM intercepta o token sem precisar quebrar TLS. "
                                     + "Validado: tcpdump capturou JWT completo no wire em port 80.",
                             "tcpdump -i any -A 'tcp port 80' & "
                                     + "curl --max-redirs 0 -H 'Authorization: Bearer <jwt>' " + httpUrl,
@@ -78,7 +78,7 @@ public class HSTSModule implements Scanner {
                             cvssVector, score));
                 } else {
                     findings.add(Finding.of(id(), ctx.targetUrl(),
-                            "Endpoint HTTP acessível — downgrade via SSLstrip possível", Severity.MEDIUM, evidence,
+                            "Endpoint HTTP acessível -- downgrade via SSLstrip possível", Severity.MEDIUM, evidence,
                             "Sem HSTS, MITM pode interceptar o redirect " + status + " e manter conexão em HTTP",
                             "curl -sv --max-redirs 0 " + httpUrl,
                             "Adicionar HSTS com max-age=31536000; includeSubDomains; preload", cweId, cweTitle,
@@ -86,7 +86,7 @@ public class HSTSModule implements Scanner {
                 }
             }
         } catch (Exception e) {
-            log.accept("[~] HSTS: probe HTTP falhou — " + e.getMessage());
+            log.accept("[~] HSTS: probe HTTP falhou -- " + e.getMessage());
         }
 
         // Probe 2: qualidade do header HSTS no response HTTPS
@@ -118,7 +118,7 @@ public class HSTSModule implements Scanner {
                 findings.add(
                         Finding.of(id(), ctx.targetUrl(), "HSTS ausente no response HTTPS", Severity.HIGH, evidence,
                                 "Sem Strict-Transport-Security, o browser nao memoriza"
-                                        + " que o dominio exige HTTPS — SSLstrip trivial",
+                                        + " que o dominio exige HTTPS -- SSLstrip trivial",
                                 "curl -sI " + ctx.targetUrl() + " | grep -i strict",
                                 "Adicionar: Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
                                 cweId, cweTitle, cvssVector, score));
@@ -128,14 +128,14 @@ public class HSTSModule implements Scanner {
                     findings.add(Finding.of(id(), ctx.targetUrl(),
                             "HSTS max-age insuficiente: " + maxAge + "s (mínimo recomendado: " + MIN_MAX_AGE + "s)",
                             Severity.MEDIUM, evidence + " | HSTS: " + hstsVal,
-                            "max-age baixo — política expirada rapidamente, reabrindo janela para downgrade",
+                            "max-age baixo -- política expirada rapidamente, reabrindo janela para downgrade",
                             "curl -sI " + ctx.targetUrl() + " | grep -i strict",
                             "Aumentar max-age para pelo menos 31536000 (1 ano)", cweId, cweTitle, cvssVector, score));
                 }
                 if (!hstsVal.toLowerCase().contains("includesubdomains")) {
                     findings.add(Finding.of(id(), ctx.targetUrl(), "HSTS sem includeSubDomains", Severity.LOW,
                             evidence + " | HSTS: " + hstsVal,
-                            "Subdomínios não cobertos — downgrade HTTP ainda possível em *.domínio",
+                            "Subdomínios não cobertos -- downgrade HTTP ainda possível em *.domínio",
                             "curl -sI " + ctx.targetUrl() + " | grep -i strict",
                             "Adicionar includeSubDomains à diretiva HSTS", cweId, cweTitle, cvssVector, score));
                 }
@@ -149,7 +149,7 @@ public class HSTSModule implements Scanner {
                 }
             }
         } catch (Exception e) {
-            log.accept("[~] HSTS: probe HTTPS falhou — " + e.getMessage());
+            log.accept("[~] HSTS: probe HTTPS falhou -- " + e.getMessage());
         }
 
         log.accept("[+] HSTS: " + findings.size() + " finding(s)");

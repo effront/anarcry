@@ -30,7 +30,7 @@ public class IdorModule implements Scanner {
     private static final List<String> DELETE_PATHS = List.of("/api/user/2", "/api/users/2", "/api/account/2",
             "/api/order/2", "/api/document/2", "/api/invoice/2", "/api/v1/user/2", "/api/v1/users/2");
 
-    // GraphQL IDOR mutations — try with user IDs 1 and 2
+    // GraphQL IDOR mutations -- try with user IDs 1 and 2
     private static final List<String> GQL_MUTATIONS = List.of("{\"query\":\"mutation { deleteUser(id: 2) { id } }\"}",
             "{\"query\":\"mutation { updateUser(id: 2, input: {email: \\\"pwned@evil.com\\\"}) { id email } }\"}",
             "{\"query\":\"{ user(id: 2) { id email password role } }\"}",
@@ -53,11 +53,11 @@ public class IdorModule implements Scanner {
         String token2 = ctx.jwtToken2();
 
         if (token1 == null || token1.isBlank()) {
-            log.accept("[*] IDOR: ignorado — jwtToken não informado");
+            log.accept("[*] IDOR: ignorado -- jwtToken não informado");
             return List.of();
         }
         if (token2 == null || token2.isBlank()) {
-            log.accept("[*] IDOR: jwtToken2 não informado — apenas probes DELETE e GraphQL");
+            log.accept("[*] IDOR: jwtToken2 não informado -- apenas probes DELETE e GraphQL");
         }
 
         List<Finding> findings = new ArrayList<>();
@@ -112,12 +112,12 @@ public class IdorModule implements Scanner {
 
                 if (isSimilar(r1, r2)) {
                     log.accept("[!!] IDOR: acesso cruzado detectado em " + path);
-                    findings.add(Finding.of("IDOR", path, "IDOR — acesso não-autorizado ao recurso " + path,
+                    findings.add(Finding.of("IDOR", path, "IDOR -- acesso não-autorizado ao recurso " + path,
                             Severity.HIGH,
                             "Token1 e Token2 recebem a mesma resposta em " + base + path + " | Similaridade: "
                                     + similarityPercent(r1, r2) + "%" + " | Body preview: "
                                     + r1.substring(0, Math.min(150, r1.length())),
-                            "Insecure Direct Object Reference — outro usuário pode acessar recursos "
+                            "Insecure Direct Object Reference -- outro usuário pode acessar recursos "
                                     + "que não lhe pertencem. Expõe dados pessoais, financeiros ou administrativos.",
                             "# Com token do usuário 1:\ncurl -H 'Authorization: Bearer " + abbreviated(token1) + "' '"
                                     + base + path + "'\n"
@@ -132,7 +132,7 @@ public class IdorModule implements Scanner {
             }
         }
 
-        // Phase 2: DELETE IDOR — token1 attempts to delete a resource owned by token2
+        // Phase 2: DELETE IDOR -- token1 attempts to delete a resource owned by token2
         // (ID=2)
         // Expected: 403 or 404. If 200/204 → IDOR via DELETE
         log.accept("[~] IDOR: testando DELETE cross-user em " + base);
@@ -145,11 +145,11 @@ public class IdorModule implements Scanner {
                 String deleteBody = resp.body() != null ? resp.body() : "";
                 if ((status == 200 || status == 204) && !isHtml(deleteBody)) {
                     log.accept("[!!] IDOR DELETE: " + path + " retornou " + status + " com token1");
-                    findings.add(Finding.of("IDOR", path, "IDOR DELETE — deleção cross-user possível em " + path,
+                    findings.add(Finding.of("IDOR", path, "IDOR DELETE -- deleção cross-user possível em " + path,
                             Severity.HIGH,
                             "DELETE " + base + path + " com token1 → HTTP " + status
                                     + " | Esperado: 403/404 | Recurso de outro usuário foi deletado",
-                            "IDOR via DELETE — usuário pode deletar recursos de outros usuários sem autorização",
+                            "IDOR via DELETE -- usuário pode deletar recursos de outros usuários sem autorização",
                             "curl -X DELETE -H 'Authorization: Bearer <TOKEN1>' '" + base + path + "'",
                             "Validar ownership do recurso antes de deletar; verificar que o ID no path "
                                     + "pertence ao usuário autenticado; retornar 403 para acesso não autorizado",
@@ -160,7 +160,7 @@ public class IdorModule implements Scanner {
             }
         }
 
-        // Phase 3: GraphQL IDOR — mutations and queries with IDs of other users
+        // Phase 3: GraphQL IDOR -- mutations and queries with IDs of other users
         log.accept("[~] IDOR: testando GraphQL mutations em " + base);
         for (String gqlPath : List.of("/graphql", "/api/graphql", "/api/v1/graphql")) {
             boolean gqlFound = false;
@@ -179,12 +179,12 @@ public class IdorModule implements Scanner {
 
                     if (resp.statusCode() == 200 && hasData && !hasErrors) {
                         log.accept("[!!] IDOR GraphQL: mutation/query retornou dados para ID alheio em " + gqlPath);
-                        findings.add(Finding.of("IDOR", gqlPath, "IDOR GraphQL — acesso/modificação de recurso alheio",
+                        findings.add(Finding.of("IDOR", gqlPath, "IDOR GraphQL -- acesso/modificação de recurso alheio",
                                 Severity.HIGH,
                                 "POST " + base + gqlPath + " | Mutation: "
                                         + mutation.substring(0, Math.min(80, mutation.length()))
                                         + " | Response (200 chars): " + body.substring(0, Math.min(200, body.length())),
-                                "GraphQL IDOR — mutation ou query retorna dados de outro usuário sem "
+                                "GraphQL IDOR -- mutation ou query retorna dados de outro usuário sem "
                                         + "verificação de autorização no nível de objeto",
                                 "curl -X POST -H 'Content-Type: application/json' "
                                         + "-H 'Authorization: Bearer <TOKEN>' '" + base + gqlPath + "' " + "-d '"

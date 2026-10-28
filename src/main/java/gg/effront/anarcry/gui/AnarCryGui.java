@@ -51,7 +51,7 @@ public class AnarCryGui {
 
     private static final String FRAME_TITLE = "AnarCry v1.2";
     private static final int FRAME_WIDTH = 1400;
-    private static final int FRAME_HEIGHT = 850;
+    private static final int FRAME_HEIGHT = 950;
     private static final int MODULES_PANEL_WIDTH = 260;
     private static final int LOG_DIVIDER_LOCATION = 350;
 

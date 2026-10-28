@@ -43,7 +43,7 @@ public class JwtModule implements Scanner {
 
         String token = ctx.jwtToken();
         if (token == null || token.isBlank()) {
-            log.accept("[~] JWT: nenhum token informado — módulo ignorado");
+            log.accept("[~] JWT: nenhum token informado -- módulo ignorado");
             return findings;
         }
 
@@ -76,9 +76,9 @@ public class JwtModule implements Scanner {
 
         // 1. alg:none
         if (alg.equalsIgnoreCase("none") || alg.isBlank()) {
-            log.accept("[!] JWT: alg:none detectado — CRÍTICO");
+            log.accept("[!] JWT: alg:none detectado -- CRÍTICO");
             findings.add(Finding.of("JWT", "(token)", "JWT alg:none aceito", Severity.CRITICAL, evidence,
-                    "Token sem assinatura — qualquer payload pode ser aceito pelo servidor",
+                    "Token sem assinatura -- qualquer payload pode ser aceito pelo servidor",
                     "echo -n '{\"alg\":\"none\",\"typ\":\"JWT\"}' | base64url + '.' + echo -n '{\"sub\":\"admin\"}' |"
                             + "base64url + '.'",
                     "Rejeitar tokens com alg:none na validação do servidor", _cweId, _cweTitle, _cvssVector, _score));
@@ -86,7 +86,7 @@ public class JwtModule implements Scanner {
 
         // 2. HS256 brute-force
         if (alg.equalsIgnoreCase("HS256") && parts.length == 3) {
-            log.accept("[~] JWT: HS256 — tentando brute-force de segredo fraco");
+            log.accept("[~] JWT: HS256 -- tentando brute-force de segredo fraco");
             String sigInput = parts[0] + "." + parts[1];
             byte[] actualSig = Base64.getUrlDecoder().decode(padB64(parts[2]));
 
@@ -119,7 +119,7 @@ public class JwtModule implements Scanner {
                 log.accept("[!] JWT: token expirado (exp=" + exp + ")");
                 findings.add(Finding.of("JWT", "(token)", "JWT expirado ainda aceito potencialmente", Severity.HIGH,
                         evidence + " | exp=" + exp + " (agora=" + now + ")",
-                        "Token vencido sendo submetido — verificar se o servidor valida o claim exp",
+                        "Token vencido sendo submetido -- verificar se o servidor valida o claim exp",
                         "Reenviar o token no header: Authorization: Bearer <token_expirado>",
                         "Garantir validação do claim exp na autenticação do servidor", _cweId, _cweTitle, _cvssVector,
                         _score));
@@ -127,7 +127,7 @@ public class JwtModule implements Scanner {
         } else {
             log.accept("[~] JWT: sem claim exp");
             findings.add(Finding.of("JWT", "(token)", "JWT sem claim exp (sem validade)", Severity.LOW, evidence,
-                    "Tokens sem exp não expiram — se comprometidos, permanecem válidos indefinidamente",
+                    "Tokens sem exp não expiram -- se comprometidos, permanecem válidos indefinidamente",
                     "Inspecionar o payload: echo '" + (parts.length > 1 ? parts[1] : "") + "' | base64 -d",
                     "Incluir claim exp com validade curta (ex: 15 minutos)", _cweId, _cweTitle, _cvssVector, _score));
         }
@@ -136,7 +136,7 @@ public class JwtModule implements Scanner {
         if (header.has("kid")) {
             String kid = header.get("kid").getAsString();
             log.accept("[!] JWT: parâmetro kid presente: " + kid);
-            findings.add(Finding.of("JWT", "(token)", "Parâmetro kid presente — testar injeção", Severity.LOW,
+            findings.add(Finding.of("JWT", "(token)", "Parâmetro kid presente -- testar injeção", Severity.LOW,
                     "kid=" + kid + " | " + evidence,
                     "Parâmetro kid sem sanitização pode causar path traversal ou injeção SQL",
                     "Forjar token com kid: ../../dev/null (key=vazio) ou kid: ' UNION SELECT 'secret'--",
@@ -147,7 +147,7 @@ public class JwtModule implements Scanner {
         // 5. RS256 informativo
         if (alg.equalsIgnoreCase("RS256")) {
             log.accept("[~] JWT: RS256 detectado");
-            findings.add(Finding.of("JWT", "(token)", "RS256 detectado — testar confusão RS256→HS256", Severity.INFO,
+            findings.add(Finding.of("JWT", "(token)", "RS256 detectado -- testar confusão RS256→HS256", Severity.INFO,
                     evidence,
                     "Se o servidor aceitar HS256 com a chave pública como segredo, a assinatura pode ser forjada",
                     "Obter chave pública e recriar token HS256 usando-a como segredo HMAC",
@@ -155,7 +155,7 @@ public class JwtModule implements Scanner {
                     _cvssVector, _score));
         }
 
-        // 6. jku (passivo — novo)
+        // 6. jku (passivo -- novo)
         new JkuHeaderAnalyzer().analyze(header, evidence).ifPresent(findings::add);
 
         // ── Probes ativas de rede ──────────────────────────────────────────
@@ -180,17 +180,17 @@ public class JwtModule implements Scanner {
                         log.accept("[~] JWT: probe alg:none " + path + " → HTTP " + resp.statusCode());
                         if (resp.statusCode() == 200) {
                             log.accept("[!] JWT: alg:none aceito ativamente em " + base + path);
-                            findings.add(
-                                    Finding.of("JWT", base + path, "JWT alg:none aceito ativamente", Severity.CRITICAL,
-                                            "Probe em " + base + path + " → HTTP 200 com alg:none | " + evidence,
-                                            "Servidor aceita tokens sem assinatura — qualquer payload pode ser forjado",
-                                            "curl -H 'Authorization: Bearer " + noneToken + "' " + base + path,
-                                            "Rejeitar tokens com alg:none na camada de validação do servidor", _cweId,
-                                            _cweTitle, _cvssVector, _score));
+                            findings.add(Finding.of("JWT", base + path, "JWT alg:none aceito ativamente",
+                                    Severity.CRITICAL,
+                                    "Probe em " + base + path + " → HTTP 200 com alg:none | " + evidence,
+                                    "Servidor aceita tokens sem assinatura -- qualquer payload pode ser forjado",
+                                    "curl -H 'Authorization: Bearer " + noneToken + "' " + base + path,
+                                    "Rejeitar tokens com alg:none na camada de validação do servidor", _cweId,
+                                    _cweTitle, _cvssVector, _score));
                             break outer1;
                         }
                     } catch (Exception ex) {
-                        log.accept("[~] JWT: probe alg:none " + path + " — " + ex.getMessage());
+                        log.accept("[~] JWT: probe alg:none " + path + " -- " + ex.getMessage());
                     }
                 }
 
@@ -222,19 +222,19 @@ public class JwtModule implements Scanner {
                                     break outer2;
                                 }
                             } catch (Exception ex) {
-                                log.accept("[~] JWT: probe kid " + path + " — " + ex.getMessage());
+                                log.accept("[~] JWT: probe kid " + path + " -- " + ex.getMessage());
                             }
                         }
                     }
                 }
 
-                // Probe C: Null signature (novo — CVE-2020-28042)
+                // Probe C: Null signature (novo -- CVE-2020-28042)
                 new NullSignatureProbe().probe(parts, ctx, base, hc, log).ifPresent(findings::add);
 
-                // Probe D: Signature disclosure (novo — CVE-2019-7644)
+                // Probe D: Signature disclosure (novo -- CVE-2019-7644)
                 new SignatureDisclosureProbe().probe(parts, ctx, base, hc, log).ifPresent(findings::add);
 
-                // Probe E: RS256→HS256 confusion + JWK injection (novo — apenas RS256)
+                // Probe E: RS256→HS256 confusion + JWK injection (novo -- apenas RS256)
                 if (alg.equalsIgnoreCase("RS256")) {
                     new Rs256Hs256Probe().probe(parts, ctx, base, hc, log).ifPresent(findings::add);
                     new JwkInjectionProbe().probe(parts, ctx, base, hc, log).ifPresent(findings::add);
@@ -263,7 +263,7 @@ public class JwtModule implements Scanner {
 
     private HttpClient buildTrustAllClient() throws Exception {
         // Disable both cert chain validation (trustAll) and hostname verification
-        // — necessary for probing servers with self-signed or IP-addressed certs
+        // -- necessary for probing servers with self-signed or IP-addressed certs
         SSLParameters params = new SSLParameters();
         params.setEndpointIdentificationAlgorithm("");
         return HttpClient.newBuilder().sslContext(TlsUtil.sslContext(TlsUtil.trustAll())).sslParameters(params)

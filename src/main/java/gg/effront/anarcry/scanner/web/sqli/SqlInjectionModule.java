@@ -31,10 +31,10 @@ public class SqlInjectionModule implements Scanner {
     private static final List<String> PARAMS = List.of("q", "query", "id", "user", "username", "email", "search",
             "sort", "order", "filter", "page");
 
-    // Phase 1 — error-based payloads
+    // Phase 1 -- error-based payloads
     private static final List<String> ERROR_PAYLOADS = List.of("'", "\"", "')", "' AND 1=1--", "' AND 1=2--");
 
-    // Phase 2 — time-based payloads (each should induce ~5s delay on a vulnerable
+    // Phase 2 -- time-based payloads (each should induce ~5s delay on a vulnerable
     // DB)
     private record TimePayload(String payload, String dbHint) {
     }
@@ -43,7 +43,7 @@ public class SqlInjectionModule implements Scanner {
             new TimePayload("'; SELECT pg_sleep(5)--", "PostgreSQL"),
             new TimePayload("'; WAITFOR DELAY '0:0:5'--", "MSSQL"));
 
-    // Multi-vendor SQL error signature — requires at least one specific token to
+    // Multi-vendor SQL error signature -- requires at least one specific token to
     // avoid
     // false positives from generic "error" or "invalid" application messages.
     private static final Pattern SQL_ERROR = Pattern.compile(
@@ -83,7 +83,7 @@ public class SqlInjectionModule implements Scanner {
                 String baselineBody = fetchBody(ctx, hc, base + path + "?" + param + "=test", log);
                 // Anti-FP: skip if baseline itself already contains SQL error tokens
                 if (SQL_ERROR.matcher(baselineBody).find()) {
-                    log.accept("[~] SQLi: baseline já contém SQL error em " + path + " — pulando param " + param);
+                    log.accept("[~] SQLi: baseline já contém SQL error em " + path + " -- pulando param " + param);
                     continue;
                 }
 
@@ -100,9 +100,9 @@ public class SqlInjectionModule implements Scanner {
                         if (m.find() && resp.statusCode() != 400) {
                             String match = m.group();
                             String endpoint = path + "?" + param + "=" + encoded;
-                            log.accept("[!!] SQLi error-based CRITICAL em " + endpoint + " — match: " + match);
+                            log.accept("[!!] SQLi error-based CRITICAL em " + endpoint + " -- match: " + match);
 
-                            findings.add(Finding.of(id(), endpoint, "SQL Injection — Error-Based confirmado",
+                            findings.add(Finding.of(id(), endpoint, "SQL Injection -- Error-Based confirmado",
                                     Severity.CRITICAL,
                                     "Payload: " + payload + " | Match: " + match + " | Status: " + resp.statusCode()
                                             + " | URL: " + base + endpoint,
@@ -125,7 +125,7 @@ public class SqlInjectionModule implements Scanner {
                 long b1 = measureRtt(ctx, hc, base + path + "?" + param + "=1", log);
                 long b2 = measureRtt(ctx, hc, base + path + "?" + param + "=2", log);
                 if (b1 < 0 || b2 < 0) {
-                    // Target unreachable on this path — skip to next
+                    // Target unreachable on this path -- skip to next
                     continue;
                 }
                 long baselineAvg = (b1 + b2) / 2;
@@ -143,11 +143,11 @@ public class SqlInjectionModule implements Scanner {
 
                         if (elapsed > baselineAvg + 4000) {
                             String endpoint = path + "?" + param + "=" + encoded;
-                            log.accept("[!!] SQLi time-based CRITICAL — " + tp.dbHint() + " em " + endpoint
+                            log.accept("[!!] SQLi time-based CRITICAL -- " + tp.dbHint() + " em " + endpoint
                                     + " baseline=" + baselineAvg + "ms attack=" + elapsed + "ms");
 
                             findings.add(Finding.of(id(), endpoint,
-                                    "SQL Injection — Time-Based Blind confirmado (" + tp.dbHint() + ")",
+                                    "SQL Injection -- Time-Based Blind confirmado (" + tp.dbHint() + ")",
                                     Severity.CRITICAL,
                                     "baseline=" + baselineAvg + "ms attack=" + elapsed + "ms" + " delta="
                                             + (elapsed - baselineAvg) + "ms" + " | DB hint: " + tp.dbHint()
@@ -164,13 +164,13 @@ public class SqlInjectionModule implements Scanner {
                         }
                     } catch (java.net.http.HttpTimeoutException toe) {
                         // Timeout on the attack request itself can be a positive signal only when
-                        // baseline was fast — treat as a candidate but require delta > 4s.
+                        // baseline was fast -- treat as a candidate but require delta > 4s.
                         long elapsed = 10_000L; // timeout = full window consumed
                         if (elapsed > baselineAvg + 4000) {
                             String endpoint = path + "?" + param + "=" + encoded;
-                            log.accept("[!!] SQLi time-based (timeout) CRITICAL — " + tp.dbHint() + " em " + endpoint);
+                            log.accept("[!!] SQLi time-based (timeout) CRITICAL -- " + tp.dbHint() + " em " + endpoint);
                             findings.add(Finding.of(id(), endpoint,
-                                    "SQL Injection — Time-Based Blind (timeout) confirmado (" + tp.dbHint() + ")",
+                                    "SQL Injection -- Time-Based Blind (timeout) confirmado (" + tp.dbHint() + ")",
                                     Severity.CRITICAL,
                                     "baseline=" + baselineAvg + "ms attack=timeout(10000ms)" + " | DB hint: "
                                             + tp.dbHint() + " | Payload: " + tp.payload(),
