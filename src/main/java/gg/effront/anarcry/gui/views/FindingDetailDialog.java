@@ -160,12 +160,12 @@ public class FindingDetailDialog extends JDialog {
     private JPanel buildButtonPanel(Finding f) {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
 
-        JButton copyCurl = new JButton("Copy cURL");
+        JButton copyCurl = new JButton("Copy Repro");
         copyCurl.addActionListener(e -> {
             String curl = buildCurl(f);
             Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(curl), null);
             copyCurl.setText("Copied!");
-            javax.swing.Timer t = new javax.swing.Timer(1500, ev -> copyCurl.setText("Copy cURL"));
+            javax.swing.Timer t = new javax.swing.Timer(1500, ev -> copyCurl.setText("Copy Repro"));
             t.setRepeats(false);
             t.start();
         });
@@ -179,6 +179,10 @@ public class FindingDetailDialog extends JDialog {
     }
 
     private static String buildCurl(Finding f) {
+        String repro = f.reproduction();
+        if (repro != null && !repro.isBlank()) {
+            return repro;
+        }
         String endpoint = f.endpoint();
         if (endpoint == null || endpoint.isBlank() || "/".equals(endpoint)) {
             return "curl -v '<target-url>'";
