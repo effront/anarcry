@@ -72,8 +72,9 @@ public class HSTSModule implements Scanner {
                             "Authorization: Bearer enviado em TCP plaintext antes do " + status
                                     + " -- MITM intercepta o token sem precisar quebrar TLS. "
                                     + "Validado: tcpdump capturou JWT completo no wire em port 80.",
-                            "tcpdump -i any -A 'tcp port 80' & "
-                                    + "curl --max-redirs 0 -H 'Authorization: Bearer <jwt>' " + httpUrl,
+                            "# Terminal 1:\nsudo tcpdump -i any -A 'tcp port 80'\n"
+                                    + "# Terminal 2:\ncurl --max-redirs 0 " + "-H 'Authorization: Bearer <jwt>' "
+                                    + httpUrl,
                             "Adicionar HSTS com max-age=31536000; includeSubDomains; preload", cweId, cweTitle,
                             cvssVector, score));
                 } else {
