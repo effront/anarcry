@@ -281,7 +281,7 @@ public class SsrfModule implements Scanner {
                                         probe.severity(),
                                         "URL: " + url + " | Relay: " + relayBase + " | Indicador: " + match,
                                         "Servidor segue redirect do relay para " + probe.url()
-                                                + " -- WAF bypassado via dominio intermediario controlado pelo atacante",
+                                                + " -- WAF bypassado via dominio intermediario do atacante",
                                         "curl -L '" + url + "'",
                                         "Validar URL final apos resolucao de redirects; bloquear ranges internos mesmo"
                                                 + " via redirect chain; nao confiar apenas no host inicial da URL",
