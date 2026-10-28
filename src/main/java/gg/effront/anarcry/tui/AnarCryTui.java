@@ -401,7 +401,7 @@ public class AnarCryTui {
             snap.stream().filter(f -> f.severity() == Severity.CRITICAL || f.severity() == Severity.HIGH).limit(5)
                     .forEach(f -> {
                         Label fl = new Label("    [" + f.severity().name() + "] " + f.module() + " — " + f.title());
-                        fl.setForegroundColor(f.severity().color);
+                        fl.setForegroundColor(severityColor(f.severity()));
                         p.addComponent(fl);
                     });
         }
@@ -441,6 +441,16 @@ public class AnarCryTui {
             p.addComponent(new Button("[E] Export Report", this::showExportMenu));
         }
         return p.withBorder(Borders.singleLine("Relatório"));
+    }
+
+    private static TextColor severityColor(Severity s) {
+        return switch (s) {
+            case CRITICAL -> TextColor.ANSI.RED_BRIGHT;
+            case HIGH -> TextColor.ANSI.YELLOW_BRIGHT;
+            case MEDIUM -> TextColor.ANSI.YELLOW;
+            case LOW -> TextColor.ANSI.CYAN;
+            case INFO -> TextColor.ANSI.WHITE;
+        };
     }
 
     private static Label severityBar(String prefix, long count, int total, TextColor color) {
