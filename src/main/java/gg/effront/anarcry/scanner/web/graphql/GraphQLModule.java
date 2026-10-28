@@ -67,12 +67,12 @@ public class GraphQLModule implements Scanner {
                 log.accept("[~] GraphQL: " + endpoint + " → HTTP " + status);
 
                 if (body.contains("__schema") && body.contains("types")) {
-                    log.accept("[!] GraphQL: HIGH — introspection habilitada em " + url);
+                    log.accept("[!] GraphQL: HIGH -- introspection habilitada em " + url);
                     findings.add(Finding.of("GraphQL", url,
-                            "GraphQL introspection habilitada — schema completo exposto", Severity.HIGH,
+                            "GraphQL introspection habilitada -- schema completo exposto", Severity.HIGH,
                             "Endpoint: " + url + " | HTTP " + status + " | __schema presente na resposta",
                             "Introspection habilitada em produção expõe o schema completo da API (queries, mutations, "
-                                    + "types, campos, diretivas) — facilita enumeração de superfície de ataque e "
+                                    + "types, campos, diretivas) -- facilita enumeração de superfície de ataque e "
                                     + "descoberta de funcionalidades não documentadas",
                             "curl -sX POST " + url + " \\\n" + "  -H 'Content-Type: application/json' \\\n" + "  -d '"
                                     + INTROSPECTION + "' | python3 -m json.tool",
@@ -83,7 +83,7 @@ public class GraphQLModule implements Scanner {
                     continue;
                 }
 
-                // Endpoint exists but introspection disabled — confirm with __typename probe
+                // Endpoint exists but introspection disabled -- confirm with __typename probe
                 // to avoid FP on any REST API that returns JSON errors.
                 if ((status == 200 || status == 400 || status == 422) && ct.contains("json")) {
                     try {
@@ -97,7 +97,7 @@ public class GraphQLModule implements Scanner {
                             log.accept("[+] GraphQL: endpoint confirmado em " + url + " (introspection desativada)");
                             findings.add(Finding.of("GraphQL", url, "GraphQL endpoint descoberto", Severity.INFO,
                                     "Endpoint: " + url + " | HTTP " + status + " | __typename confirmado na resposta",
-                                    "Endpoint GraphQL identificado — auditar queries expostas, depth limiting e rate"
+                                    "Endpoint GraphQL identificado -- auditar queries expostas, depth limiting e rate"
                                             + "limiting",
                                     "curl -sX POST " + url + " \\\n" + "  -H 'Content-Type: application/json' \\\n"
                                             + "  -d '" + TYPENAME_QUERY + "'",
@@ -110,7 +110,7 @@ public class GraphQLModule implements Scanner {
                 }
 
             } catch (Exception e) {
-                log.accept("[~] GraphQL: " + url + " — " + e.getMessage());
+                log.accept("[~] GraphQL: " + url + " -- " + e.getMessage());
             }
         }
 

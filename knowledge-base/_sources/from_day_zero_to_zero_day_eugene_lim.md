@@ -35,12 +35,12 @@ book while it’s still in the editing and production phases, so you may come
 across errors or other issues you want to comment on. But while we sincerely
 appreciate your feedback during a book’s EA phase, please use your best dis-
 cretion when deciding what to report.
-     At the EA stage, we’re most interested in feedback related to content—
+     At the EA stage, we’re most interested in feedback related to content--
 general comments to the writer, technical errors, versioning concerns, or
 other high-level issues and observations. As these titles are still in draft
 form, we already know there may be typos, grammatical mistakes, miss-
 ing images or captions, layout issues, and instances of placeholder text. No
-need to report these—they will all be corrected later, during the copyedit-
+need to report these--they will all be corrected later, during the copyedit-
 ing, proofreading, and typesetting processes.
      If you encounter any errors (“errata”) you’d like to report, please fill
 out this Google form so we can review your comments.
@@ -188,8 +188,8 @@ translate directly into enhanced research capabilities.
      Reflecting on my own journey into vulnerability research back in 2003,
 I remember feeling a mix of excitement and uncertainty. The countless
 hours spent on trial and error made understanding software bugs daunt-
-ing. During those early days, with limited resources—primarily Phrack and
-a few reversing e-zines—finding reliable guidance was challenging. I often
+ing. During those early days, with limited resources--primarily Phrack and
+a few reversing e-zines--finding reliable guidance was challenging. I often
 spent evenings poring over code, eager to unravel its complexities. If I’d had
 a guide like From Day Zero to Zero Day, my learning experience would have
 been not just easier but also far more fulfilling.
@@ -198,7 +198,7 @@ ability research to becoming one of Singapore’s top bug bounty hunters
 has provided him with extensive hands-on experience and profound tech-
 nical insight. This journey encompasses the entire spectrum of vulnerability
 research. What sets this book apart is its unwavering commitment to the
-fundamentals—fostering a solid understanding of how vulnerabilities mani-
+fundamentals--fostering a solid understanding of how vulnerabilities mani-
 fest, equipping you to tackle unfamiliar code with confidence, and cultivat-
 ing a structured, analytical mindset. Complex concepts are broken down
 into intuitive, accessible knowledge.
@@ -253,7 +253,7 @@ xviii   Foreword by Jacob Soo
 When I was a toddler, my parents used to playfully scold me, saying that ev-
 ery time they bought me a new toy I would “break it, crumble it, take it apart
 in pieces.” Little did I know that my curiosity about understanding the in-
-ner workings of something—or just causing chaos and seeing what it led to—
+ner workings of something--or just causing chaos and seeing what it led to--
 would prove helpful in vulnerability research.
      Although I had a way with computers, breaking computer systems was
 never a career option I thought I had. My family was distraught at the idea
@@ -405,8 +405,8 @@ xxii   Introduction
 
    From Day Zero to Zero Day (Early Access) © 2025 by Eugene Lim
 
-     While it’s impossible to cover the three techniques fully—doing so for
-each one would take a book (or several) by itself—I introduce subdomains
+     While it’s impossible to cover the three techniques fully--doing so for
+each one would take a book (or several) by itself--I introduce subdomains
 within each area in sufficient detail that you’ll be able to make your own in-
 formed decisions about which tools or techniques to use for the problem
 at hand. For example, fuzzing tools comprise not only traditional random
@@ -569,7 +569,7 @@ From Day Zero to Zero Day (Early Access) © 2025 by Eugene Lim
                                     0
                                DAY ZERO
             He learned rapidly because his first training was in how to learn.
-                                —Frank Herbert, Dune
+                                --Frank Herbert, Dune
 
 
              Once the protected turf of nation-state ac-
@@ -787,8 +787,8 @@ research doesn’t necessarily entail exploiting it. For example, if you discove
 a buffer overflow that overwrites return address pointers on the stack in a
 program, a simple proof of concept (PoC) that triggers this is sufficient for
 vulnerability research. Developing a full-blown exploit that executes arbi-
-trary shellcode falls under exploit development—the process of creating tools
-or code that exploits vulnerabilities—and is a necessary step in a penetra-
+trary shellcode falls under exploit development--the process of creating tools
+or code that exploits vulnerabilities--and is a necessary step in a penetra-
 tion test. In some large vulnerability research organizations, vulnerability
 discovery is handled by a separate team from exploit development, with the
 former passing its output to the latter to refine into reliable exploits. This is
@@ -844,7 +844,7 @@ ternals, such as source code) and gray-box (with only partial knowledge of
                     Naming and Directory Interface (JNDI) injection, a class of vulnerabilities
                     discovered in 2016 by Alvaro Muñoz and Oleksandr Mirosh. That the vul-
                     nerability had existed unnoticed in the Log4j codebase since 2013 suggests
-                    that not enough people (or automated code scans) had reviewed the code—
+                    that not enough people (or automated code scans) had reviewed the code--
                     or if they did, they didn’t know what to look for.
                          This brings us to another point about the importance of code review:
                     most software uses open source code in some form, from shared libraries to
@@ -1087,7 +1087,7 @@ From Day Zero to Zero Day (Early Access) © 2025 by Eugene Lim
                           TAINT ANALYSIS
                                         1
   Life is not like water. Things in life don’t necessarily flow over the shortest possible route.
-                                 —Haruki Murakami, 1Q84
+                                 --Haruki Murakami, 1Q84
 
 
              Taint analysis (or source and sink analysis) is
@@ -1456,8 +1456,8 @@ which is why manual code review continues to be relevant. While automated
 
                  code analysis augments manual code review, you must carefully curate and
                  customize it for each context.
-                     Now that we’ve covered the basics of taint analysis—sources, sinks, prop-
-                 agators, and sanitizers—we’ll maximize efficiency with the sink-to-source
+                     Now that we’ve covered the basics of taint analysis--sources, sinks, prop-
+                 agators, and sanitizers--we’ll maximize efficiency with the sink-to-source
                  analysis strategy.
 
 
@@ -1789,7 +1789,7 @@ void relay_relay_reply(int sock, const uint8_t *msg, int32_t len, relay_config *
                  occur, the number of bytes copied must exceed the size of the destination
                  buffer. Hence, you must first determine the size of the buffer at current_buffer
                  _position. Ideally, this is a fixed size, not resized by the code to match the
-                 number of copied bytes—an example of a sanitization pattern. Earlier in the
+                 number of copied bytes--an example of a sanitization pattern. Earlier in the
                  code, the current_buffer_position variable is assigned with auto current_buffer
                  _position = buffer; · and the original buffer is initialized as static uint8_t
                  buffer[4096]; ¶. Good; you now know that the destination buffer has a fixed
@@ -1819,7 +1819,7 @@ const struct dhcpv6_option *parse_dhcpv6_opt(const uint8_t *buffer, const uint8_
                  };
 
                       The option_length parameter is a uint16_t variable (an unsigned short
-                 integer) ¶. It’s 2 bytes (16 bits) with a maximum value of 0xFF, or 65,535—
+                 integer) ¶. It’s 2 bytes (16 bits) with a maximum value of 0xFF, or 65,535--
                  far larger than the fixed destination buffer size of 4,096. Even if you flip
                  the bytes around with ntohs, it ends up as the same 0xFF value. This is an ex-
                  ploitable pattern.
@@ -2110,7 +2110,7 @@ written by a SONiC developer (https://support.edge-core.com/hc/en-us/articles/
 8615164994201--Edgecore-SONiC-DHCPv6-Relay) that contains the expected
 structure of this configuration setting in the database.
      After resolving this requirement by adding the expected configuration
-to the Redis database, dhcp6relay finally runs—but it doesn’t bind to any in-
+to the Redis database, dhcp6relay finally runs--but it doesn’t bind to any in-
 terfaces because none of them contain non-link-local IPv6 addresses, as
 prepare_socket requires. You need to create these manually and add this con-
 figuration to the Redis database as well. Rather than creating a brand new
@@ -2475,7 +2475,7 @@ parse_dhcpv6_opt (buffer=0x5555555ac605 <error: Cannot access memory at
                SURFACE
         Once we know where we are, then the world becomes as narrow as a map.
                    When we don’t know, the world feels unlimited.
-                           —Liu Cixin, The Dark Forest
+                           --Liu Cixin, The Dark Forest
 
 
               As software grows in complexity, so does
@@ -2783,8 +2783,8 @@ httpserver.js const http = require('http');
                   nested routes under /items to another file. This makes the code easier to
                   read both for developers and for you, the aspiring vulnerability researcher.
 
-                  The Model–View–Controller Architecture
-                  One common pattern among web frameworks is the Model–View–Controller
+                  The Model-View-Controller Architecture
+                  One common pattern among web frameworks is the Model-View-Controller
                   (MVC) architecture, which separates the code into three main groups. Famil-
                   iarity with this pattern will help you quickly analyze frameworks, understand
                   the flow of data through sources and sinks, and focus on the critical business
@@ -3734,7 +3734,7 @@ saw an example of the remote variant in the simple vulnerable TCP server
                  filesystem pathname exposes it to the many namespace hijacking issues of
                  file IPC. Additionally, by delegating access control to the filesystem, UDSs
                  open up the possibility of inappropriate file permissions.
-                      CVE-2022-21950 was a vulnerability in Canna, a Japanese Kana–Kanji
+                      CVE-2022-21950 was a vulnerability in Canna, a Japanese Kana-Kanji
                  server, that arose from the hardcoded directory /tmp/.iroha_unix containing
                  the UDS used by Canna. As described in the bug report (https://bugzilla.suse
                  .com/show_bug.cgi?id=1199280), the openSUSE operating system patched a
@@ -4018,8 +4018,8 @@ zation of files in the archive as well as their contents.
 that typically warrant greater scrutiny.
 
 
-Type–Length–Value
-The type–length–value (TLV) pattern occurs in both protocols and file for-
+Type-Length-Value
+The type-length-value (TLV) pattern occurs in both protocols and file for-
 mats. We use TLV for chunked data in the body because its structure allows
 a parser to easily identify and consume chunks of variable length. It consists
 of three parts:
@@ -4067,8 +4067,8 @@ IHDR, is parsed.
                  format includes a field descriptor array in the header where each field de-
                  scriptor defines the field type (1 byte) and size (1 byte). Unfortunately,
                  OpenOffice’s code trusted both these values, such that for a field type I
-                 (corresponding to an integer), it allocated a buffer of 4 bytes—which would
-                 be correct for an Int32 type—but copied the attacker-controlled size number
+                 (corresponding to an integer), it allocated a buffer of 4 bytes--which would
+                 be correct for an Int32 type--but copied the attacker-controlled size number
                  of bytes into that buffer:
 
                  // nType is taken from field descriptor type value
@@ -4156,8 +4156,8 @@ applications typically appear in the Android Package (APK) format, which
                  load into AndroidManifest.xml, an attacker could cause JADX to disclose local
                  file data when exporting a decompiled Android application. To patch this,
                  JADX switched to a secure XML parser that didn’t process external entities.
-                      Child format–related vulnerabilities occur because developers tend to
-                 focus on the parent directory–based format and delegate handling child
+                      Child format-related vulnerabilities occur because developers tend to
+                 focus on the parent directory-based format and delegate handling child
                  file formats to external libraries, which may not parse securely by default.
                  Look for instances in which child files are processed, such as manifests, and
                  validate their usage.
@@ -4257,7 +4257,7 @@ From Day Zero to Zero Day (Early Access) © 2025 by Eugene Lim
    AUTOMATED VARIANT ANALYSIS
                                    3
                                    Only connect!
-                            —E.M. Forster, Howards End
+                            --E.M. Forster, Howards End
 
 
              Now that you’ve approached code analy-
@@ -5805,7 +5805,7 @@ Ran 1 rule on 18 files: 2 findings.
                 realloc, from macros to function pointers. Simply looking for REALLOC would
                 not work outside of the Expat codebase.
                      While “one pattern to match them all” does not exist, researchers can
-                tweak their rules toward the low–false positive, high-confidence end of the
+                tweak their rules toward the low-false positive, high-confidence end of the
                 spectrum. By scanning thousands of repositories in one go, you can make
                 up for a higher rate of false negatives (missing out on potential vulnerabili-
                 ties) with sheer scale; even a 1 percent hit rate means at least 10 new vulner-
@@ -6004,7 +6004,7 @@ From Day Zero to Zero Day (Early Access) © 2025 by Eugene Lim
                                      4
          If you look down on one side, everything seems reassuringly familiar. . . .
                     On the other side, it seems completely alien territory.
-                                   —Mary Beard, SPQR
+                                   --Mary Beard, SPQR
 
 
              Like code review and fuzzing, reverse en-
@@ -6162,7 +6162,7 @@ Scripts
                     erence to the Atom code editor that it was built for) emerged. Electron
                     focused on creating desktop applications with Node.js and other web tech-
                     nologies, like HTML and CSS. Instead of struggling with various operating
-                    system–specific APIs and build processes, developers could simply use tried-
+                    system-specific APIs and build processes, developers could simply use tried-
                     and-tested common environments like Node.js and the Chromium browser
                     engine to create cross-platform desktop applications with JavaScript. This
                     enabled much faster development, especially as desktop applications began
@@ -7362,7 +7362,7 @@ Framework 4.7.2")]
 
                 Java Bytecode
                 Similar to the .NET Framework’s CIL, Java also uses an intermediate rep-
-                resentation that gets executed by a common runtime—in this case, the JVM
+                resentation that gets executed by a common runtime--in this case, the JVM
                 platform. Like CIL, Java bytecode uses a higher-level instruction set than
 
                                                                                    Binary Taxonomy   121
@@ -8088,7 +8088,7 @@ ues, and may require you to dump the unpacked and decrypted bytes from
                                       5
                     . . . for all is like an ocean, all flows and connects;
               touch it in one place and it echoes at the other end of the world.
-                     —Fyodor Dostoevsky, The Brothers Karamazov
+                     --Fyodor Dostoevsky, The Brothers Karamazov
 
 
              Despite the popularity of script-based frame-
@@ -8127,7 +8127,7 @@ perspective before comparing your findings with the actual source code.
                    Chapter 1, you’re doing it in a disassembler or decompiler. Jokes aside, this
                    can be a surprisingly fruitful approach on less-hardened software.
                         You can test this method with FreshTomato, an open source firmware
-                   for Broadcom chipset–based routers. Unlike the binaries you explored in
+                   for Broadcom chipset-based routers. Unlike the binaries you explored in
                    the previous chapter, the firmware was compiled for ARM and MIPS ar-
                    chitectures, which use a different instruction set from the x86 and x86-64
                    architecture that is typically used on desktops and servers. It’s common to
@@ -9101,7 +9101,7 @@ sh: 1: error: not found
 
                     You’ll find that you need to use Frida’s JavaScript API to write to the
                 program’s memory ¶ instead of directly assigning a string value because the
-                data types are different—in this case, a pointer:
+                data types are different--in this case, a pointer:
 
 $ frida-trace -i "system" ./hello-vuln
 Instrumenting...
@@ -9227,7 +9227,7 @@ identify: UnableToOpenConfigureFile `delegates.xml' @ warning/configure.c/GetCon
                 matically hook a list of desired functions, trace child processes, and more.
                 As you encounter more complex applications and environments, this au-
                 tomation will prove invaluable in optimizing your analysis efforts.
-                     You can also use Frida’s read–eval–print loop (REPL) CLI to inspect and
+                     You can also use Frida’s read-eval-print loop (REPL) CLI to inspect and
                 intercept a program on the fly, similar to a traditional debugger but with
                 a far more powerful scripting engine. Invest some time in reading Frida’s
                 documentation at https://frida.re/docs and explore how you can apply Frida’s
@@ -9255,7 +9255,7 @@ identify: UnableToOpenConfigureFile `delegates.xml' @ warning/configure.c/GetCon
                       application.
                       System events Events related to file I/O, process creation, network
                       connections, and so on. This overlaps with system call tracing but can in-
-                      clude operating system–level events. Examples include Process Monitor
+                      clude operating system-level events. Examples include Process Monitor
                       (Procmon) and pspy.
                       Logging Debugging and error messages from different processes. Ex-
                       amples include Event Viewer (Windows), journalctl (Linux), Logcat (An-
@@ -9495,7 +9495,7 @@ system(acStack_360);
                                      6
          For we all of us, grave or light, get our thoughts entangled in metaphors,
                            and act fatally on the strength of them.
-                               —George Eliot, Middlemarch
+                               --George Eliot, Middlemarch
 
 
              There isn’t a single perfect way to reverse
@@ -10941,7 +10941,7 @@ From Day Zero to Zero Day (Early Access) © 2025 by Eugene Lim
                                       7
            Life, with its rules, its obligations, and its freedoms, is like a sonnet:
               You’re given the form, but you’ve to write the sonnet yourself.
-                         —Madeleine L’Engle, A Wrinkle in Time
+                         --Madeleine L’Engle, A Wrinkle in Time
 
 
              The code review and reverse engineering
@@ -11191,7 +11191,7 @@ Fuzz First, Optimize Later
                        Generally speaking, it’s better to use generation-based fuzzers for simple
                   and well-documented formats and protocols, while mutation-based fuzzers
                   are more suitable for complex or proprietary ones. For this example, you’ll
-                  use boofuzz to fuzz the MQTT protocol, a lightweight publish/subscribe–
+                  use boofuzz to fuzz the MQTT protocol, a lightweight publish/subscribe-
                   style communication protocol commonly used in IoT devices.
 
 
@@ -11204,7 +11204,7 @@ Fuzz First, Optimize Later
                   docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_MQTT_Control_Packet,
                   an MQTT TCP packet consists of the following components:
                       Fixed header A required header for each MQTT packet, which con-
-                      sists of a 4-bit control packet–type unsigned value, 4-bit flags, and a 1- to
+                      sists of a 4-bit control packet-type unsigned value, 4-bit flags, and a 1- to
                       4-byte variable-byte integer that represents the number of bytes remain-
                       ing within the current control packet
                       Variable header An optional header whose contents vary depending
@@ -11245,7 +11245,7 @@ Fuzz First, Optimize Later
             your inputs are reaching interesting parts of the program and not failing
             specific checks.
                  MQTT includes many control packet types, so trying to understand and
-            account for all the packet type–specific requirements can be overwhelming.
+            account for all the packet type-specific requirements can be overwhelming.
             Instead, you should focus on one or two packet types and the minimum se-
             quences required for them. For this exercise, you’ll focus on the PUBLISH
             packet type, which can be sent after a CONNECT packet.
@@ -11424,7 +11424,7 @@ check if the fixed portions of the packet are well formed.
                   tives. It’s especially important to take note of distinctions like endianness,
                   expected number of bytes, and special data types. For example, in the MQTT
                   specification, a UTF-8 encoded string like ClientID must be prefixed with a
-                  2-byte integer–length field.
+                  2-byte integer-length field.
 
 
                   Fuzzing the MQTT PUBLISH Packet
@@ -11511,8 +11511,8 @@ check if the fixed portions of the packet are well formed.
                        With that, you can begin fuzzing the PUBLISH packet. One challenge is
                   deciding which fields to fuzz. If you had infinite time and compute power,
                   there would be nothing stopping you from fuzzing all of them. However,
-                  if you want to optimize your fuzzing, a good rule of thumb is to fuzz type–
-                  length–value fields. For example, RemainingLength, TopicNameLength, the TopicName
+                  if you want to optimize your fuzzing, a good rule of thumb is to fuzz type-
+                  length-value fields. For example, RemainingLength, TopicNameLength, the TopicName
                   block’s string primitive, and PropertiesLength are good candidates for fuzzing.
                   Set their fuzzable arguments to True and change ApplicationMessage’s to False.
 
@@ -12382,7 +12382,7 @@ From Day Zero to Zero Day (Early Access) © 2025 by Eugene Lim
                                    8
                 Speed creates a space of initiation, which may be lethal;
                         its only rule is to leave no trace behind.
-                             —Jean Baudrillard, America
+                             --Jean Baudrillard, America
 
 
              One of the biggest strengths of mutation-
@@ -13639,7 +13639,7 @@ From Day Zero to Zero Day (Early Access) © 2025 by Eugene Lim
                                     9
                In battle there are only the normal and extraordinary forces,
            but their combinations are limitless; none can comprehend them all.
-                                —Sun Tzu, The Art of War
+                                --Sun Tzu, The Art of War
 
 
             Consider the wide range of vulnerability
@@ -14321,7 +14321,7 @@ main.go package main
             The function takes in an input URL and expected domain ¶, then uses
         a regex pattern to ensure the domain in the URL matches the expected
         domain ·. But there’s a mistake in this code that allows certain inputs to
-        bypass this check—see if you can spot it!
+        bypass this check--see if you can spot it!
             To run the application, ensure you have downloaded and installed Go
         using the instructions at https://go.dev/doc/install (including setting your PATH):
 
@@ -14603,7 +14603,7 @@ Syntactic and Semantic Targets
                   through a lot of unnecessary fuzzing.
                       Consider a pitch-black maze that uses only 90-degree-angle turns. If
                   you knew this from the very beginning, you wouldn’t waste time fumbling
-                  around in various directions—you’d just keep going straight until you touched
+                  around in various directions--you’d just keep going straight until you touched
                   a wall, then turn left or right. However, if you lacked this understanding
                   about the basic structure of the maze, you’d probably spend many hours un-
                   necessarily trying out different angles and turns until you eventually sensed
@@ -14941,7 +14941,7 @@ tator grammar for JSON:
         review of Fuzzilli’s capabilities, check out https://github.com/googleprojectzero/
         fuzzilli/blob/main/Docs/HowFuzzilliWorks.md.
              Since Fuzzilli requires the target JavaScript engine to run in a specific
-        read–eval–print–reset loop, this also requires applying custom patches to the
+        read-eval-print-reset loop, this also requires applying custom patches to the
         target engine. While this is not as straightforward as AFL++’s workflow, the
         results speak for themselves. Fuzzilli’s bug trophy case includes vulnerabili-
         ties in Safari’s JavaScriptCore, Firefox’s SpiderMonkey, and the Chromium
@@ -14995,7 +14995,7 @@ From Day Zero to Zero Day (Early Access) © 2025 by Eugene Lim
                     BEYOND DAY ZERO
      Remember . . . how I explained to you the implications of that word “revolution”?
                         A turning round, a completing of a cycle.
-                              —Graham Swift, Waterland
+                              --Graham Swift, Waterland
 
 
             Now that you’ve built the capability to con-
@@ -15035,7 +15035,7 @@ the coordinated vulnerability disclosure model for disclosing and patching
                     (CVD), from writing a report to requesting a CVE.
                          While the very first bug bounty program was launched back in 1995
                     by Netscape for its Netscape Navigator browser, reporting vulnerabilities
-                    largely remained a dangerous affair for researchers up until the 2000s—and
+                    largely remained a dangerous affair for researchers up until the 2000s--and
                     it can still be dangerous in some jurisdictions today. Vulnerability research
                     remains poorly understood and is often viewed with suspicion, even when
                     the results are disclosed directly to vendors. Sometimes, this has even led to
@@ -15147,7 +15147,7 @@ day brokers on the black market. By providing a means for researchers to be
                    researchers, allowing them to be properly compensated and, in some cases,
                    even make a living from their research. The flip side to this is that some
                    companies have been flooded with vulnerability reports fishing for boun-
-                   ties, even if they don’t actually run a bug bounty program. Don’t do this—
+                   ties, even if they don’t actually run a bug bounty program. Don’t do this--
                    demanding a reward for a vulnerability without a pre-existing bug bounty
                    program or disclosure policy is unethical and can be considered extortion.
                         Another consideration with bug bounties is that you may not be able to
@@ -15193,8 +15193,8 @@ day brokers on the black market. By providing a means for researchers to be
                 nerability reports, or may even be overwhelmed by too many low-quality re-
                 ports. It’s important that your report is easy to read and understand so that
                 the reader immediately grasps the severity and nature of the vulnerability.
-                    Here, we’ll go through the key sections of a vulnerability report—the
-                summary, reproduction steps, root cause, and recommendations—based on
+                    Here, we’ll go through the key sections of a vulnerability report--the
+                summary, reproduction steps, root cause, and recommendations--based on
                 one I sent to the Apache OpenOffice security team for CVE-2021-33035, a
                 code execution vulnerability in Apache OpenOffice Calc.
 
@@ -15773,7 +15773,7 @@ nerability research, you’ll be able to mix and match them in myriad ways, like
 through hybrid analysis or instrumented black-box fuzzing. From there, the
 possibilities are endless.
      I hope that after reading this book, you feel energized and excited to
-start your own zero-day hunting journey. Remember—it’s always day zero in
+start your own zero-day hunting journey. Remember--it’s always day zero in
 vulnerability research!
 
 

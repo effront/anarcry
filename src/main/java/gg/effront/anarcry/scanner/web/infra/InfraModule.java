@@ -98,7 +98,7 @@ public class InfraModule implements Scanner {
 
         String host = ctx.host();
         if (!host.matches("[a-zA-Z0-9._\\-]{1,253}")) {
-            log.accept("[!] Infra: host invalido — scan cancelado");
+            log.accept("[!] Infra: host invalido -- scan cancelado");
             return findings;
         }
         String portList = PROBE_PORTS.stream().map(p -> String.valueOf(p.port())).collect(Collectors.joining(","));
@@ -109,7 +109,7 @@ public class InfraModule implements Scanner {
         if (nmapAvailable()) {
             boolean root = isRoot();
             log.accept("[~] Infra: nmap detectado"
-                    + (root ? " (root — SYN scan + OS detection)" : " (connect scan + service detection)"));
+                    + (root ? " (root -- SYN scan + OS detection)" : " (connect scan + service detection)"));
             try {
                 nmapScan = runNmap(host, portList, root, log);
                 openPorts = nmapScan.openPorts();
@@ -119,16 +119,16 @@ public class InfraModule implements Scanner {
                     findings.add(Finding.of("Infra", host, "OS fingerprint detectado: " + nmapScan.osGuess(),
                             Severity.INFO, "nmap OS detection: " + nmapScan.osGuess(),
                             "Informacao de OS exposta via fingerprint de rede"
-                                    + " — util para targeting de exploits especificos de versao",
+                                    + " -- util para targeting de exploits especificos de versao",
                             "nmap -O -Pn " + host, "Considerar TCP stack hardening para dificultar OS fingerprinting",
                             _cweId, _cweTitle, _cveVector, _score));
                 }
             } catch (Exception e) {
-                log.accept("[~] Infra: nmap falhou (" + e.getMessage() + ") — fallback connect scan");
+                log.accept("[~] Infra: nmap falhou (" + e.getMessage() + ") -- fallback connect scan");
                 openPorts = connectScan(host, log);
             }
         } else {
-            log.accept("[~] Infra: nmap nao encontrado — connect scan (" + PROBE_PORTS.size() + " portas)");
+            log.accept("[~] Infra: nmap nao encontrado -- connect scan (" + PROBE_PORTS.size() + " portas)");
             openPorts = connectScan(host, log);
         }
 
@@ -137,7 +137,7 @@ public class InfraModule implements Scanner {
             return findings;
         }
 
-        log.accept("[~] Infra: " + openPorts.size() + " porta(s) abertas — fingerprinting...");
+        log.accept("[~] Infra: " + openPorts.size() + " porta(s) abertas -- fingerprinting...");
 
         // SSH
         if (openPorts.contains(22)) {
@@ -160,15 +160,15 @@ public class InfraModule implements Scanner {
             boolean passwordEnabled = authMethods.contains("password");
             Severity sev = passwordEnabled ? Severity.MEDIUM : Severity.INFO;
             log.accept(passwordEnabled
-                    ? "[!] Infra: MEDIUM — SSH aceita senha em " + host + ":22 (" + banner + ")"
+                    ? "[!] Infra: MEDIUM -- SSH aceita senha em " + host + ":22 (" + banner + ")"
                     : "[~] Infra: SSH exposto em " + host + ":22, so publickey (" + banner + ")");
             findings.add(Finding.of("Infra", host + ":22",
-                    "SSH exposto — " + (passwordEnabled ? "password auth habilitado" : "publickey only"), sev,
+                    "SSH exposto -- " + (passwordEnabled ? "password auth habilitado" : "publickey only"), sev,
                     "Host: " + host + ":22 | Banner: " + banner + " | Auth methods: " + authMethods,
                     passwordEnabled
                             ? "SSH exposto com autenticacao por senha habilitada"
-                                    + " — vulneravel a brute force e credential stuffing"
-                            : "SSH exposto publicamente, apenas publickey aceita — risco de brute force baixo",
+                                    + " -- vulneravel a brute force e credential stuffing"
+                            : "SSH exposto publicamente, apenas publickey aceita -- risco de brute force baixo",
                     "ssh -o PreferredAuthentications=password -o BatchMode=yes user@" + host,
                     passwordEnabled
                             ? "Desabilitar PasswordAuthentication no sshd_config; restringir acesso por IP ou VPN"
@@ -180,10 +180,10 @@ public class InfraModule implements Scanner {
         if (openPorts.contains(6379)) {
             String pong = redisPing(host);
             if (pong.startsWith("+PONG")) {
-                log.accept("[!!] Infra: CRITICAL — Redis unauthenticated em " + host + ":6379");
+                log.accept("[!!] Infra: CRITICAL -- Redis unauthenticated em " + host + ":6379");
                 findings.add(Finding.of("Infra", host + ":6379", "Redis exposto sem autenticacao", Severity.CRITICAL,
                         "Host: " + host + ":6379 | PING -> +PONG (sem autenticacao requerida)",
-                        "Redis acessivel sem senha — leitura/escrita arbitraria de todas as chaves;"
+                        "Redis acessivel sem senha -- leitura/escrita arbitraria de todas as chaves;"
                                 + " possivel RCE via CONFIG SET dir/dbfilename para escrever webshell ou cron",
                         "redis-cli -h " + host + " PING && redis-cli -h " + host + " INFO server",
                         "Configurar requirepass no redis.conf; bind em loopback ou interface interna;"
@@ -194,11 +194,11 @@ public class InfraModule implements Scanner {
 
         // MongoDB exposto
         if (openPorts.contains(27017)) {
-            log.accept("[!] Infra: HIGH — MongoDB exposto em " + host + ":27017");
+            log.accept("[!] Infra: HIGH -- MongoDB exposto em " + host + ":27017");
             findings.add(Finding
-                    .of("Infra", host + ":27017", "MongoDB exposto — porta acessivel externamente", Severity.HIGH,
+                    .of("Infra", host + ":27017", "MongoDB exposto -- porta acessivel externamente", Severity.HIGH,
                             "Host: " + host + ":27017 | porta TCP aberta sem restricao de rede detectada",
-                            "MongoDB na porta padrao exposto — verificar se autenticacao esta habilitada;"
+                            "MongoDB na porta padrao exposto -- verificar se autenticacao esta habilitada;"
                                     + " versoes sem --auth aceitam qualquer conexao",
                             "mongosh --host " + host + " --eval \"db.adminCommand({listDatabases:1})\"",
                             "Habilitar autenticacao (security.authorization: enabled);"
@@ -208,8 +208,8 @@ public class InfraModule implements Scanner {
 
         // etcd exposto
         if (openPorts.contains(2379)) {
-            log.accept("[!] Infra: CRITICAL — etcd exposto em " + host + ":2379");
-            findings.add(Finding.of("Infra", host + ":2379", "etcd exposto — porta acessivel externamente",
+            log.accept("[!] Infra: CRITICAL -- etcd exposto em " + host + ":2379");
+            findings.add(Finding.of("Infra", host + ":2379", "etcd exposto -- porta acessivel externamente",
                     Severity.CRITICAL, "Host: " + host + ":2379 | porta TCP aberta",
                     "etcd exposto pode conter secrets do Kubernetes (tokens, certs, credenciais de servicos)",
                     "curl http://" + host + ":2379/v3/cluster/member/list",
@@ -253,11 +253,11 @@ public class InfraModule implements Scanner {
 
                     if (matched) {
                         alreadyReported.add(dedupKey);
-                        log.accept("[!!] Infra: " + probe.severity() + " — " + probe.name() + " em " + url);
+                        log.accept("[!!] Infra: " + probe.severity() + " -- " + probe.name() + " em " + url);
                         findings.add(Finding.of("Infra", host + ":" + probe.port(),
                                 probe.name() + " exposto sem restricao de rede", probe.severity(),
                                 "URL: " + url + " | HTTP " + resp.statusCode() + " | Indicador: " + matchedIndicator,
-                                "Painel/servico de administracao acessivel sem restricao de rede — "
+                                "Painel/servico de administracao acessivel sem restricao de rede -- "
                                         + "atacante com acesso ao IP pode autenticar,"
                                         + " explorar ou pivotar para a infra interna",
                                 "curl -sk " + url,

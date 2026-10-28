@@ -99,7 +99,7 @@ public class SiteMapPanel extends Panel {
 
     private static String humanSize(long bytes) {
         if (bytes <= 0) {
-            return "—";
+            return "--";
         }
         if (bytes < 1024) {
             return bytes + "B";

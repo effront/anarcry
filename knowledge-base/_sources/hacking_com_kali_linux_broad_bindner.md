@@ -88,7 +88,7 @@ Fevereiro/2014 Primeira edição
 
 Novatec Editora Ltda.
 Rua Luís Antônio dos Santos 110
-02460-000 – São Paulo, SP – Brasil
+02460-000 - São Paulo, SP - Brasil
 Tel.: +55 11 2959-6529
 Email: novatec@novatec.com.br
 Site: www.novatec.com.br
@@ -159,8 +159,8 @@ Capítulo 2 ■ Download e instalação do Kali Linux
  Fazendo o download do Kali Linux
  Instalação no disco rígido
    Fazendo o boot do Kali pela primeira vez
-   Instalação – configurando os defaults
-   Instalação – configuração inicial da rede
+   Instalação - configurando os defaults
+   Instalação - configuração inicial da rede
    Senhas
    Configurando o relógio do sistema
    Particionamento dos discos
@@ -335,9 +335,9 @@ Capítulo 9 ■ Exploração de falhas (exploitation)
   NetCat (nc)
   Telnet (telnet)
   SSLScan (sslscan)
-  Arachni – Framework de scanner para segurança de aplicações web
+  Arachni - Framework de scanner para segurança de aplicações web
   Usando o scanner Arachni em aplicações web
-  w3af – Framework para auditoria e ataque de aplicações web
+  w3af - Framework para auditoria e ataque de aplicações web
   Usando o w3af
  Conclusão
 
@@ -408,10 +408,10 @@ Informações contidas neste capítulo:
 
 Visão geral do livro e principais pontos de aprendizagem
 Este livro conduz o leitor pelo ciclo de vida dos testes de invasão usando o live disk mais avançado
-disponível atualmente – o Kali Linux. Após esta breve introdução, o capítulo detalha a maneira de
+disponível atualmente - o Kali Linux. Após esta breve introdução, o capítulo detalha a maneira de
 localizar, fazer o download, instalar e personalizar o Kali Linux. A seguir, uma rápida introdução às
 configurações e aos parâmetros básicos do Linux garante que os comandos e as configurações básicas
-sejam compreendidos. O restante do livro é dedicado ao ciclo de vida dos testes de invasão – o
+sejam compreendidos. O restante do livro é dedicado ao ciclo de vida dos testes de invasão - o
 Reconhecimento (Reconnaissance), o Scanning, a Exploração de Falhas (Exploitation), a Preservação do
 Acesso e a Geração do Relatório. Embora haja centenas de diferentes ferramentas na distribuição Kali
 Linux, cada capítulo em que será discutido o ciclo de vida dos testes de invasão abordará as ferramentas
@@ -440,7 +440,7 @@ pentesters. Quem seria melhor para testar a configuração de segurança de um s
 pentester com um profundo conhecimento em administração de tecnologias de servidores? Isso vale
 também para outras áreas de especialização.
 Este livro apresentará o mundo dos testes de invasão e a ferramenta mais comum usada pelos
-pentesters – o Linux Live Disk – a esses profissionais da área técnica. Ao seguir os exemplos e as
+pentesters - o Linux Live Disk - a esses profissionais da área técnica. Ao seguir os exemplos e as
 instruções presentes nos próximos capítulos, esses profissionais estarão no caminho certo para
 compreender ou para se tornar um pentester.
 
@@ -657,7 +657,7 @@ acordo com a Offensive Security, a mudança no nome indica a reestruturação co
 Backtrack pela empresa. As grandes melhorias em relação às versões mais antigas da distribuição
 Backtrack mereceram uma mudança no nome, a qual indica que essa não é somente uma nova versão
 do Backtrack. O próprio Backtrack foi uma melhoria em relação a duas ferramentas de segurança das
-quais ele foi derivado – o White Hat and SLAX (WHAX) e o Auditor. Nessa linha, o Kali Linux é a
+quais ele foi derivado - o White Hat and SLAX (WHAX) e o Auditor. Nessa linha, o Kali Linux é a
 encarnação mais recente do estado em que se encontram as auditorias de segurança no mercado e as
 ferramentas para testes de invasão.
 
@@ -673,7 +673,7 @@ Referências
 
 
 Informações contidas neste capítulo:
- • Este capítulo explica como obter um dos toolkits mais eficientes para testes de invasão disponíveis –
+ • Este capítulo explica como obter um dos toolkits mais eficientes para testes de invasão disponíveis -
    o Kali Linux
 
 Visão geral do capítulo e principais pontos de aprendizagem
@@ -792,7 +792,7 @@ Offensive Security também enviará mensagens de atualizações e informações 
 
 ---
 
-                             Figura 2.1 – Fazendo o download do Kali Linux.
+                             Figura 2.1 - Fazendo o download do Kali Linux.
 Não se esqueça de selecionar a arquitetura correta (i386 = 32 bits, amd64 = 64 bits). As variantes
 alternativas do Kali Linux estão além do escopo deste livro; no entanto, se você quiser se familiarizar
 com o Kali ou se precisar de um ambiente isolado (sandboxed) para ter mais controle, o download do
@@ -835,21 +835,21 @@ com o sistema operacional Linux sem a necessidade de apagar o sistema operaciona
 instalado no disco rígido do computador.
 
 
-                                  Figura 2.2 – Menu de boot do live ISO.
+                                  Figura 2.2 - Menu de boot do live ISO.
 Outro tipo de instalação, que está além do escopo deste livro, é a Instalação com Síntese de Voz
 (Installation with Speech Synthesis). É um recurso novo no sistema operacional Kali e no Debian. A
 instalação pode ser controlada vocalmente se você tiver o hardware para suportar a síntese de voz. Este
 livro focará na instalação gráfica por enquanto; sendo assim, selecione Graphical Install (Instalação Gráfica)
 e tecle Enter.
 
-Instalação – configurando os defaults
+Instalação - configurando os defaults
 As próximas telas permitirão a seleção de um idioma default, a localização e o idioma do teclado para o
 sistema. Selecione as configurações adequadas e clique em Continue (Continuar) para prosseguir com a
 instalação. À medida que o computador avançar na instalação do Kali Linux, várias barras de
 progressão serão apresentadas na tela durante o processo. Selecionar as configurações default será
 adequado na maioria das telas de seleção.
 
-Instalação – configuração inicial da rede
+Instalação - configuração inicial da rede
 A figura 2.3 detalha a configuração inicial e os parâmetros básicos para a placa principal de interface de
 rede. Selecione um nome de host digitando na caixa de texto e clique em Continue. Os nomes de host
 
@@ -860,7 +860,7 @@ devem ser únicos, pois complicações com a rede podem ser resultantes de compu
 acidentalmente com o mesmo nome de host, embora localizados na mesma rede.
 
 
-                             Figura 2.3 – Configurando um nome de host.
+                             Figura 2.3 - Configurando um nome de host.
 Após selecionar um nome de host e clicar no botão Continue, a próxima tela solicitará o FQDN (Fully
 Qualified Domain Name) do computador. Isso é necessário para associar-se a ambientes com domínios,
 mas não será necessário na maioria dos ambientes de laboratório. Neste guia, o FQDN foi
@@ -874,9 +874,9 @@ o usuário e não deve ser facilmente adivinhada. Uma senha com dez ou mais cara
 Por exemplo, se o usuário já jogou futebol no ensino médio, então soccer22 não seria uma senha
 recomendável. As senhas podem ser constituídas a partir de variações de expressões comuns que
 facilitem ser lembradas. Aqui estão alguns exemplos de senhas robustas:
- • St0n(3)b@tt73 – “Stone Battle”
- • P@p3r0kCur5# – “Paper, Rock, Curse”
- • m!gh7yP@jjjama% h – “Mighty Pajamas”
+ • St0n(3)b@tt73 - “Stone Battle”
+ • P@p3r0kCur5# - “Paper, Rock, Curse”
+ • m!gh7yP@jjjama% h - “Mighty Pajamas”
 Ao digitar sua senha, ela aparecerá como uma série de pontos ou de asteriscos. Isso é normal e evita
 
 
@@ -886,7 +886,7 @@ que sua senha seja mostrada caso alguém possa estar vendo a tela do computador.
 mesma senha robusta duas vezes, clique no botão Continue para prosseguir com a instalação (Figura 2.4).
 
 
-                                Figura 2.4 – Configurando uma senha.
+                                Figura 2.4 - Configurando uma senha.
 
 Configurando o relógio do sistema
 A figura 2.5 mostra o prompt para selecionar um fuso horário. Clique no fuso horário apropriado e em
@@ -895,7 +895,7 @@ seguida no botão Continue para prosseguir com a instalação.
 
 ---
 
-                                     Figura 2.5 – Configure o relógio.
+                                     Figura 2.5 - Configure o relógio.
 
 Particionamento dos discos
 Existem algumas maneiras de configurar partições para instalar um sistema operacional Linux, sobre as
@@ -907,13 +907,13 @@ entanto é melhor investir tempo para analisar cada passo do assistente de insta
 A figura 2.6 mostra diferentes opções para o particionamento de discos rígidos durante a instalação. O
 LVM, ou Logical Volume Management, não é recomendado para instalação em laptops, pen drives ou
 cartões SD. O LVM serve para vários discos rígidos e é recomendado somente para usuários avançados.
-Você deve selecionar Guided – user entire disk (Guiado – disco inteiro do usuário). Clique no botão Continue
+Você deve selecionar Guided - user entire disk (Guiado - disco inteiro do usuário). Clique no botão Continue
 para avançar no processo de instalação.
 
 
 ---
 
-                                Figura 2.6 – Particionamento de discos-1.
+                                Figura 2.6 - Particionamento de discos-1.
 A figura 2.7 mostra o disco rígido selecionado para a instalação. De acordo com o hardware e a versão
 do Kali Linux, a experiência de instalação poderá ser um pouco diferente. O disco rígido será
 selecionado; se for aceito, clique no botão Continue para avançar no processo de instalação (Figura 2.8).
@@ -934,7 +934,7 @@ você. Clique no botão Continue para avançar no processo de instalação.
 
 ---
 
-                              Figura 2.7 – Particionamento de discos-2.
+                              Figura 2.7 - Particionamento de discos-2.
 A figura 2.10 mostra a última chance de efetuar uma revisão no particionamento antes de a
 configuração do disco rígido ser confirmada. Existem maneiras de alterar os tamanhos das partições no
 futuro caso seja necessário, porém fazer isso pode potencialmente causar extensos danos ao sistema
@@ -946,10 +946,10 @@ instalação.
 
 ---
 
-                               Figura 2.8 – Particionamento de discos-3.
+                               Figura 2.8 - Particionamento de discos-3.
 
 
-                               Figura 2.9 – Particionamento de discos-4.
+                               Figura 2.9 - Particionamento de discos-4.
 Após clicar em Continue no último prompt da seção de particionamento do assistente, a partição do disco
 rígido terá início. A figura 2.11 mostra que a instalação propriamente dita está ocorrendo nesse
 
@@ -960,12 +960,12 @@ instante. De acordo com o hardware que você tiver, esse processo pode levar som
 ou até mesmo uma hora ou mais.
 
 
-                             Figura 2.10 – Particionamento de discos-5.
+                             Figura 2.10 - Particionamento de discos-5.
 
 
 ---
 
-                           Figura 2.11 – A instalação está sendo realizada.
+                           Figura 2.11 - A instalação está sendo realizada.
 
 Configure o gerenciador de pacotes
 O gerenciador de pacotes (package manager) é uma parte muito importante da instalação do sistema
@@ -978,7 +978,7 @@ avançar no processo de instalação.
 
 ---
 
-                          Figura 2.12 – Configure o gerenciador de pacotes.
+                          Figura 2.12 - Configure o gerenciador de pacotes.
 Se estiver usando um proxy, insira as informações para configuração no local apropriado no próximo
 prompt do assistente ou deixe em branco, conforme mostrado na figura 2.13. Clique no botão Continue
 para avançar no processo de instalação.
@@ -986,7 +986,7 @@ para avançar no processo de instalação.
 
 ---
 
-                               Figura 2.13 – Configurando um proxy.
+                               Figura 2.13 - Configurando um proxy.
 
 Instalando o GRUB Loader
 O GRUB (Grand Unified Bootloader) corresponde à tela principal apresentada sempre que o
@@ -999,7 +999,7 @@ para você. Clique no botão Continue para avançar no processo de instalação.
 
 ---
 
-                               Figura 2.14 – Instalação do GRUB.
+                               Figura 2.14 - Instalação do GRUB.
 
 Concluindo a instalação
 Agora remova o disco do computador e faça o boot novamente. Ao ser solicitado, clique no botão
@@ -1008,7 +1008,7 @@ Continue para finalizar a instalação (Figura 2.15).
 
 ---
 
-                                   Figura 2.15 – Instalação completa.
+                                   Figura 2.15 - Instalação completa.
 Após o novo boot, a tela de boas-vindas será apresentada. Faça login como o usuário root usando a
 senha previamente definida durante o processo de instalação. Bem-vindo ao Kali Linux!
 
@@ -1034,7 +1034,7 @@ uma plataforma Linux será persistente.
 ---
 
 Windows (não persistente)
-Aplicação necessária – Win32 Disk Imager:
+Aplicação necessária - Win32 Disk Imager:
  http://sourceforge.net/projects/win32diskimager/
 Após fazer o download do Kali Linux ISO, insira um pen drive no computador e permita que ele seja
 automaticamente detectado pelo Windows, prestando atenção na letra atribuída ao drive. A seguir,
@@ -1064,7 +1064,7 @@ para que corresponda à identificação correta e remova qualquer número no fin
 
 ---
 
-                                     Figura 2.16 – USB montado.
+                                     Figura 2.16 - USB montado.
 Use o comando dd para transferir a imagem do Kali ISO para o dispositivo USB.
  dd if=kali_linux_image.iso of=/dev/sdb bs=512k
 Agora inicie o Gparted.
@@ -1158,8 +1158,8 @@ O utilitário APT para manipulação de pacotes, conhecido simplesmente como apt
 ferramenta de linha de comando leve e extremamente eficiente, usada para a instalação e a remoção de
 pacotes de software. O apt-get mantém o controle de tudo o que é instalado, juntamente com as
 dependências necessárias. As dependências correspondem aos pacotes de software adicionais
-necessários ao funcionamento adequado de outro software. Por exemplo, o Metasploit – o melhor
-amigo do pentester – depende de uma linguagem de programação em particular chamada Ruby. Se o
+necessários ao funcionamento adequado de outro software. Por exemplo, o Metasploit - o melhor
+amigo do pentester - depende de uma linguagem de programação em particular chamada Ruby. Se o
 Ruby não estiver instalado, o Metasploit não poderá nem mesmo ser iniciado; portanto o Ruby é uma
 dependência do Metasploit.
 O apt-get não só mantém um controle das dependências para os softwares instalados como também
@@ -1213,8 +1213,8 @@ seguir para fazer o upgrade do Kali:
 
 Remove
 O apt-get pode ser usado para reduzir a quantidade de memória usada por um sistema ou para remover
-um programa específico. Também é aconselhável que todos os pacotes que não estiverem em uso – que
-não estiverem servindo a nenhum propósito e não forem necessários ao seu sistema operacional – sejam
+um programa específico. Também é aconselhável que todos os pacotes que não estiverem em uso - que
+não estiverem servindo a nenhum propósito e não forem necessários ao seu sistema operacional - sejam
 removidos. Por exemplo, se a aplicação Leafpad não for necessária ao sistema, remova-a. Se a aplicação
 tiver de ser futuramente reinstalada, isso poderá ser feito, porém é melhor eliminar o que não for
 necessário. A sintaxe a seguir pode ser usada para remover uma aplicação ou um pacote:
@@ -1320,14 +1320,14 @@ aplicação Leafpad, a figura a seguir mostra que o pacote foi removido, mas que
 configuração continuam disponíveis (Figura 3.1).
 
 
-                                    Figura 3.1 – Leafpad removido.
+                                    Figura 3.1 - Leafpad removido.
 Após o comando dpkg -P leafpad ser executado, os arquivos de configuração do pacote também serão
 removidos. A figura 3.2 mostra a saída correspondente para o pacote de aplicação Leafpad após um
 purge completo do sistema.
 
 
-                                  Figura 3.2 – Leafpad após um purge.
-Para ver o status – instalado ou removido – de um software, use a sintaxe a seguir:
+                                  Figura 3.2 - Leafpad após um purge.
+Para ver o status - instalado ou removido - de um software, use a sintaxe a seguir:
  dpkg -l {nome_do_pacote}
 Mais informações detalhadas sobre o pacote instalado também podem ser apresentadas na tela por
 meio do comando a seguir:
@@ -1377,7 +1377,7 @@ A seguir, crie vários arquivos nesse diretório, que poderão ser usados para d
 Nesse caso, o sinal de maior (>) será usado para criar um arquivo contendo “Hello world”. Esse arquivo
 se chamará file1, e vários arquivos podem ser criados da mesma maneira usando a mesma sintaxe,
 porém mudando o número final. A criação dos arquivos dessa maneira também fará com que eles
-sejam movidos para o diretório especificado – nesse caso, o diretório tar-demo1:
+sejam movidos para o diretório especificado - nesse caso, o diretório tar-demo1:
  echo "Hello World" > tar-demo1/file1
  echo "Hello World" > tar-demo1/file2
 Vá para o diretório em que você deseja criar o tarball. Nesse caso, é o diretório tar-demo1:
@@ -1420,7 +1420,7 @@ para criar os arquivos deste exemplo:
  echo "Hello World" > tar-demo3/file1
 Vá para o diretório em que você deseja criar o tarball. Neste exemplo, o diretório tar-demo3 será usado:
  cd tar-demo3
-Gere um novo tarball com os arquivos contidos no diretório corrente. Isso é feito por meio das opções –
+Gere um novo tarball com os arquivos contidos no diretório corrente. Isso é feito por meio das opções -
 czf do comando tar. As opções do comando tar garantem que o tarball será criado corretamente. A
 opção c cria um novo arquivo, a opção z garante que os arquivos serão compactados (zipped) e a opção
 f indica que o nome após as opções (tarball-demo.tar.gz) será usado como o nome do novo arquivo.
@@ -1522,7 +1522,7 @@ A interconexão em rede é a maneira pela qual os computadores e outros disposit
 modernos se comunicam uns com os outros. Ela pode ser vista como os caminhos ou as vias entre os
 dispositivos, juntamente com regras e requisitos (protocolos), leis de tráfego (conjuntos de regras e
 configurações), equipes de manutenção (serviços de rede), aplicação de leis (segurança de rede) e vias
-fechadas e privadas (portas de firewall e restrições de protocolos – também como parte da segurança).
+fechadas e privadas (portas de firewall e restrições de protocolos - também como parte da segurança).
 Nas seções a seguir, o básico sobre a interconexão em rede será descrito, bem como os passos
 necessários para configurar a conexão com a rede de forma correta no Kali.
 A interconexão em rede é um assunto complexo, e este capítulo mal toca a superfície quando se trata
@@ -1546,12 +1546,12 @@ Placa de Interface de Rede) com fio está sendo mostrada na figura 4.1, e um mó
 4.2.
 
 
-                   Figura 4.1 – Network Interface Card (Placa de Interface de Rede).
+                   Figura 4.1 - Network Interface Card (Placa de Interface de Rede).
 
 
 ---
 
-                            Figura 4.2 – Placa de expansão de rede wireless.
+                            Figura 4.2 - Placa de expansão de rede wireless.
 Independentemente do meio, as redes físicas e wireless possuem os mesmos componentes básicos. Em
 primeiro lugar, há dois ou mais dispositivos que estarão se comunicando, por exemplo, o computador
 de Adam estará se comunicando com o computador de Bill. Para isso, eles precisarão dos equipamentos
@@ -1560,7 +1560,7 @@ mesma rede física baseada em CAT5 à qual Bill está conectado; no entanto Bill
 uma placa de rede wireless e Adam poderia estar usando uma placa de rede com fio, desde que os
 protocolos e as configurações para ambos estejam corretos. Para que isso funcione corretamente, tanto
 Adam quanto Bill devem se conectar ao mesmo segmento de rede usando um dispositivo, por exemplo,
-um roteador wireless, que conectará os diferentes tipos de meios físicos – com e sem fio.
+um roteador wireless, que conectará os diferentes tipos de meios físicos - com e sem fio.
 Existem vários componentes que fazem parte de uma rede moderna, e explicar a interconexão em rede
 de modo completo está muito além do escopo deste livro; entretanto o pequeno segmento de rede que
 será explicado será suficiente para descrever o modo de configurar uma placa de rede. Essa rede
@@ -1589,8 +1589,8 @@ os endereços IP privados que são comuns e que podem ser usados para redes inte
 porém não para a internet.
 
 
-                        Figura 4.3 – Exemplo de um pequeno segmento de rede.
-                                  Tabela 4.1 – Endereços IP privados
+                        Figura 4.3 - Exemplo de um pequeno segmento de rede.
+                                  Tabela 4.1 - Endereços IP privados
                                  Faixa de endereços IP      Quantidade de endereços possíveis
                               10.0.0.0 a 10.255.255.255     16.777.216
                               172.16.0.0 a 172.31.255.255   1.048.576
@@ -1647,7 +1647,7 @@ comunicação na rede à procura de um servidor DHCP, enviando uma solicitação
 busca desse servidor. O servidor responde ao cliente e atribui configurações de rede ao computador que
 estiver efetuando a solicitação. Isso inclui um endereço IP para o computador (bem, na realidade, é
 somente para a placa de rede, mas isso é somente um mero detalhe nessa explicação), o gateway
-default, o servidor de nomes – ou servidores de nomes – e a máscara de sub-rede default. Na maioria
+default, o servidor de nomes - ou servidores de nomes - e a máscara de sub-rede default. Na maioria
 dos casos, essa é uma ótima maneira de configurar sua placa de rede; entretanto, se você estiver
 realizando um teste de invasão, usar o DHCP para configurar sua placa de rede fará com que todos
 fiquem sabendo que você está entrando na rede, o que normalmente não é algo interessante.
@@ -1676,14 +1676,14 @@ maiores exigirão uma máscara de sub-rede diferente, que poderá ser calculada 
 serviços a uma quantidade específica de hosts na rede.
 
 Configurações default do Kali Linux
-Como explicado anteriormente, a maioria dos pentesters – os hackers white hat – não vai querer que
+Como explicado anteriormente, a maioria dos pentesters - os hackers white hat - não vai querer que
 suas placas de rede anunciem sua presença na rede assim que o computador se conectar. É exatamente
 isso o que fará o Kali Linux ao ser iniciado e se conectar com uma rede. Devemos tomar cuidado ao
 realizar um teste de invasão para evitar essa comunicação extra desnecessária desabilitando a placa de
 rede antes de conectá-la à rede. Em instalações personalizadas, incluindo a instalação em um disco
 rígido, em um pen drive ou em um cartão SD, essa configuração automática de rede pode ser alterada.
 Outra maneira de alterar isso é criando um live disk personalizado que será configurado para realizar a
-configuração manual da rede. Esses métodos serão discutidos no capítulo 5 – sobre a personalização do
+configuração manual da rede. Esses métodos serão discutidos no capítulo 5 - sobre a personalização do
 Kali Linux.
 
 
@@ -1700,15 +1700,15 @@ Network Connections (Conexões de rede).
 
 ---
 
-                    Figura 4.4 – Configuração de rede por meio da interface gráfica.
+                    Figura 4.4 - Configuração de rede por meio da interface gráfica.
 Ao clicar em Network Connections, a caixa de diálogo para conexões de rede será apresentada; a aba Wired
 (Com fio) estará selecionada por default (Figura 4.5). De modo alternativo, clicar com o botão da
 direita do mouse nos dois computadores na parte superior à direita da tela, como mostrado na figura
 4.6, e selecionar Edit Connections (Alterar conexões) permitirá o acesso à mesma caixa de diálogo. Na
 maioria dos casos, os computadores terão somente uma placa de rede a ser configurada; caso haja várias
 NICs instaladas, certifique-se de estar configurando a placa correta. Neste exemplo, configuraremos
-Wired connection 1 (Conexão com fio 1) – um nome que poderá ser alterado se você desejar algo mais
-significativo –, que corresponde à única placa de rede física do computador. A caixa de diálogo para
+Wired connection 1 (Conexão com fio 1) - um nome que poderá ser alterado se você desejar algo mais
+significativo -, que corresponde à única placa de rede física do computador. A caixa de diálogo para
 efetuar a configuração será apresentada depois que a conexão a ser alterada for selecionada e o botão
 Edit (Alterar) for clicado. Isso fará a caixa de diálogo Editing (Alteração) relativa à conexão ser
 apresentada, com a aba Wired selecionada por default. Essa aba mostra o endereço MAC (Media Access
@@ -1724,10 +1724,10 @@ corresponde à primeira placa do computador. A sequência de numeração para as
 inicia em 0, e não em 1, portanto a segunda placa do computador corresponderá à eth1.
 
 
-                Figura 4.5 – Configuração de rede com fio por meio da interface gráfica.
+                Figura 4.5 - Configuração de rede com fio por meio da interface gráfica.
 
 
-   Figura 4.6 – Alternativa para acessar a configuração de rede com fio por meio da interface gráfica.
+   Figura 4.6 - Alternativa para acessar a configuração de rede com fio por meio da interface gráfica.
 As configurações de Wired Ethernet podem ser feitas por meio da seleção da aba 802.1x Security
 (Segurança 802.1x), de IPv4 Settings (Configurações de IPv4) ou de IPv6 Settings (Configurações de IPv6).
 
@@ -1758,7 +1758,7 @@ lo, que corresponde ao loopback ou à interface interna. As configurações dess
 definidas por meio da interface gráfica. É fácil alterar esses parâmetros usando o prompt de comando.
 
 
-      Figura 4.7 – Visualizando o status das configurações de rede por meio da linha de comando.
+      Figura 4.7 - Visualizando o status das configurações de rede por meio da linha de comando.
 
 Ativando e desativando a interface
 
@@ -1834,11 +1834,11 @@ dos sistemas.
 
 ---
 
-          Figura 4.8 – Configuração da conexão de rede wireless por meio da interface gráfica.
+          Figura 4.8 - Configuração da conexão de rede wireless por meio da interface gráfica.
 
 Nome da conexão
 O parâmetro relativo ao nome da conexão apresenta Wireless connection seguido do número do adaptador
-sendo configurado como default – nesse caso, Wireless connection 1 (Conexão wireless 1). Esse nome pode
+sendo configurado como default - nesse caso, Wireless connection 1 (Conexão wireless 1). Esse nome pode
 ser alterado para algo mais significativo, por exemplo client1 wireless connection.
 
 Caixa de seleção para conexão automática (Connect Automatically)
@@ -2046,7 +2046,7 @@ serviço Pure-FTPd (Figura 4.9):
  apt-get install pure-ftpd-common pure-ftpd
 
 
-                       Figura 4.9 – Instalação do Pure-FTPd usando o apt-get.
+                       Figura 4.9 - Instalação do Pure-FTPd usando o apt-get.
 Esse comando irá instalar o serviço FTP. Algumas configurações menores serão necessárias para garantir
 a operação correta do Pure-FTP Server.
  cd /etc/pure-ftpd/conf
@@ -2114,14 +2114,14 @@ Administrando o serviço SSH a partir da GUI do Kali
 O servidor SSH está incluído na estrutura de arquivos principal da GUI do Kali e é acessado da mesma
 maneira que o servidor Apache é iniciado ou finalizado. Para acessar o menu do SSH, selecione
 Applications (Aplicações) na barra localizada na parte superior da tela do Kali. A partir do menu suspenso
-apresentado, selecione Kali Linux – uma ação que fará um submenu ser apresentado. Nesse menu,
+apresentado, selecione Kali Linux - uma ação que fará um submenu ser apresentado. Nesse menu,
 selecione System Services (Serviços do sistema), que, por sua vez, fará outro menu ser apresentado;
 selecione a opção SSH nesse menu. As opções para iniciar, finalizar e reiniciar o serviço SSH serão
 apresentadas.
 
 Administrando o servidor SSH a partir da linha de comando
 O servidor SSH também pode ser iniciado, finalizado e reiniciado a partir do prompt de comando. Para
-isso, a ação a ser realizada – start, stop ou restart – deve ser acrescentada após o comando
+isso, a ação a ser realizada - start, stop ou restart - deve ser acrescentada após o comando
 /etc/init.d/ssh, como mostrado nos comandos a seguir:
  /etc/init.d/ssh start
  /etc/init.d/ssh stop
@@ -2195,7 +2195,7 @@ drive dos sistemas.
 Um exemplo do processo de upgrade está sendo mostrado na figura 4.10.
 
 
-                                    Figura 4.10 – Processo de upgrade.
+                                    Figura 4.10 - Processo de upgrade.
 
 Adicionando um repositório-fonte
 Por padrão, o Kali verifica somente os software armazenados em seu próprio repositório em busca de
@@ -2204,7 +2204,7 @@ poderiam provocar falhas na funcionalidade do Kali. Por esse motivo, os updates 
 testados pelos desenvolvedores do Kali na Offensive Security antes de serem adicionados ao repositório
 oficial do Kali. Embora isso normalmente seja um aspecto positivo, há algumas aplicações de software
 que não estarão disponíveis quando usarmos os pontos de distribuição default do Kali, e poderá ser
-necessário adicionar outros repositórios – nesse exemplo, os repositórios do Debian serão acrescentados.
+necessário adicionar outros repositórios - nesse exemplo, os repositórios do Debian serão acrescentados.
 Usando o nano, ou um editor de textos diferente, abra o arquivo /etc/apt/sources.list:
  nano /etc/apt/sources.list
 Após o arquivo ser aberto, acrescente o comentário e as duas linhas a seguir no final.
@@ -2212,7 +2212,7 @@ Após o arquivo ser aberto, acrescente o comentário e as duas linhas a seguir n
  deb http://http.us.debian.org/debian stable main contrib non-free
  deb-src http://http.us.debian.org/debian stable main contrib non-free
 
-Agora salve o arquivo – no nano, isso é feito teclando Control + O (letra O). Mantenha o mesmo nome de
+Agora salve o arquivo - no nano, isso é feito teclando Control + O (letra O). Mantenha o mesmo nome de
 arquivo teclando Enter e, por fim, use Control + X para sair. Isso fará o repositório principal do Debian ser
 
 
@@ -2333,14 +2333,14 @@ o arquivo. A figura 5.1 mostra a caixa de diálogo de boas-vindas para a instala
 no botão Next (Próximo) para continuar.
 
 
-                               Figura 5.1 – Instalação do VirtualBox-1.
+                               Figura 5.1 - Instalação do VirtualBox-1.
 Este tutorial não discutirá a instalação personalizada nem as configurações avançadas. Aceite as opções
 default que estão na caixa de diálogo mostrada na figura 5.2 e clique no botão Next para continuar.
 
 
 ---
 
-                             Figura 5.2 – Instalação do VirtualBox-2.
+                             Figura 5.2 - Instalação do VirtualBox-2.
 1. Selecione as configurações para o seu ícone, conforme mostrado na figura 5.3, e clique no botão
   Next. Um aviso sobre a conexão de rede será mostrado (Figura 5.4); clique no botão Yes (Sim) para
   prosseguir.
@@ -2348,10 +2348,10 @@ default que estão na caixa de diálogo mostrada na figura 5.2 e clique no botã
 
 ---
 
-Figura 5.3 – Instalação do VirtualBox-3.
+Figura 5.3 - Instalação do VirtualBox-3.
 
 
-Figura 5.4 – Instalação do VirtualBox-4.
+Figura 5.4 - Instalação do VirtualBox-4.
 
 
 ---
@@ -2361,19 +2361,19 @@ Figura 5.4 – Instalação do VirtualBox-4.
    continuar.
 
 
-                                Figura 5.5 – Instalação do VirtualBox-5.
+                                Figura 5.5 - Instalação do VirtualBox-5.
  3. Durante a instalação, uma pergunta para saber se o usuário deseja instalar device drivers poderá ser
    apresentada, como mostrado na figura 5.6. Clique no botão Install para prosseguir, quando
    solicitado. (Isso poderá ocorrer várias vezes).
 
 
-                                Figura 5.6 – Instalação do VirtualBox-6.
+                                Figura 5.6 - Instalação do VirtualBox-6.
 Depois de concluída a instalação, clique no botão Finish (Concluir), como mostrado na figura 5.7.
 
 
 ---
 
-                               Figura 5.7 – Instalação do VirtualBox-7.
+                               Figura 5.7 - Instalação do VirtualBox-7.
 A instalação do VirtualBox agora estará concluída e, se a opção Start Oracle VM VirtualBox 4.2.16 after
 installation (Iniciar o Oracle VM VirtualBox 4.2.16 após a instalação) estiver selecionada, o VirtualBox
 será aberto e o VirtualBox Manager (Gerenciador do VirtualBox) será apresentado, como mostrado na
@@ -2383,7 +2383,7 @@ fechado.
 
 ---
 
-                                Figura 5.8 – Boas-vindas do VirtualBox.
+                                Figura 5.8 - Boas-vindas do VirtualBox.
 Abra um navegador web e acesse https://www.virtualbox.org/wiki/Downloads novamente. Faça o
 download do VirtualBox 4.2.16 Oracle VM VirtualBox Extension Pack. Após ter concluído o
 download, dê um clique duplo no arquivo para executá-lo (Figura 5.9).
@@ -2394,7 +2394,7 @@ para continuar. Feche o VirtualBox quando a instalação estiver concluída.
 
 ---
 
-                                Figura 5.9 – Extensões do VirtualBox.
+                                Figura 5.9 - Extensões do VirtualBox.
 
 Configurando uma plataforma de ataque virtual
 Para manter tudo em um laboratório virtualizado, criar uma VM que possa executar o Kali Linux é uma
@@ -2416,19 +2416,19 @@ Abra o VirtualBox e clique no botão New (Novo), como mostrado na fig. 5.10.
 
 ---
 
-Figura 5.10 – Crie uma VM.
+Figura 5.10 - Crie uma VM.
 
 
 ---
 
-                                  Figura 5.11 – Ajustes na memória.
+                                  Figura 5.11 - Ajustes na memória.
 3. Clique no botão Next para continuar. Em seguida, selecione a opção Create a virtual hard drive now (Criar
   um disco rígido virtual agora) e clique no botão Create (Criar) para prosseguir (Figura 5.12).
 
 
 ---
 
-                                 Figura 5.12 – Criação do disco rígido.
+                                 Figura 5.12 - Criação do disco rígido.
 4. Selecione a opção VMDK (Virtual Machine Disk) e clique no botão Next para prosseguir (Figura 5.13).
 5. Selecione a opção Fixed Size (Tamanho fixo) e clique no botão Next (Figura 5.14).
 6. O nome e o tamanho default do disco rígido são apropriados para um cenário com live disk; no
@@ -2445,22 +2445,22 @@ Configure o parâmetro Shared Clipboard (Clipboard compartilhado) para Bidirecti
 
 ---
 
-Figura 5.13 – Finalizando a criação do disco rígido.
+Figura 5.13 - Finalizando a criação do disco rígido.
 
 
 ---
 
-Figura 5.14 – Tamanho do disco rígido.
+Figura 5.14 - Tamanho do disco rígido.
 
 
 ---
 
-Figura 5.15 – Localização do disco rígido.
+Figura 5.15 - Localização do disco rígido.
 
 
 ---
 
-                              Figura 5.16 – Configurações avançadas.
+                              Figura 5.16 - Configurações avançadas.
 8. Selecione o botão Storage (Armazenamento) no menu à esquerda. Clique no ícone de “CD”
   Controller: IDE (Controlador: IDE) marcado como Empty (Vazio). Marque a caixa de seleção Live CD/DVD,
   que está do lado direito da janela. Navegue até o arquivo ISO do Kali Linux que foi baixado (Figura
@@ -2469,14 +2469,14 @@ Figura 5.15 – Localização do disco rígido.
 
 ---
 
-                            Figura 5.17 – Configurações do live disk.
+                            Figura 5.17 - Configurações do live disk.
 9. Selecione o botão Network (Rede) no menu à esquerda e altere a opção Attached to (Conectado a)
   para Host-only Adapter (Figura 5.18).
 
 
 ---
 
-                       Figura 5.18 – Configurações de rede do Metasploitable2.
+                       Figura 5.18 - Configurações de rede do Metasploitable2.
  10. Clique no botão OK para salvar as alterações e volte para a tela principal. A criação da máquina
   virtual Kali Linux foi concluída.
 
@@ -2500,18 +2500,18 @@ site Sourceforge.net para procurar o Metasploitable. Nos resultados, clique no l
 Metasploitable2. Clique no botão de download para obter a VM (Figura 5.19).
 
 
-                             Figura 5.19 – Download do Metasploitable2.
+                             Figura 5.19 - Download do Metasploitable2.
 Salve o download em um local que você se lembre. Se o VirtualBox não estiver aberto, inicie-o (Figura
 5.20).
 
 
-                                  Figura 5.20 – Abra o VirtualBox.
+                                  Figura 5.20 - Abra o VirtualBox.
 Clique no botão New (Novo) para criar uma VM (Figura 5.21).
 
 
 ---
 
-                             Figura 5.21 – Crie uma nova máquina virtual.
+                             Figura 5.21 - Crie uma nova máquina virtual.
  1. Chame a máquina virtual de Metasploitable2 e configure Type (Tipo) para Linux. Configure Version
    (Versão) para Ubuntu e clique no botão Next para prosseguir.
  2.   (Fora    do    Assistente)   Extraia   o   conteúdo     do    arquivo    Metasploitable2.zip   para
@@ -2527,19 +2527,19 @@ VMs/Metasploitable2/Metasploitable.vmdk (Figura 5.23).
 
 ---
 
-Figura 5.22 – Configure a RAM.
+Figura 5.22 - Configure a RAM.
 
 
 ---
 
-                              Figura 5.23 – Criação do disco rígido.
+                              Figura 5.23 - Criação do disco rígido.
 Clique no botão Create (Criar) para continuar, mas NÃO inicie a máquina virtual nesse momento
 (Figura 5.24).
 
 
 ---
 
-                         Figura 5.24 – Configuração completa do Metasploitable2.
+                         Figura 5.24 - Configuração completa do Metasploitable2.
 Selecione a máquina virtual e, em seguida, clique no botão Settings (Configurações). Clique em General
 (Geral) no menu à esquerda. Em seguida, selecione a aba Advanced (Figura 5.25).
 Configure o parâmetro Shared Clipboard (Clipboard compartilhado) para Bidirectional (Bidirecional), e
@@ -2554,7 +2554,7 @@ Faça login no Metasploitable2 usando as credenciais default:
 
 ---
 
-                       Figura 5.25 – Configurações avançadas do Metasploitable2.
+                       Figura 5.25 - Configurações avançadas do Metasploitable2.
 O primeiro aspecto a ser observado é que não há nenhuma GUI por padrão. O Metasploitable não foi
 criado para ser usado como uma plataforma de ataque. Fazer o login no Metasploitable nesse instante
 serve para verificar se ele está funcionando e para determinar o seu endereço IP para que ele possa ser
@@ -2570,19 +2570,19 @@ Metasploitable2 (Figura 5.27).
 
 ---
 
-Figura 5.26 – Configurações de rede do Metasploitable2.
+Figura 5.26 - Configurações de rede do Metasploitable2.
 
 
 ---
 
-                                    Figura 5.27 – Interface web.
+                                    Figura 5.27 - Interface web.
 
 Ampliação de seu laboratório
 Com o Projeto Metasploitable2, o aprendiz não só obtém um computador vulnerável para atacar, como
 também terá uma porta de acesso a outras áreas de treinamento. A máquina virtual propriamente dita é
 vulnerável a explorações de falha locais e remotas por natureza; porém os web services a seguir
 acompanham o Metasploitable:
- 1. phpMyAdmin – administrar o SQL por meio de uma interface web não é fácil, porém o phpMyAdmin
+ 1. phpMyAdmin - administrar o SQL por meio de uma interface web não é fácil, porém o phpMyAdmin
    é uma aplicação web gratuita, criada em PHP, que simplifica a administração dos bancos de dados
    MySQL conectados aos servidores web. O acesso direto ao banco de dados MySQL é possível por
    meio do phpMyAdmin, e, sendo assim, ele é um alvo atraente para um pentester e igualmente para
@@ -2604,17 +2604,17 @@ acompanham o Metasploitable:
    recentes. Mais informações estão disponíveis em http://sourceforge.net/projects/mutillidae/ e em
    http://www.youtube.com/user/webpwnized.
 
- 3. WebDAV – As pessoas que operam e administram sites podem precisar fazer alterações nos conteúdos
+ 3. WebDAV - As pessoas que operam e administram sites podem precisar fazer alterações nos conteúdos
    desses sites. O WebDAV é uma extensão do pacote de protocolo HTTP que permite efetuar
    modificações em sites remotamente. O WebDAV usa uma combinação de nome de usuário e de
    senha para administrar o acesso das contas. Se a configuração do WebDAV não for segura, é
    possível aos invasores desfigurar os sites, carregar arquivos maliciosos e usar o servidor web com
    outras intenções maliciosas. Mais informações estão disponíveis em http://www.webdav.org/.
- 4. DVWA – O Damn Vulnerable Web App é outra plataforma de treinamento para profissionais da área
+ 4. DVWA - O Damn Vulnerable Web App é outra plataforma de treinamento para profissionais da área
    de segurança, além de professores, alunos e pesquisadores, para o aprendizado a respeito de
    segurança de aplicações web e, como o nome indica, é uma aplicação muito vulnerável. Mais
    informações estão disponíveis em http://www.dvwa.co.uk e em http://sourceforge.net/projects/dvwa.
- 5. TWiki – É uma aplicação web 2.0 de nível corporativo, que é um frontend para wiki e colaboração. O
+ 5. TWiki - É uma aplicação web 2.0 de nível corporativo, que é um frontend para wiki e colaboração. O
    TWiki é robusto e já teve diversas versões disponibilizadas após a versão que acompanha o
    Metasploitable. A quantidade de vulnerabilidades na versão instalada na máquina virtual
    Metasploitable é impressionante. O TWiki oferece uma perspectiva mais ampla ao pentester em
@@ -2642,15 +2642,15 @@ módulos:
 
 ---
 
- • SQLol – uma plataforma de treinamento para injeção de SQL que permite a personalização de
+ • SQLol - uma plataforma de treinamento para injeção de SQL que permite a personalização de
    caracteres e sequências explicitamente listados; a plataforma é focada em desafios, com o intuito de
    aprimorar as habilidades básicas necessárias para testar e passar pelos recursos de segurança do SQL.
- • XMLmao – similar ao SQLol, o XMLmao é um ambiente de treinamento configurável para injeção de
+ • XMLmao - similar ao SQLol, o XMLmao é um ambiente de treinamento configurável para injeção de
    XML.
- • Shelol – um ambiente de treinamento configurável para shell de sistemas operacionais, para efetuar
+ • Shelol - um ambiente de treinamento configurável para shell de sistemas operacionais, para efetuar
    injeção de comandos.
- • XSSmh – ferramenta de treinamento para Cross-site Scripting.
- • CryptOMG – projeto desenvolvido em conjunto com Andrew Jordan, o CryptOMG é uma aplicação
+ • XSSmh - ferramenta de treinamento para Cross-site Scripting.
+ • CryptOMG - projeto desenvolvido em conjunto com Andrew Jordan, o CryptOMG é uma aplicação
    web configurável do tipo "capture the flag" (capture a bandeira), projetado para realizar a exploração
    de falhas comuns na implementação de criptografia. Mais informações estão disponíveis em
    https://github.com/SpiderLabs/MCIR.
@@ -2665,7 +2665,7 @@ botão Network (Rede) à esquerda e altere o parâmetro Attached to (Conectado a
 
 ---
 
-                            Figura 5.28 – Modificando o adaptador de rede.
+                            Figura 5.28 - Modificando o adaptador de rede.
 O parâmetro Name (Nome) corresponde à placa de rede com a qual a placa de interface de rede virtual
 estará conectada. Resultados individuais poderão estar diferentes daqueles mostrados na figura 5.28.
 Clique no botão OK para concluir e fechar a janela. Se a máquina virtual Metasploitable2 ainda não estiver
@@ -2699,7 +2699,7 @@ Altere a página web do Metasploitable2 para facilitar o acesso:
 Adicione o MCIR à lista de páginas web, como mostrado na figura 5.29.
 
 
-                                     Figura 5.29 – Shell de comandos.
+                                     Figura 5.29 - Shell de comandos.
 Tecle CTRL+X para sair e salve o arquivo. O framework MCIR não está totalmente carregado. As
 configurações de rede devem ser restauradas. Abra a janela do VirtualBox Manager, selecione a
 máquina virtual Metasploitable2 e clique no botão Settings na barra de menu. Como feito anteriormente,
@@ -2721,12 +2721,12 @@ http://{endereço_IP_da_máquina_virtual_Metasploitable2}/.
 Como podemos ver na figura 5.30, o link para o MCIR está disponível no navegador web (Figura 5.31).
 
 
-                               Figura 5.30 – Interface web do Metasploitable.
+                               Figura 5.30 - Interface web do Metasploitable.
 
 
 ---
 
-                           Figura 5.31 – Magical Code Injection Rainbow.
+                           Figura 5.31 - Magical Code Injection Rainbow.
 Use essa metodologia para atualizar e para acrescentar novos conteúdos na máquina virtual
 Metasploitable2. Posteriormente, este livro discutirá o uso do Metasploit Framework para explorar as
 falhas dessa máquina virtual.
@@ -2797,11 +2797,11 @@ fases do ciclo de vida, como também terá uma visão mais detalhada de quais fe
 chance de serem usadas em primeiro lugar pelos profissionais dessa área de segurança. Esses capítulos
 apresentarão as ferramentas ao leitor, porém não serão feitas descrições exaustivas; na realidade, elas
 mal tocam a superfície quando se trata daquilo que cada ferramenta ou técnica é capaz de fazer para
-auxiliar na condução desses tipos de testes. Muitas das ferramentas ou técnicas possuem livros inteiros –
-às vezes, vários livros – dedicados ao seu uso correto e às suas aplicações.
+auxiliar na condução desses tipos de testes. Muitas das ferramentas ou técnicas possuem livros inteiros -
+às vezes, vários livros - dedicados ao seu uso correto e às suas aplicações.
 
 
-                           Figura 6.1 – O ciclo de vida dos testes de invasão.
+                           Figura 6.1 - O ciclo de vida dos testes de invasão.
 
 Fase 1: Reconhecimento
 Em uma pequena sala mal iluminada, analistas e oficiais esquadrinham e inspecionam mapas do
@@ -2972,7 +2972,7 @@ que o wget não irá copiar a programação de páginas do lado do servidor como
 meio de um script PHP.
  wget -m -p -E -k -K -np -v http://foo.com
 Nesse exemplo, o comando wget é seguido de várias opções. Como ocorre com outras ferramentas no
-Kali Linux, o manual do usuário – ou man pages – pode ser consultado para determinar a melhor
+Kali Linux, o manual do usuário - ou man pages - pode ser consultado para determinar a melhor
 maneira de usar a ferramenta nas atividades que estão sendo conduzidas. Para visualizar as man pages
 do wget, utilize o comando a seguir:
  man wget
@@ -3014,10 +3014,10 @@ compor a string de pesquisa a ser usada. A utilização de mais de um campo torn
 mais complexa; por outro lado, ela ficará mais focada.
 
 
-                         Figura 7.1 – Página de pesquisa avançada do Google.
+                         Figura 7.1 - Página de pesquisa avançada do Google.
 
 
-                       Figura 7.2 – Pesquisa avançada do Google (continuação).
+                       Figura 7.2 - Pesquisa avançada do Google (continuação).
 
 
 ---
@@ -3254,8 +3254,8 @@ ou de um pentester. Se o pentester puder interagir socialmente com os indivíduo
 de redes sociais, será muito mais eficiente se ele tiver uma persona que puder afirmar que já trabalhou
 na empresa-alvo ou que frequentou a mesma faculdade que o CEO com quem o pentester está
 tentando se conectar no LinkedIn. Obviamente, o pentester deve evitar assumir totalmente a
-identidade de uma pessoa de verdade – um ato que poderia levar algumas pessoas a acreditar que
-houve um roubo de identidade –, mas não é incomum que duas pessoas tenham nomes semelhantes.
+identidade de uma pessoa de verdade - um ato que poderia levar algumas pessoas a acreditar que
+houve um roubo de identidade -, mas não é incomum que duas pessoas tenham nomes semelhantes.
 Por exemplo, criar uma persona fictícia chamada John Smith que frequentou a Wisconsin University e
 que tenha um passado totalmente inventado não é o mesmo que roubar a identidade do verdadeiro
 John Smith que passou por essa universidade. De qualquer maneira, certifique-se de que sua persona
@@ -3307,13 +3307,13 @@ essa solicitação e armazenou a resposta em cache ou se o Google estiver regist
 de nome, o endereço IP poderá ser imediatamente retornado. Se esse servidor de nome não tiver a
 informação em cache ou armazenada, ele perguntará ao próximo servidor. Se o próximo servidor acima
 na hierarquia tiver a informação, ela será retornada; do contrário, esse processo continuará até que a
-solicitação chegue ao servidor de nome TLD – nesse caso, o servidor de nome para .com.
+solicitação chegue ao servidor de nome TLD - nesse caso, o servidor de nome para .com.
 Os servidores de nome contêm diversas informações úteis, muito mais do que as páginas web. Por
 exemplo, o servidor de nome contém o servidor de emails do domínio, ou o Registro MX, outros
 computadores nomeados, ou Registros A, além de outras informações úteis.
 
 
-                             Figura 7.3 – Filtrando as pesquisas do Google.
+                             Figura 7.3 - Filtrando as pesquisas do Google.
 
 
 ---
@@ -3366,7 +3366,7 @@ exemplo define o servidor de nome para que seja um dos servidores de nome do Goo
   > server 216.239.32.10
 Há vários registros que podem ser descobertos usando o nslookup. Vários dos tipos principais de registros
 estão definidos na tabela 7.1.
-                                      Tabela 7.1 – Tipos básicos de registros do DNS
+                                      Tabela 7.1 - Tipos básicos de registros do DNS
                             Tipo de registro Porta default                           Tipo de servidor
                             mx               25            Mail (email)
                             txt              n/a            Mensagens de texto usadas para observações legíveis aos seres humanos
@@ -3510,7 +3510,7 @@ lado da conexão. No passado, muitas pessoas relacionavam essa comunicação a u
 Embora essa analogia seja um pouco antiquada, ela ilustra um handshake de três vias (three-way
 handshake), pois é semelhante à conexão para iniciar uma comunicação TCP. Na comunicação TCP, a
 comunicação é iniciada pelo computador que estiver tentando se conectar com outro computador,
-ocorrendo a troca de três pacotes. Isso é feito por meio do envio de um pacote – ou solicitação –
+ocorrendo a troca de três pacotes. Isso é feito por meio do envio de um pacote - ou solicitação -
 marcado com a flag de sincronização, que recebe o nome de SYN. Se o computador na extremidade
 receptora da comunicação estiver disponível, ele responderá a quem enviou, com um pacote contendo
 as flags de confirmação e de sincronização ligadas; esse pacote TCP é conhecido como SYN/ACK. Por
@@ -3519,7 +3519,7 @@ para concluir a sincronização e estabelecer a conexão. Essa comunicação oco
 figura 8.1.
 
 
-                                Figura 8.1 – Handshake de três vias do TCP.
+                                Figura 8.1 - Handshake de três vias do TCP.
 O handshake de três vias corresponde ao método pelo qual todas as comunicações TCP devidamente
 
 
@@ -3592,7 +3592,7 @@ presentes no sistema-alvo (Figura 8.2).
                                                       10       Host proibido administrativamente
                                                       13       Comunicação proibida administrativamente
                            8 (Echo Request)           0        Solicitação de eco
-                                            Figura 8.2 – Tabela do ICMP.
+                                            Figura 8.2 - Tabela do ICMP.
 
 Ping
 O Ping provavelmente é o comando baseado em ICMP usado com mais frequência pelo usuário final
@@ -3631,7 +3631,7 @@ Host inacessível
 Traceroute
 O traceroute usa o comando Ping baseado em ICMP para descobrir quantos dispositivos diferentes
 existem entre o computador que iniciou o traceroute e o alvo. Esse comando funciona por meio da
-manipulação do tempo de vida (time to live) – ou TTL – dos pacotes. O TTL corresponde à quantidade
+manipulação do tempo de vida (time to live) - ou TTL - dos pacotes. O TTL corresponde à quantidade
 de vezes que um pacote pode ser retransmitido pelo próximo host encontrado na rede, ou seja, aos hops
 (saltos). O comando é iniciado com um valor de TTL igual a 1, indicando que o pacote pode ir no
 máximo até o próximo dispositivo existente entre quem iniciou o comando e o alvo. O dispositivo
@@ -3690,12 +3690,12 @@ típico, porém bem básico, está sendo mostrado na figura 8.3, a qual detalha 
 informam à ferramenta de scanning o que deverá ser feito.
 
 
-                              Figura 8.3 – Estrutura do comando Nmap.
+                              Figura 8.3 - Estrutura do comando Nmap.
 Com exceção do próprio comando Nmap, cada uma dessas opções será discutida com mais detalhes nas
 seções seguintes. As opções do comando informam ao sistema operacional que programa deve ser
-executado – nesse caso, o Nmap – e o que é especificamente necessário para executar a tarefa de forma
-adequada. Após o comando, encontram-se as opções de scanning – nesse caso, o scan stealth está sendo
-indicado pela opção –sS. A seguir, estão as opções relacionadas aos tempos, que informam à ferramenta
+executado - nesse caso, o Nmap - e o que é especificamente necessário para executar a tarefa de forma
+adequada. Após o comando, encontram-se as opções de scanning - nesse caso, o scan stealth está sendo
+indicado pela opção -sS. A seguir, estão as opções relacionadas aos tempos, que informam à ferramenta
 o volume de tráfego a ser gerado e com que velocidade, determinando, em última instância, se o scan
 será executado de forma rápida ou lenta. Nesse exemplo, a opção para o alvo vem depois das opções
 
@@ -3754,7 +3754,7 @@ sistema-alvo estiver configurado indevidamente, o scan poderá passar totalmente
 nos dias de hoje. Essa técnica de scan está sendo mostrada na figura 8.4.
 
 
-                                       Figura 8.4 – Scan stealth.
+                                       Figura 8.4 - Scan stealth.
 
 -sT Scan TCP connect
 
@@ -3769,7 +3769,7 @@ log na maioria dos sistemas, porém geralmente pode fornecer mais informações 
 
 ---
 
-                                    Figura 8.5 – Scan TCP connect.
+                                    Figura 8.5 - Scan TCP connect.
 
 -sU Scan UDP
 
@@ -3786,7 +3786,7 @@ indicando vários erros de inacessibilidade (Figura 8.6).
 
 ---
 
-                                       Figura 8.6 – Scan UDP.
+                                       Figura 8.6 - Scan UDP.
 
 -sA scan ACK
 
@@ -3800,7 +3800,7 @@ recebida ou se uma resposta ICMP com tipo igual a 3 e código igual a 1, 2, 3, 9
 inacessibilidade) for recebida, isso indicará que a porta está sendo filtrada (Figura 8.7).
 
 
-                                       Figura 8.7 – Scan ACK.
+                                       Figura 8.7 - Scan ACK.
 
 Templates de tempo
 Conforme mencionado anteriormente, o template default de tempo usado pelo Nmap, caso nenhuma
@@ -3852,7 +3852,7 @@ disponível.
 
 ---
 
-                                      Figura 8.8 – Scan Paranoid.
+                                      Figura 8.8 - Scan Paranoid.
 
 -T1 Sneaky
 
@@ -3865,7 +3865,7 @@ de velocidade entre esse scan e o scan -T0 está sendo mostrada na figura 8.9, e
 foi reduzido para 8.331 segundos, ou seja, 138 minutos.
 
 
-                                       Figura 8.9 – Scan Sneaky.
+                                       Figura 8.9 - Scan Sneaky.
 
 -T2 Polite
 
@@ -3884,7 +3884,7 @@ ver que o tempo total do scanning foi reduzido para 544 segundos, ou seja, apena
 8.10).
 
 
-                                      Figura 8.10 – Scan Polite.
+                                      Figura 8.10 - Scan Polite.
 
 -T3 Normal
 
@@ -3895,7 +3895,7 @@ simultaneamente, o que aumentará a velocidade em geral. Esse scan possui um sca
 pode aumentar até max_scan_delay, que é igual a 1 segundo, o que significa que o scan ocorrerá o mais
 rápido possível, porém, após 1 segundo, o scan da porta corrente será abandonado e a próxima porta
 será verificada. O scan normal realizou o scan das portas selecionadas no computador-alvo em 547
-segundos – mais lento que o scan polite nesse exemplo, embora esse normalmente não seja o caso. Essa
+segundos - mais lento que o scan polite nesse exemplo, embora esse normalmente não seja o caso. Essa
 é uma das peculiaridades do scanning: às vezes, algumas tarefas se alinham e um scan que deveria ser
 mais lento acaba não sendo tão lento assim. É por isso que um pentester competente deve estar
 familiarizado com todas as ferramentas de seu arsenal a fim de saber qual é a melhor maneira de
@@ -3904,7 +3904,7 @@ empregá-las (Figura 8.11).
 
 ---
 
-                                    Figura 8.11 – Scan Normal.
+                                    Figura 8.11 - Scan Normal.
 
 -T4 Aggressive
 
@@ -3917,7 +3917,7 @@ portas da máquina virtual Metasploit em apenas 477 segundos, ou seja, pouco men
 (Figura 8.12).
 
 
-                                   Figura 8.12 – Scan Aggressive.
+                                   Figura 8.12 - Scan Aggressive.
 
 -T5 Insane
 
@@ -3932,7 +3932,7 @@ entanto os resultados foram um pouco diferentes em relação aos demais scans re
 
 ---
 
-                                       Figura 8.13 – Scan Insane.
+                                       Figura 8.13 - Scan Insane.
 
 Identificação do alvo
 A identificação do alvo ou do conjunto de alvos em um scan Nmap corresponde a uma das partes mais
@@ -3963,7 +3963,7 @@ endereçamento CIDR.
  nmap 10.0.2.1/24
 
 
-                                  Figura 8.14 – Conversão CIDR.
+                                  Figura 8.14 - Conversão CIDR.
 Um conjunto menor de endereços IP pode ser identificado no scan por meio da definição de uma faixa
 menor de IPs. Neste exemplo, os 100 primeiros endereços serão verificados:
  nmap 10.0.2.1-100
@@ -4064,14 +4064,14 @@ Após a instalação do Nessus ter sido concluída conforme descrito no capítul
 por meio do comando a seguir:
  /etc/init.d/nessusd start
 Depois que o scanner for iniciado, abra o navegador web IceWeasel e acesse https://localhost:8834/. O
-número após os dois pontos – nesse caso é o 8834 – diz ao navegador para se conectar ao computador
+número após os dois pontos - nesse caso é o 8834 - diz ao navegador para se conectar ao computador
 local por meio da porta 8834, em vez de usar a porta default. É importante verificar a documentação do
 Nessus para garantir que a porta correta está sendo usada para se conectar ao console; algumas versões
 podem usar uma porta diferente. Para os navegadores web, a porta default é a 80, e um usuário que
 tentar acessar o kali-local na porta default 80 vai encontrá-la fechada ou oferecendo serviços que não
 são compatíveis com o navegador web IceWeasel.
-Fazer a conexão com essa porta usando o navegador IceWeasel fará o Nessus Console – uma GUI que
-permite ao usuário definir, configurar e executar o scan usando a ferramenta Nessus – ser aberto. A
+Fazer a conexão com essa porta usando o navegador IceWeasel fará o Nessus Console - uma GUI que
+permite ao usuário definir, configurar e executar o scan usando a ferramenta Nessus - ser aberto. A
 primeira página a ser apresentada será a janela que permite ao usuário fazer o registro da aplicação,
 como pode ser visto na figura 8.15. O registro é necessário para obter as atualizações, os arquivos e
 outras informações a respeito do Nessus Home Feed. Se um código de ativação válido para o Nessus
@@ -4080,10 +4080,10 @@ não estiver disponível, clique no botão Get started (Iniciar) para dar iníci
 
 ---
 
-                                     Figura 8.15 – Registro do Nessus.
+                                     Figura 8.15 - Registro do Nessus.
 A próxima tela é usada para configurar a conta inicial de administrador. Crie essa conta preenchendo os
 campos de login e de senha nessa página e fazendo a confirmação da senha (Figura 8.16). Neste
-exemplo, o nome do usuário será definido como Nessus e a senha Nessus será usada – uma combinação
+exemplo, o nome do usuário será definido como Nessus e a senha Nessus será usada - uma combinação
 que deve ser empregada somente em ambientes de teste. Selecione um nome de usuário e uma senha
 que atendam aos requisitos do sistema e clique no botão Next (Próximo).
 A próxima tela é usada para ativar o Nessus Feed Plugin. O botão I already have an Activation Code (Já tenho
@@ -4103,7 +4103,7 @@ Continue para fazer o login. Com isso conclui a configuração inicial do Nessus
 
 ---
 
-                             Figura 8.16 – Configuração inicial do Nessus.
+                             Figura 8.16 - Configuração inicial do Nessus.
 
 Scanning com o Nessus
 Após instalar o Nessus, é importante saber como configurar e fazer o scanning de uma rede ou de um
@@ -4127,7 +4127,7 @@ todos os campos desse formulário forem preenchidos, clique no botão Create Use
 
 ---
 
-                                      Figura 8.17 – Novo usuário.
+                                      Figura 8.17 - Novo usuário.
 
 Configuração
 A aba de configuração permite ao usuário ajustar melhor o Nessus Scanner para que ele funcione do
@@ -4166,24 +4166,24 @@ serão mostrados, como podemos ver na figura 8.19. O número que está no retân
 nesse caso é igual a 103, indica a quantidade de verificações existentes nesse grupo.
 
 
-                                  Figura 8.18 – Credenciais no Nessus.
+                                  Figura 8.18 - Credenciais no Nessus.
 
 
 ---
 
-                                    Figura 8.19 – Removendo o DoS.
+                                    Figura 8.19 - Removendo o DoS.
 Após fazer essas alterações, retorne à aba General Settings (Configurações gerais) e insira um nome novo
 no campo Name (Nome); nesse caso, No DoS foi inserido nesse campo (Figura 8.20) e o botão Update
 (Atualizar) foi selecionado. Depois que a aplicação for atualizada, essa nova Política estará disponível na
 lista Policies (Políticas), como mostrado na Figura 8.21.
 
 
-                                Figura 8.20 – Renomeando para No DoS.
+                                Figura 8.20 - Renomeando para No DoS.
 
 
 ---
 
-                        Figura 8.21 – Entrada correspondente a No DoS na lista.
+                        Figura 8.21 - Entrada correspondente a No DoS na lista.
 O último passo na configuração do scan consiste em criar o template do scan. Crie um novo template
 selecionando o botão + New Scan (+ Novo Scan). Em General Scan Settings (Configurações gerais do scan),
 dê um nome ao novo template; neste exemplo, No DoS Test Scan foi inserido como o nome, o tipo Run Now
@@ -4200,7 +4200,7 @@ perfil selecionado. A Scan Queue (Fila de scans) mostrará o status do(s) scan(s
 na figura 8.22.
 
 
-                               Figura 8.22 – Scan Queue (Fila de scans).
+                               Figura 8.22 - Scan Queue (Fila de scans).
 À medida que o scan executar, as vulnerabilidades descobertas poderão ser vistas na aba Results
 (Resultados). A figura 8.23 mostra o resultado do scan na máquina virtual Metasploitable2 depois de o
 scan ter executado somente durante alguns minutos, não tendo concluído sequer a marca de 0% de
@@ -4219,12 +4219,12 @@ por plugin), nesse caso. Cada botão torna-se azul, mostrando que está selecion
 Selecione o botão azul Export (Exportar) para iniciar a exportação (Figura 8.24).
 
 
-                                     Figura 8.23 – Resultados do scan.
+                                     Figura 8.23 - Resultados do scan.
 
 
 ---
 
-                                        Figura 8.24 – Relatório associado ao scan.
+                                        Figura 8.24 - Relatório associado ao scan.
 O Nessus é uma ferramenta eficiente de scanning que possui recursos excelentes. Vários livros e vídeos
 mergulham mais a fundo na configuração e no uso da ferramenta de scanning Nessus. É recomendável
 que essa aplicação seja completamente testada no ambiente de laboratório antes de ser usada em
@@ -4377,7 +4377,7 @@ Searchsploit
 
 ---
 
-                                    Figura 9.1 – O Searchsploit.
+                                    Figura 9.1 - O Searchsploit.
 Nesta pesquisa, um único resultado foi retornado; podemos perceber que usar o Searchsploit é bem
 fácil. A pesquisa retornou uma vulnerabilidade de DLL (Dynamic Link Library, ou Biblioteca de
 Vínculo Dinâmico) para um sistema Windows 32 bits executando o IIS e que utiliza o PHP versão 5.2.0
@@ -4386,7 +4386,7 @@ será explorada e provocará um DoS no host. Para obter mais informações sobre
 pipe da saída de um comando locate, como mostrado na figura 9.2.
 
 
-                                        Figura 9.2 – Locate.
+                                        Figura 9.2 - Locate.
 
 Exploits remotos
 
@@ -4489,7 +4489,7 @@ deverão ser informadas ao cliente antes de serem utilizadas. Às vezes, isso po
 impacto no tempo necessário para a realização de um teste completo.
 Um teste encoberto em uma empresa é um teste em que uma quantidade limitada de pessoas tem
 conhecimento das operações de teste. No caso de um teste encoberto, um número bastante restrito de
-pessoas da empresa – em geral um gerente de TI, o gerente da área de segurança ou um superior –
+pessoas da empresa - em geral um gerente de TI, o gerente da área de segurança ou um superior -
 saberá sobre o teste de segurança com antecedência. Um pentester deve ser habilidoso e competente
 para usar a enorme quantidade de ferramentas de seu arsenal a fim de manter o silêncio na rede. Esses
 tipos de teste de segurança são conduzidos não só para testar as vulnerabilidades do sistema de
@@ -4574,7 +4574,7 @@ reverso, um shell será apresentado ao pentester para acesso a esse computador, 
 sentado diante do teclado da vítima.
 
 Meterpreter shell
-O Meterpreter shell – um tipo especial de shell – é a ferramenta essencial do Metasploit. A Rapid7
+O Meterpreter shell - um tipo especial de shell - é a ferramenta essencial do Metasploit. A Rapid7
 desenvolve continuamente o Meterpreter shell, que tem um miniarsenal próprio incrivelmente letal. O
 Meterpreter shell pode ser adicionado como um payload que pode ser tanto um bind shell quanto um
 reverse shell. O uso do Meterpreter shell será discutido em detalhes posteriormente neste capítulo.
@@ -4617,7 +4617,7 @@ explosivo que se encontra dentro do míssil lançado pelo Aston Martin de James 
 
 está dentro do payload é mais parecido com esse material explosivo. O shellcode corresponde ao
 sistema de entrega interno que efetivamente gera a brecha, carrega códigos maliciosos e executa os
-comandos dentro do payload de modo a criar um shell – por isso o nome shellcode. Nem todos os
+comandos dentro do payload de modo a criar um shell - por isso o nome shellcode. Nem todos os
 payloads contêm shellcode. Por exemplo, o payload windows/adduser corresponde somente a uma série
 de comandos com o propósito de criar um usuário ou uma conta de administrador em uma plataforma
 Windows.
@@ -4654,19 +4654,19 @@ finalizar o serviço Metasploit (Figura 9.3).
 
 ---
 
-                           Figura 9.3 – Verificando o status do serviço Metasploit.
+                           Figura 9.3 - Verificando o status do serviço Metasploit.
 Para reiniciar o serviço (Figura 9.4):
  service metasploit restart
 
 
-                                   Figura 9.4 – Reiniciando o Metasploit.
+                                   Figura 9.4 - Reiniciando o Metasploit.
 Para finalizar o serviço (Figura 9.5):
  service metasploit stop
 
 
 ---
 
-                             Figura 9.5 – Finalizando o serviço Metasploit.
+                             Figura 9.5 - Finalizando o serviço Metasploit.
 
 Atualizando o banco de dados
 O Metasploit não é desenvolvido somente pela Rapid7; atualizações constantes são feitas em todos os
@@ -4687,7 +4687,7 @@ reinicie e, em seguida, reabra a interface web do Metasploit (Figura 9.6).
 
 ---
 
-                                    Figura 9.6 – Login no Metasploit.
+                                    Figura 9.6 - Login no Metasploit.
 
 Scanning com o Metasploit
 Agora que “Q” já abasteceu o seu Aston Martin com munição suficiente para matar um pequeno
@@ -4708,7 +4708,7 @@ recentes para monitorar cada movimento (Figura 9.7).
 
 ---
 
-                                Figura 9.7 – Página web do Metasploit.
+                                Figura 9.7 - Página web do Metasploit.
 
 Usando o Metasploit
 As próximas seções devem ser encaradas como um exercício prático para realizar o scan da máquina
@@ -4726,7 +4726,7 @@ alvo) nas linhas subsequentes.
 Os pentesters devem se familiarizar com determinados campos de Advanced Target Settings (Configurações
 avançadas do alvo), que aparecerão após clicar no botão Show Advanced Option (Mostrar opções avançadas)
 no centro da página.
- 1. Excluded Addresses (Endereços excluídos) – Qualquer endereço IP desse bloco não estará sujeito ao
+ 1. Excluded Addresses (Endereços excluídos) - Qualquer endereço IP desse bloco não estará sujeito ao
    scanning. Quando estiver em uma missão, um pentester não vai querer desperdiçar tempo ao fazer
    o scanning dele mesmo ou de seus aliados; por favor, faça isso somente nos alvos. Não se esqueça de
    inserir o endereço IP do computador de ataque e o endereço de qualquer colega de equipe nessa
@@ -4738,26 +4738,26 @@ no centro da página.
    hosts sensíveis que não deverão ser verificados. Certifique-se de definir como excluídos todos os
    endereços que estão no intervalo especificado para o alvo, mas que não devem ser considerados no
    scan.
- 2. Perform Initial Portscan (Realizar scan inicial de portas) – Se essa é a primeira vez que um host ou uma
+ 2. Perform Initial Portscan (Realizar scan inicial de portas) - Se essa é a primeira vez que um host ou uma
    rede são sujeitos ao scanning, deixe essa caixa selecionada. Remova a seleção em scans subsequentes
    para garantir que não haja perda de tempo.
- 3. Custom NMAP Arguments (Argumentos personalizados do Nmap) – Usado para portas obscuras, evasão
+ 3. Custom NMAP Arguments (Argumentos personalizados do Nmap) - Usado para portas obscuras, evasão
    de IDS e outras situações que envolvam a necessidade de executar módulos NSE personalizados.
    Um pentester pode especificar aqui as opções individuais.
- 4. Additional TCP Ports (Portas TCP adicionais) – Quando o scan para descobertas do Metasploit é
+ 4. Additional TCP Ports (Portas TCP adicionais) - Quando o scan para descobertas do Metasploit é
    iniciado, portas bastante comuns são verificadas. Se, durante a fase de reconhecimento, um
    pentester descobrir uma porta obscura executando uma aplicação, ela poderá ser adicionada aqui
    sem o uso de opções. Por exemplo, 2013, 2600, 31337.
- 5. Exclude TCP Ports (Excluir portas TCP) – O ROE pode autorizar Bond a ter determinados indivíduos
+ 5. Exclude TCP Ports (Excluir portas TCP) - O ROE pode autorizar Bond a ter determinados indivíduos
    como alvo para obter informações, porém pode exigir que determinadas perguntas não sejam feitas.
    Além disso, se o pentester estiver trabalhando em equipe, é possível fazer uma divisão na atribuição
    de portas de modo a agilizar o processo de scanning. Como ocorreu anteriormente, liste as portas
    que devem ser excluídas das opções do NMAP. Por exemplo, 2013, 2600, 31337.
- 6. Custom TCP Port Range (Intervalo personalizado de portas TCP) – Especialmente quando se trabalha
+ 6. Custom TCP Port Range (Intervalo personalizado de portas TCP) - Especialmente quando se trabalha
    em equipe, separar a atribuição de portas pode aliviar o trabalho às vezes árduo de realizar o
    scanning à procura de vulnerabilidades. Especifique os intervalos de portas com um hífen (-) entre a
    porta de menor e de maior número. Por exemplo, (1-1024).
- 7. Custom TCP Source Port (Porta de origem TCP personalizada) – Até mesmo James Bond precisa usar
+ 7. Custom TCP Source Port (Porta de origem TCP personalizada) - Até mesmo James Bond precisa usar
    um disfarce de vez em quando. Especificar uma porta de origem diferente pode ser útil para passar
    pelos controles de segurança e pelas listas de controle de acesso dos firewalls.
 A missão consiste em realizar o scan da máquina virtual Metasploitable2. Insira o endereço IP na caixa
@@ -4769,7 +4769,7 @@ processos que serão executados em background (Figura 9.8).
 
 ---
 
-                         Figura 9.8 – Scanning do Metasploitable2 concluído.
+                         Figura 9.8 - Scanning do Metasploitable2 concluído.
 Após o scan ter sido concluído, clique na aba Overview (Visão geral) da barra de manutenção na parte
 superior do site. A seção Discovery mostra que um host foi verificado, há mais de 30 serviços e pelo
 menos uma vulnerabilidade. É interessante observar que esses resultados são apenas de uma execução
@@ -4783,26 +4783,26 @@ Clique no endereço IP do host para obter mais informações (Figura 9.9).
 
 ---
 
-                         Figura 9.9 – Visualização da aba Analysis (Análise).
+                         Figura 9.9 - Visualização da aba Analysis (Análise).
 A figura 9.10 mostra uma separação e uma pequena descrição dos serviços inicialmente identificados
 pelo Metasploit. Há seis seções principais no dossiê associado a esse host em particular: Services
 (Serviços), Vulnerabilities (Vulnerabilidades), File Shares (Compartilhamento de arquivos), Notes
 (Observações), Credentials (Credenciais) e Modules (Módulos).
- • Services – De modo muito semelhante a James Bond em uma missão de reconhecimento, o host
+ • Services - De modo muito semelhante a James Bond em uma missão de reconhecimento, o host
    forneceu uma tonelada de informações digitais sobre o que esperar inicialmente do sistema. A
    expansão dos dados na seção Service Information (Informações sobre o serviço) faz com que o software,
    os números de versão e informações sensíveis sejam apresentados. Alguns dos serviços possuem
    hiperlinks para registros próprios porque dados adicionais foram capturados e estão disponíveis para
    análise.
- • Vulnerabilities – As vulnerabilidades nos hosts estão listadas na ordem em que estão prestes a ser
+ • Vulnerabilities - As vulnerabilidades nos hosts estão listadas na ordem em que estão prestes a ser
    exploradas. As vulnerabilidades incluídas nessa seção estão diretamente relacionadas aos módulos
    de exploits do Metasploit Framework.
- • File Shares – (Se houver algum disponível) Compartilhamentos divulgados são mostrados nessa parte
+ • File Shares - (Se houver algum disponível) Compartilhamentos divulgados são mostrados nessa parte
    da interface. É importante analisar manualmente os logs de scanning no Metasploit para garantir
    que nada foi deixado de lado. Os computadores Linux podem ter diretórios “exportados” ou
    “compartilhados”; contudo o Linux não os divulga como faz uma plataforma Microsoft. Esse é o
    caso do Metasploitable2, em que a pasta root (/) e outras estão disponíveis, mas não são listadas.
- • Notes – Essa seção lista qualquer tipo de configuração de segurança, listas de usuários, contas de
+ • Notes - Essa seção lista qualquer tipo de configuração de segurança, listas de usuários, contas de
    serviços, compartilhamentos e exportações descobertos durante o scanning. Em direção à parte
    inferior, na seção Shares (Compartilhamentos), encontra-se um Easter egg interessante. Bom
    divertimento aos pentesters que embarcarem nessa viagem.
@@ -4810,9 +4810,9 @@ pelo Metasploit. Há seis seções principais no dossiê associado a esse host e
 
 ---
 
- • Credentials – Qualquer credencial capturada durante os scans será listada nessa seção para que possa
+ • Credentials - Qualquer credencial capturada durante os scans será listada nessa seção para que possa
    ser analisada.
- • Modules – Essa seção não corresponde somente às correlações diretas com os módulos de exploit; ela
+ • Modules - Essa seção não corresponde somente às correlações diretas com os módulos de exploit; ela
    disponibiliza uma plataforma de lançamento após o título de cada vulnerabilidade descoberta. Clicar
    no hiperlink fará uma sessão ser automaticamente iniciada para efetuar uma tentativa de exploração
    de falhas do host.
@@ -4824,12 +4824,12 @@ Metasploit tentará usar um payload genérico e o Meterpreter shellcode. Após a
 clique no botão Run Module (Executar o módulo) na parte inferior (Figura 9.11).
 
 
-                         Figura 9.10 – Resumo contido em Analysis para o alvo.
+                         Figura 9.10 - Resumo contido em Analysis para o alvo.
 
 
 ---
 
-                                 Figura 9.11 – Iniciando um ataque.
+                                 Figura 9.11 - Iniciando um ataque.
 Sucesso! Uma sessão foi criada no host. Isso significa que o host foi comprometido com êxito e que a
 vulnerabilidade foi explorada. A aba Sessions (Sessões) da barra de manutenção na parte superior
 apresenta um número 1 visível ao lado do nome, indicando que podemos interagir com a sessão
@@ -4839,13 +4839,13 @@ sessões ativas do Sr. Bond. A missão ainda não foi concluída (Figura 9.12).
 
 ---
 
-                                      Figura 9.12 – Sessões ativas.
+                                      Figura 9.12 - Sessões ativas.
 Na página web correspondente a Sessions, todas as sessões estão listadas, juntamente com o tipo de shell
 disponível para interação, além de haver uma descrição que normalmente inclui a conta (ou o nível) de
 acesso disponível. Clique no hiperlink Session 1 para iniciar uma interação baseada em web com o
 Meterpreter shell.
 
-Meterpreter – Gerenciamento de sessão
+Meterpreter - Gerenciamento de sessão
 Obrigado à “Q” e à equipe de desenvolvimento da Rapid7 por conceber um sistema tão simples. Um
 pentester pode acessar um shell de comandos a partir daqui, se desejar; no entanto muitas das funções
 avançadas, como a criação de proxies como ponto de pivoteamento, estão atualmente disponíveis por
@@ -4861,14 +4861,14 @@ realizada nessa sessão será registrada para prover continuidade. Essas informa
 exportadas no futuro, quando os relatórios forem criados.
 
 
-                                Figura 9.13 – Gerenciamento de sessão.
+                                Figura 9.13 - Gerenciamento de sessão.
 
 Ações em uma sessão
 
 
 ---
 
- 1. Collect System Data (Coletar dados de sistema) – Para coletar evidências do sistema e dados sensíveis
+ 1. Collect System Data (Coletar dados de sistema) - Para coletar evidências do sistema e dados sensíveis
    (capturas de tela, senhas, informações de sistema). Se houvesse um recurso do tipo “compre
    pronto”, seria representado por esse botão. O processo de obter uma captura de tela é uma
    ferramenta muito eficiente para relatórios. De modo muito semelhante a Bond ao obter evidências
@@ -4877,16 +4877,16 @@ Ações em uma sessão
    informações do sistema também é uma prioridade, pois proporciona uma compreensão mais
    profunda ao pentester a respeito de outros itens existentes na rede, por exemplo, possíveis bancos de
    dados, outras redes, e assim por diante.
- 2. Access File system (Acessar sistema de arquivos) – Para navegar pelo sistema de arquivos remoto e fazer
+ 2. Access File system (Acessar sistema de arquivos) - Para navegar pelo sistema de arquivos remoto e fazer
    upload e download de arquivos e apagá-los. Lembranças são boas, mas o que é digital é para
    sempre. Backups, configurações e documentações pessoais valem ouro. Se houver um servidor web
    executando no computador, tente carregar um C99 shell, keyloggers, backdoors, cavalos de Troia e
    outras ferramentas maravilhosas. Apenas um conselho: não deixe um currículo aqui.
- 3. Command Shell (Shell de comandos) – Para interagir com um shell de comandos remoto no alvo
+ 3. Command Shell (Shell de comandos) - Para interagir com um shell de comandos remoto no alvo
    (usuários avançados). Se as contas root ou de administrador não puderem ser obtidas durante a
    exploração de falhas, um pentester em algum momento terá de arregaçar as mangas e pôr a mão na
    massa na linha de comando.
- 4. Create Proxy Pivot (Criar pivô proxy) – Para ataques com pivôs usando o host remoto como gateway.
+ 4. Create Proxy Pivot (Criar pivô proxy) - Para ataques com pivôs usando o host remoto como gateway.
    Só porque Bond consegue invadir e obter acesso a um laboratório subterrâneo secreto não significa
    que ele simplesmente irá sorrir e em seguida deixar o local; ele irá explorá-lo com mais cuidado. A
    máquina virtual Metasploitable2 é um sistema isolado; no entanto, se fosse um sistema na periferia
@@ -4894,11 +4894,11 @@ Ações em uma sessão
    futuramente, poderia levar a outras maneiras de efetuar ataques em pontos mais internos do
    sistema. A partir desse computador, a metodologia de hacking será reiniciada, começando pelo
    reconhecimento.
- 5. Create VPN Pivot (Criar pivô VPN) – Para fazer o pivoteamento do tráfego por meio do host remoto.
+ 5. Create VPN Pivot (Criar pivô VPN) - Para fazer o pivoteamento do tráfego por meio do host remoto.
    Não é muito diferente do botão Create Proxy Pivot, exceto pelo fato de todo o tráfego a partir de agora
    ser transmitido por meio de um túnel VPN criptografado. Isso é bom especialmente para se desviar
    de sistemas de detecção de invasão.
- 6. Terminate Session (Finalizar sessão) – Depois de tudo dito e feito, Bond conquista a garota no final e
+ 6. Terminate Session (Finalizar sessão) - Depois de tudo dito e feito, Bond conquista a garota no final e
    sai da cena de ação. Esse botão finaliza as sessões, porém irá remover somente o Meterpreter shell.
    Se o pentester deixar para trás qualquer arquivo, rootkit, keylogger etc., então um ponto de
    comprometimento no sistema será mantido. Antes de finalizar uma sessão, limpe os arquivos e
@@ -4916,7 +4916,7 @@ resultado na obtenção de acesso como root, então todo o sistema de arquivos e
 pronto para ser pilhado.
 
 
-                             Figura 9.14 – Acesso ao sistema de arquivos.
+                             Figura 9.14 - Acesso ao sistema de arquivos.
 
 Shell de comandos
 Na figura 9.15, o botão Command Shell (Shell de comandos) do menu Available Actions foi selecionado. A
@@ -4929,7 +4929,7 @@ de comando do Meterpreter.
 
 ---
 
-                                   Figura 9.15 – Shell de comandos.
+                                   Figura 9.15 - Shell de comandos.
 
 Módulos para pós-exploração de falhas
 Esses módulos são práticos para ter à mão e podem automatizar muitas das funções comuns necessárias
@@ -4945,18 +4945,18 @@ parte inferior. Veja a figura 9.16.
 
 ---
 
-                               Figura 9.16 – Multi Gather OpenSSH PKI.
+                               Figura 9.16 - Multi Gather OpenSSH PKI.
 Clique no botão Run Module. Veja a Figura 9.17.
 
 
-                                  Figura 9.17 – Execução do módulo.
+                                  Figura 9.17 - Execução do módulo.
 Na figura 9.17, o pentester pode observar o processo de cópia das credenciais PKI do SSH. Todos os
 arquivos baixados serão armazenados no diretório /opt/metasploit/apps/pro/loot (Figura 9.18).
 
 
 ---
 
-                                          Figura 9.18 – Loot.
+                                          Figura 9.18 - Loot.
 A máquina virtual Metasploitable2 está propositadamente repleta de vulnerabilidades e não deverá ser
 usada nunca como um sistema operacional base. Reserve tempo para rever os recursos que acabaram de
 ser apresentados e veja quantas vulnerabilidades podem ser encontradas.
@@ -4976,23 +4976,23 @@ OWASP
 O OWASP (Open Web Application Security Project) é uma organização sem fins lucrativos que luta por
 melhorias na segurança de softwares. O OWASP disponibiliza uma lista anual contendo as dez
 vulnerabilidades mais comuns na web. Em 2013, as dez principais vulnerabilidades eram:
- • A1 – Injection (Injeção)
+ • A1 - Injection (Injeção)
 
 
 ---
 
    • Aqui estão incluídas as injeções de SQL, de OS e de LDAP como um todo.
- • A2 – Broken Authentication and Session Management (Autenticação e gerenciamento de sessão
+ • A2 - Broken Authentication and Session Management (Autenticação e gerenciamento de sessão
    com falhas)
- • A3 – Cross-Site Scripting (XSS)
- • A4 – Insecure Direct Object References (Referências não seguras e diretas a objetos)
- • A5 – Security Misconfigurations (Configurações incorretas de segurança)
- • A6 – Sensitive Data Exposure (Exposição de dados sensíveis)
- • A7 – Missing Function Level Access Controls (Ausência de controles de acesso de nível de função)
- • A8 – Cross-Site Request Forgery (CSRF)
- • A9 – Using Components with Known Vulnerabilities (Uso de componentes com vulnerabilidades
+ • A3 - Cross-Site Scripting (XSS)
+ • A4 - Insecure Direct Object References (Referências não seguras e diretas a objetos)
+ • A5 - Security Misconfigurations (Configurações incorretas de segurança)
+ • A6 - Sensitive Data Exposure (Exposição de dados sensíveis)
+ • A7 - Missing Function Level Access Controls (Ausência de controles de acesso de nível de função)
+ • A8 - Cross-Site Request Forgery (CSRF)
+ • A9 - Using Components with Known Vulnerabilities (Uso de componentes com vulnerabilidades
    conhecidas)
- • A10 – Unvalidated Redirects and Forwards (Redirecionamento e encaminhamentos sem validação)
+ • A10 - Unvalidated Redirects and Forwards (Redirecionamento e encaminhamentos sem validação)
 Mais informações estão disponíveis em https://www.owasp.org/index.php/Category:OWASP_Top_Ten_Project.
 Além de disponibilizar relatórios, o OWASP contribui para difundir conhecimentos por meio de grupos
 de representantes locais constituídos por indivíduos da área de segurança em cada região. Os grupos de
@@ -5007,14 +5007,14 @@ O Kali Linux possui uma quantidade abundante de ferramentas prontamente disponí
 verdadeiro poder dessas ferramentas se evidencia somente quando elas são usadas de forma apropriada
 e na ordem correta. Ao testar aplicações web, a metodologia de teste não é diferente para as três
 primeiras fases da metodologia de hacking: reconhecimento, scanning e exploração de falhas. Em
-alguns casos, as fases quatro e cinco – preservação do acesso e ocultação das pistas, respectivamente –
+alguns casos, as fases quatro e cinco - preservação do acesso e ocultação das pistas, respectivamente -
 são incluídas; no entanto esse nem sempre é o caso. Além do mais, toda página em um site deve ser
 testada, e não apenas as homepages e os logins. Só porque o login de um site é seguro não significa que
 a porta estará fechada e que o teste tenha terminado: encontre uma janela. Se a janela estiver trancada,
 quebre-a com uma pedra. Com tantas vias para os invasores explorarem as falhas dos sites atualmente,
 nenhuma pedra pode ser menosprezada durante os testes.
 
-Passo 1 – Análise manual
+Passo 1 - Análise manual
 Um scan de portas pode informar que o serviço HTTP na porta 80 está ativo, mas isso não significa
 necessariamente que um site se encontra lá realmente. Abra um navegador e acesse o site para verificar
 se um web service está realmente servindo as páginas. Isso não vale somente para a porta 80; um scan
@@ -5032,7 +5032,7 @@ demorado, porém, em última instância, nenhuma ferramenta automatizada é capa
 as vulnerabilidades. Uma análise manual de todas as páginas web representa um passo inicial muito
 importante.
 
-Passo 2 – Fingerprinting (Identificação)
+Passo 2 - Fingerprinting (Identificação)
 Uma análise manual de um site nem sempre informa qual é a aplicação web, o servidor web e o sistema
 operacional base. O fingerprinting pode ser usado para determinar todas as três informações no Kali
 Linux.
@@ -5059,7 +5059,7 @@ ajudará um pentester a restringir melhor os possíveis ataques ao servidor web.
 
 ---
 
-                              Figura 9.19 – Fingerprinting com o NetCat.
+                              Figura 9.19 - Fingerprinting com o NetCat.
 
 Telnet (telnet)
 Assim como ocorre com o NetCat, o Telnet pode ser usado exatamente da mesma maneira para
@@ -5068,7 +5068,7 @@ determinar informações sobre o sistema (Figura 9.20).
  :exemplo: telnet 192.168.56.102:80
 
 
-                              Figura 9.20 – Fingerprinting com o Telnet.
+                              Figura 9.20 - Fingerprinting com o Telnet.
 
 SSLScan (sslscan)
 Quando os sites possuem certificados SSL, determinar qual é a criptografia SSL sendo usada, se houver,
@@ -5083,7 +5083,7 @@ certificado pode ser usado em ataques mais sofisticados, que estão além do esc
  :exemplo: sslscan 192.168.56.102:8080
 O Metasploitable2 não possui nenhum serviço com SSL no momento.
 
-Passo 3 – Scanning
+Passo 3 - Scanning
 O scanning automático pode reduzir enormemente a quantidade de tempo necessária para identificar
 vulnerabilidades em qualquer sistema. Existem diversas aplicações projetadas para fazer o scan de
 servidores web; não conte com apenas uma aplicação. Nenhum sistema sozinho é capaz de incluir as
@@ -5094,7 +5094,7 @@ Há alguns líderes no mercado de segurança quanto se trata de scanning automá
 Nessus, o Retina e o WebInspect são bons programas, mas podem ser muito caros. O Kali Linux é
 disponibilizado com várias alternativas leves e eficientes.
 
-Arachni – Framework de scanner para segurança de aplicações web (mais informações
+Arachni - Framework de scanner para segurança de aplicações web (mais informações
 em http://www.arachni-scanner.com/)
 O scanner de aplicações web Arachni é uma ferramenta cheia de recursos, executada a partir de uma
 interface web muito semelhante à do Nessus da Tenable. Porém, de modo diferente do Nessus, o
@@ -5116,17 +5116,17 @@ IceWeasel e vá para http://127.0.01:4567 para acessar a webUI (Figura 9.22)
 
 ---
 
-                              Figura 9.21 – Iniciando o serviço Arachni.
+                              Figura 9.21 - Iniciando o serviço Arachni.
 Para iniciar um scan na máquina virtual Metasploitable2, digite http://192.168.56.102 na caixa de texto
 para o URL e clique no botão Launch Scan (Iniciar scan), como mostrado na figura 9.23.
 
 
-                                Figura 9.22 – Página web do Arachni.
+                                Figura 9.22 - Página web do Arachni.
 
 
 ---
 
-                               Figura 9.23 – Scanning com o Arachni.
+                               Figura 9.23 - Scanning com o Arachni.
 Enquanto o scanner estiver executando, o processo estará associado a um processo dispatch. Vários
 dispatchers podem ser executados ao mesmo tempo. Se houver mais web services para testar, volte para
 a aba Start a Scan (Iniciar um scan) e inicie outro scan. Se o IceWeasel for fechado ou vários scans
@@ -5140,7 +5140,7 @@ scanners, o Arachni também mantém os relatórios separados para cada dispatche
 
 ---
 
-                                 Figura 9.24 – Relatórios do Arachni.
+                                 Figura 9.24 - Relatórios do Arachni.
 Os relatórios disponibilizam gráficos de barras e de pizza com os resultados dos scans, como mostrado
 na figura 9.25.
 O Arachni divide o relatório em duas subcategorias. A primeira recebe o nome de Trusted (Confiável),
@@ -5151,18 +5151,18 @@ como não confiáveis são consideradas como possíveis falso-positivos e devem 
 pentester.
 
 
-                               Figura 9.25 – Vulnerabilidades por tipo.
+                               Figura 9.25 - Vulnerabilidades por tipo.
 
 
 ---
 
-w3af – Framework para auditoria e ataque de aplicações web (mais informações em
+w3af - Framework para auditoria e ataque de aplicações web (mais informações em
 http://w3af.org/)
 
 O w3af é outro scanner de vulnerabilidades bem leve, disponibilizado à comunidade de segurança
 pelos bons desenvolvedores do OWASP. A geração de relatórios é limitada e não é tão elegante quanto
-no Arachni, porém fornece uma boa base para o relatório de vulnerabilidades. A grande vantagem – ou
-desvantagem, conforme a maneira pela qual um pentester estiver envolvido em uma atividade – é que o
+no Arachni, porém fornece uma boa base para o relatório de vulnerabilidades. A grande vantagem - ou
+desvantagem, conforme a maneira pela qual um pentester estiver envolvido em uma atividade - é que o
 w3af possui uma variedade de plugins personalizáveis para vulnerabilidades que exigem atualizações da
 internet no momento em que o plugin for disparado. Durante um evento de teste de invasão, se o
 pentester não tiver acesso à internet, o w3af irá gerar vários erros. Se uma conexão com a internet
@@ -5176,7 +5176,7 @@ Aplicações web à Scanners de vulnerabilidades web à w3af), como mostrado na 
 
 ---
 
-                                     Figura 9.26 – Console do w3af.
+                                     Figura 9.26 - Console do w3af.
 Quando a GUI do w3af inicia, um perfil vazio é carregado, sem plugins ativos. Um novo perfil pode ser
 criado ao selecionar inicialmente os plugins desejados e, em seguida, clicar nas opções Profiles > Save as
 (Perfis > Salvar como) na barra de menu. Alguns perfis previamente preenchidos já existem e estão
@@ -5192,7 +5192,7 @@ Neste guia de instruções, o perfil OWASP_TOP10 foi selecionado; no entanto os 
 
 ---
 
-                               Figura 9.27 – Seleção de módulos no w3af.
+                               Figura 9.27 - Seleção de módulos no w3af.
 Insira um site que será o alvo. Nesse caso, a máquina virtual Metasploitable2 foi selecionada. Clique no
 botão Start (Iniciar).
 O resultado do scan anterior será limitado em virtude da falta de plugins ativados (Figura 9.28). Para
@@ -5202,7 +5202,7 @@ file:///root/results.html.
 
 ---
 
-                           Figura 9.28 – A aba Results (Resultados) do w3af.
+                           Figura 9.28 - A aba Results (Resultados) do w3af.
 
 Nikto (mais informações em http://www.cirt.net/nikto2)
 O Nikto é um scanner simples e direto, que procura vulnerabilidades no servidor web e em aplicações
@@ -5226,7 +5226,7 @@ Se quiser alterar o formato do relatório, modifique a extensão do arquivo ou u
 exportar os arquivos que serão usados pelo Metasploit, utilize: -format MSF.
 
 
-                                 Figura 9.29 – Scanning com o Nikto.
+                                 Figura 9.29 - Scanning com o Nikto.
 O relatório foi salvo como nikto-test.html, que fará o relatório ser automaticamente formatado como
 HTML. Para abrir o relatório a partir da linha de comando, digite: iceweasel nikto-test.html (Figura
 9.30).
@@ -5234,7 +5234,7 @@ HTML. Para abrir o relatório a partir da linha de comando, digite: iceweasel ni
 
 ---
 
-                                              Figura 9.30 – Relatório do Nikto.
+                                              Figura 9.30 - Relatório do Nikto.
 
 Websploit (mais informações em http://sourceforge.net/projects/websploit/)
 O Websploit é uma aplicação modular baseada em Ruby, que se assemelha ao Metasploit quanto à
@@ -5308,7 +5308,7 @@ preservação do acesso; no entanto os termos a seguir não são apenas definiç
 introdução à relação entre preservação do acesso e as práticas de pós-exploração de falhas.
 
 Malware
-Malware – um tipo de software malicioso – é um nome genérico que engloba vírus, worms, cavalos de
+Malware - um tipo de software malicioso - é um nome genérico que engloba vírus, worms, cavalos de
 Troia (Trojans), keyloggers e bots. Em relação aos testes de invasão, usar o termo malware é adequado
 para relatórios de nível executivo, porém, quando estiver envolvido com um relatório técnico, classificar
 adequadamente o tipo de malware usado para explorar a vulnerabilidade geralmente é melhor e
@@ -5331,8 +5331,8 @@ em um host para executar uma função desejada ou explícita, mas que esconde e 
 ocultos ou encobertos em seu código com a finalidade de criar backdoors, executar scripts, roubar
 informações e, em alguns casos, explorar socialmente pessoas desavisadas de modo a fazer com que elas
 divulguem informações pessoais, por exemplo, números de cartões de crédito. A verdadeira diferença
-entre backdoors e cavalos de Troia sofreu distorções desde que o primeiro cavalo de Troia – que ficou
-conhecido como Pervading Animal – foi possivelmente incluído em um jogo para o sistema de
+entre backdoors e cavalos de Troia sofreu distorções desde que o primeiro cavalo de Troia - que ficou
+conhecido como Pervading Animal - foi possivelmente incluído em um jogo para o sistema de
 computador UNIVAC 1108 em 1975. O termo cavalo de Troia normalmente é sinônimo de backdoor
 em virtude da natureza inerente aos cavalos de Troia atualmente. Além do mais, os cavalos de Troia
 com frequência são confundidos com os vírus. O que faz com que os cavalos de Troia não sejam
@@ -5470,7 +5470,7 @@ configurados ao converter um payload em um arquivo binário executável.
 
 ---
 
-                                 Figura 10.1 – Saída do msfpayload.
+                                 Figura 10.1 - Saída do msfpayload.
 As ferramentas msfpayload são capazes de fazer o pipe do payload nos formatos a seguir:
  • [C] C
  • [H] C-sharp
@@ -5494,7 +5494,7 @@ a seguir. Observe que este é um comando único e deve ser digitado em uma só l
 A figura 10.2 mostra o resultado da criação do backdoor unencoded-payload.exe.
 
 
-                 Figura 10.2 – Criando um binário executável a partir de um payload.
+                 Figura 10.2 - Criando um binário executável a partir de um payload.
 
 Criando um binário executável a partir de um payload (codificado)
 A ferramenta msfencode:
@@ -5506,7 +5506,7 @@ A figura 10.3 mostra o resultado da criação do backdoor encoded-payload.exe.
 
 ---
 
-            Figura 10.3 – Criando um binário executável a partir de um payload codificado.
+            Figura 10.3 - Criando um binário executável a partir de um payload codificado.
 
 Criando um cavalo de Troia codificado
 Os backdoors das seções anteriores executavam somente em background e não interagiam com o
@@ -5532,7 +5532,7 @@ A figura 10.4 mostra o resultado da criação do cavalo de Troia trojan-cmd-payl
 calc.exe do Windows.
 
 
-            Figura 10.4 – Criando um cavalo de Troia executável para o Microsoft Windows.
+            Figura 10.4 - Criando um cavalo de Troia executável para o Microsoft Windows.
 O cavalo de Troia criado a partir do binário calc.exe do Windows pode ser carregado em uma vítima de
 diversas maneiras, conforme descrito neste livro.
 
@@ -5557,7 +5557,7 @@ conexão foi feita a partir do sistema operacional da vítima por meio da execu�
 payload.exe.
 
 
-                         Figura 10.5 – O multi-handler do Metasploit ouvindo.
+                         Figura 10.5 - O multi-handler do Metasploit ouvindo.
 
 Backdoors persistentes
 De modo muito semelhante a um estudante universitário que telefona para casa para ter notícias de
@@ -5578,7 +5578,7 @@ será feita, porém ele será executado imediatamente após o processo de login.
 aplicação fará a conexão de volta com a origem regularmente.
 
 
-                                      Figura 10.6 – Scheduleme.
+                                      Figura 10.6 - Scheduleme.
 
 Capacidade de detecção
 Se o pentester souber quais antivírus estão executando em um sistema-alvo em potencial, ou se quiser
@@ -5589,7 +5589,7 @@ detecção de fornecedores comuns de antivírus em relação ao arquivo trojan-c
 
 ---
 
-                                     Figura 10.7 – VirusTotal.com.
+                                     Figura 10.7 - VirusTotal.com.
 
 Backdoors para web services
 Web services vulneráveis que permitem a um pentester carregar conteúdos estão sujeitos a possíveis
@@ -5597,15 +5597,15 @@ backdoors. Esses backdoors são colocados no site na forma de páginas adicionai
 qualquer pessoa que consiga encontrar a página web. A seguir está uma breve lista de backdoors que
 podem ser carregados em servidores web e podem ser usados para a execução de comandos locais na
 vítima ou para interagir com um banco de dados que estiver se comunicando com o servidor.
- 1. C99 Shell – PHP backdoor shell
+ 1. C99 Shell - PHP backdoor shell
  Download: http://www.r57shell.net/
- 2. C100 Shell – PHP backdoor shell
+ 2. C100 Shell - PHP backdoor shell
  Download: http://www.r57shell.net/
- 3. Jackall – PHP backdoor shell
+ 3. Jackall - PHP backdoor shell
  Download: http://oco.cc
- 4. XXS-Shell – ASP.net backdoor e controlador zumbi
+ 4. XXS-Shell - ASP.net backdoor e controlador zumbi
  Download: http://www.portcullis-security.com/tools/free/XSSShell039.zip
- 5. Weevley – PHP backdoor shell que disponibiliza um console do tipo telnet
+ 5. Weevley - PHP backdoor shell que disponibiliza um console do tipo telnet
  Download: http://epinna.github.com/Weevley/downloads/weevley-1.0.tar.zip
 
 
@@ -5637,7 +5637,7 @@ quando conectado à sessão.
 
 ---
 
-                                       Figura 10.8 – Keyscan.
+                                       Figura 10.8 - Keyscan.
 
 Resumo
 Este capítulo apresentou uma introdução à função da preservação de acesso; somente um grão de

@@ -28,20 +28,20 @@ public class CipherSuiteProbe {
 
     private static final List<CipherGroup> GROUPS = List.of(
             new CipherGroup("RC4", "RC4", c -> c.contains("RC4"), Severity.HIGH, "Cipher suite RC4 aceito",
-                    "RC4 é criptograficamente quebrado — vulnerável a ataques de desvio estatístico", "-cipher RC4"),
+                    "RC4 é criptograficamente quebrado -- vulnerável a ataques de desvio estatístico", "-cipher RC4"),
             new CipherGroup("NULL", "NULL", c -> c.contains("_NULL_") || c.contains("WITH_NULL"), Severity.CRITICAL,
                     "Cipher suite NULL aceito",
-                    "Cipher NULL não fornece confidencialidade — dados transmitidos em claro", "-cipher NULL"),
+                    "Cipher NULL não fornece confidencialidade -- dados transmitidos em claro", "-cipher NULL"),
             new CipherGroup("ANON", "anon", c -> c.contains("_anon_") || c.contains("_DHE_anon"), Severity.CRITICAL,
-                    "Cipher suite anônimo aceito", "Cipher anônimo não autentica o servidor — vulnerável a MITM",
+                    "Cipher suite anônimo aceito", "Cipher anônimo não autentica o servidor -- vulnerável a MITM",
                     "-cipher aNULL"),
             new CipherGroup("3DES", "3DES_EDE_CBC", c -> c.contains("_3DES_"), Severity.HIGH,
                     "Cipher suite 3DES aceito",
-                    "3DES vulnerável ao SWEET32 (CVE-2016-2183) — colisão de bloco após ~768GB de dados",
+                    "3DES vulnerável ao SWEET32 (CVE-2016-2183) -- colisão de bloco após ~768GB de dados",
                     "-cipher 3DES"),
             new CipherGroup("EXPORT", "EXPORT", c -> c.contains("EXPORT") || c.contains("_40_"), Severity.HIGH,
                     "Cipher suite EXPORT aceito",
-                    "Ciphers EXPORT foram deliberadamente enfraquecidos (40-56 bits) — FREAK/DROWN/LOGJAM",
+                    "Ciphers EXPORT foram deliberadamente enfraquecidos (40-56 bits) -- FREAK/DROWN/LOGJAM",
                     "-cipher EXPORT"));
 
     public List<Finding> probe(ScanContext ctx, Consumer<String> log) {
@@ -68,7 +68,7 @@ public class CipherSuiteProbe {
                     String[] weak = Arrays.stream(supported).filter(group.matcher()).toArray(String[]::new);
 
                     if (weak.length == 0) {
-                        log.accept("[+] CIPHER: " + group.name() + " — nenhum cipher disponível localmente");
+                        log.accept("[+] CIPHER: " + group.name() + " -- nenhum cipher disponível localmente");
                         continue;
                     }
 
@@ -80,7 +80,7 @@ public class CipherSuiteProbe {
                         negotiated = socket.getSession().getCipherSuite();
                     }
 
-                    log.accept("[!] CIPHER: " + group.name() + " aceito — " + negotiated);
+                    log.accept("[!] CIPHER: " + group.name() + " aceito -- " + negotiated);
                     findings.add(Finding.of("TLS", host + ":" + port, group.title(), group.severity(),
                             "Negociação bem-sucedida: " + negotiated + " em " + host + ":" + port, group.impact(),
                             "openssl s_client -connect " + host + ":" + port + " " + group.opensslFlag(),

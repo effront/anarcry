@@ -21,9 +21,10 @@ import gg.effront.anarcry.model.CvssCalculator;
 
 public class RequestSmugglingModule implements Scanner {
 
-    // Baseline timeout — expect any normal server to respond within 2s
+    // Baseline timeout -- expect any normal server to respond within 2s
     private static final int BASELINE_TIMEOUT_MS = 2_000;
-    // Probe timeout — if server takes longer than this, it's holding the connection
+    // Probe timeout -- if server takes longer than this, it's holding the
+    // connection
     private static final int PROBE_TIMEOUT_MS = 3_000;
 
     @Override
@@ -43,30 +44,30 @@ public class RequestSmugglingModule implements Scanner {
 
         log.accept("[~] ReqSmuggling: testando CL.TE e TE.CL em " + host + ":" + port);
 
-        // Verify baseline — server must respond to a normal request in <
+        // Verify baseline -- server must respond to a normal request in <
         // BASELINE_TIMEOUT_MS
         boolean baseline = sendBaseline(ctx, host, port, BASELINE_TIMEOUT_MS);
         if (!baseline) {
-            log.accept("[~] ReqSmuggling: servidor não respondeu ao baseline — pulando");
+            log.accept("[~] ReqSmuggling: servidor não respondeu ao baseline -- pulando");
             return findings;
         }
 
-        // CL.TE probe — CL says 4 bytes, TE body is 8 bytes (complete chunked)
+        // CL.TE probe -- CL says 4 bytes, TE body is 8 bytes (complete chunked)
         // If frontend uses CL: forwards 4 bytes → backend (TE) gets "1\r\nA" →
         // incomplete chunk → hangs
         boolean clTeTimeout = sendProbeAndCheckTimeout(ctx, host, port, buildClTeProbe(host), PROBE_TIMEOUT_MS);
         if (clTeTimeout) {
-            log.accept("[!!] ReqSmuggling: CRITICAL — CL.TE desync confirmado (probe excedeu " + PROBE_TIMEOUT_MS
+            log.accept("[!!] ReqSmuggling: CRITICAL -- CL.TE desync confirmado (probe excedeu " + PROBE_TIMEOUT_MS
                     + "ms vs baseline < " + BASELINE_TIMEOUT_MS + "ms)");
-            findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(), "HTTP Request Smuggling — CL.TE desync",
+            findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(), "HTTP Request Smuggling -- CL.TE desync",
                     Severity.CRITICAL,
                     "CL.TE timing probe: POST com Content-Length=4 e Transfer-Encoding=chunked (corpo de 8 bytes) "
-                            + "causou timeout de " + PROBE_TIMEOUT_MS + "ms — backend usa TE e ficou aguardando "
+                            + "causou timeout de " + PROBE_TIMEOUT_MS + "ms -- backend usa TE e ficou aguardando "
                             + "bytes de chunk que o frontend (usa CL) não repassou",
                     "Frontend e backend discordam sobre como interpretar Content-Length vs Transfer-Encoding. "
                             + "Um atacante pode 'contrabandear' requests parciais no buffer do backend, "
                             + "causando request hijacking, bypass de controles de acesso, e Account Takeover.",
-                    "# Probe CL.TE — envia via socket raw (nc/openssl):\n" + "printf 'POST / HTTP/1.1\\r\\nHost: "
+                    "# Probe CL.TE -- envia via socket raw (nc/openssl):\n" + "printf 'POST / HTTP/1.1\\r\\nHost: "
                             + host + "\\r\\n" + "Content-Length: 4\\r\\nTransfer-Encoding: chunked\\r\\n\\r\\n"
                             + "1\\r\\nA\\r\\n0\\r\\n\\r\\n' | nc " + host + " " + port,
                     "Normalizar requests ambíguos no proxy/load-balancer: rejeitar com 400 qualquer request "
@@ -76,20 +77,20 @@ public class RequestSmugglingModule implements Scanner {
             return findings;
         }
 
-        // TE.CL probe — TE body completa, CL diz 1 byte
+        // TE.CL probe -- TE body completa, CL diz 1 byte
         // Se frontend usa TE: processa chunked completo → backend (usa CL) lê 1 byte →
         // resto vaza
         boolean teCLTimeout = sendProbeAndCheckTimeout(ctx, host, port, buildTeCLProbe(host), PROBE_TIMEOUT_MS);
         if (teCLTimeout) {
-            log.accept("[!!] ReqSmuggling: CRITICAL — TE.CL desync confirmado");
-            findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(), "HTTP Request Smuggling — TE.CL desync",
+            log.accept("[!!] ReqSmuggling: CRITICAL -- TE.CL desync confirmado");
+            findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(), "HTTP Request Smuggling -- TE.CL desync",
                     Severity.CRITICAL,
                     "TE.CL timing probe: POST com Transfer-Encoding=chunked e Content-Length=1 " + "causou timeout de "
-                            + PROBE_TIMEOUT_MS + "ms — backend usa CL e ficou aguardando "
+                            + PROBE_TIMEOUT_MS + "ms -- backend usa CL e ficou aguardando "
                             + "dados que o frontend (usa TE) não repassou completamente",
                     "Frontend e backend discordam sobre como interpretar Transfer-Encoding vs Content-Length. "
                             + "Permite HTTP request smuggling com impacto equivalente ao CL.TE.",
-                    "# Probe TE.CL — envia via socket raw:\n" + "printf 'POST / HTTP/1.1\\r\\nHost: " + host + "\\r\\n"
+                    "# Probe TE.CL -- envia via socket raw:\n" + "printf 'POST / HTTP/1.1\\r\\nHost: " + host + "\\r\\n"
                             + "Content-Length: 1\\r\\nTransfer-Encoding: chunked\\r\\n\\r\\n"
                             + "1\\r\\nA\\r\\n0\\r\\n\\r\\n' | nc " + host + " " + port,
                     "Normalizar requests ambíguos no proxy: rejeitar 400 para Content-Length + Transfer-Encoding",
@@ -97,16 +98,17 @@ public class RequestSmugglingModule implements Scanner {
             return findings;
         }
 
-        // TE.TE obfuscation — se ambos processam TE mas um fica confuso com obfuscation
+        // TE.TE obfuscation -- se ambos processam TE mas um fica confuso com
+        // obfuscation
         String verdict = probeTeTeObfuscation(ctx, host, port, log);
         if (verdict != null) {
-            log.accept("[!!] ReqSmuggling: HIGH — TE.TE obfuscation aceito pelo servidor: " + verdict);
+            log.accept("[!!] ReqSmuggling: HIGH -- TE.TE obfuscation aceito pelo servidor: " + verdict);
             findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(),
-                    "HTTP Request Smuggling — TE.TE obfuscation (" + verdict + ")", Severity.HIGH,
+                    "HTTP Request Smuggling -- TE.TE obfuscation (" + verdict + ")", Severity.HIGH,
                     "Probe com Transfer-Encoding obfuscado '" + verdict + "' causou timeout de " + PROBE_TIMEOUT_MS
-                            + "ms — servidor processou TE obfuscado como chunked e ficou "
+                            + "ms -- servidor processou TE obfuscado como chunked e ficou "
                             + "aguardando chunk terminal (baseline respondeu em < " + BASELINE_TIMEOUT_MS + "ms)",
-                    "Frontend ou backend aceitou Transfer-Encoding com valor não-padrão — "
+                    "Frontend ou backend aceitou Transfer-Encoding com valor não-padrão -- "
                             + "atacante pode usar a ambiguidade para smuggling de requests.",
                     "printf 'POST / HTTP/1.1\\r\\nHost: " + host + "\\r\\n"
                             + "Content-Length: 8\\r\\nTransfer-Encoding: " + verdict + "\\r\\n\\r\\n"
@@ -122,7 +124,7 @@ public class RequestSmugglingModule implements Scanner {
     }
 
     // CL.TE: CL says 4 bytes, TE body is 8 bytes ("1\r\nA\r\n0\r\n\r\n")
-    // Frontend (uses CL) forwards 4 bytes: "1\r\n" — backend (uses TE) sees
+    // Frontend (uses CL) forwards 4 bytes: "1\r\n" -- backend (uses TE) sees
     // incomplete chunk, hangs
     private String buildClTeProbe(String host) {
         return "POST / HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "Content-Type: application/x-www-form-urlencoded\r\n"
@@ -152,9 +154,9 @@ public class RequestSmugglingModule implements Scanner {
     private boolean sendProbeAndCheckTimeout(ScanContext ctx, String host, int port, String probe, int timeoutMs) {
         try {
             String resp = rawSend(ctx, host, port, probe, timeoutMs);
-            return false; // Got a response — no timeout
+            return false; // Got a response -- no timeout
         } catch (java.net.SocketTimeoutException e) {
-            return true; // Timed out — server was hanging
+            return true; // Timed out -- server was hanging
         } catch (Exception e) {
             return false;
         }
@@ -180,7 +182,7 @@ public class RequestSmugglingModule implements Scanner {
                 } catch (java.net.SocketTimeoutException e) {
                     timeouts++;
                 } catch (Exception e) {
-                    // Connection error — skip attempt
+                    // Connection error -- skip attempt
                 }
             }
             if (timeouts >= TETE_CONFIRM_THRESHOLD) {

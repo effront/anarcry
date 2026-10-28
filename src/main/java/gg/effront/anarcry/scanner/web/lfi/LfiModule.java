@@ -25,18 +25,18 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * LfiModule — detects Local File Inclusion / Path Traversal (CWE-22).
+ * LfiModule -- detects Local File Inclusion / Path Traversal (CWE-22).
  *
  * <p>
  * Phases:
  * <ol>
- * <li>Linux traversal — inject canonical payloads, look for "root:x:" in
+ * <li>Linux traversal -- inject canonical payloads, look for "root:x:" in
  * response</li>
- * <li>Windows traversal — inject win.ini traversal, look for
+ * <li>Windows traversal -- inject win.ini traversal, look for
  * "[extensions]"</li>
- * <li>PHP wrapper — if PHP fingerprinted, inject php://filter and check
+ * <li>PHP wrapper -- if PHP fingerprinted, inject php://filter and check
  * base64-decoded content</li>
- * <li>Log poisoning → RCE chain — if Linux LFI confirmed on Apache/Nginx
+ * <li>Log poisoning → RCE chain -- if Linux LFI confirmed on Apache/Nginx
  * server</li>
  * </ol>
  *
@@ -85,22 +85,22 @@ public class LfiModule implements Scanner {
     }
 
     /**
-     * Linux payloads — mix of plain traversal sequences (encode=true) and
+     * Linux payloads -- mix of plain traversal sequences (encode=true) and
      * pre-encoded bypass variants (encode=false, already URL-safe).
      */
     private static final List<Payload> PAYLOADS_LINUX = List.of(new Payload("../../etc/passwd", true),
             new Payload("../../../etc/passwd", true), new Payload("../../../../etc/passwd", true),
-            // Pre-encoded bypass — dots encoded; do NOT re-encode (would double-encode %)
+            // Pre-encoded bypass -- dots encoded; do NOT re-encode (would double-encode %)
             new Payload("..%2F..%2Fetc%2Fpasswd", false), new Payload("%2e%2e%2f%2e%2e%2fetc%2fpasswd", false),
             // Double-dot bypass (....// technique)
             new Payload("....//....//etc/passwd", false));
 
     /**
-     * Windows payloads — backslash replaced with %5C so URI.create() accepts the
+     * Windows payloads -- backslash replaced with %5C so URI.create() accepts the
      * URL.
      */
     private static final List<Payload> PAYLOADS_WINDOWS = List.of(new Payload("../../windows/win.ini", true),
-            // Backslash variant — encode=false because we pre-encoded the backslash below
+            // Backslash variant -- encode=false because we pre-encoded the backslash below
             new Payload("..%5C..%5Cwindows%5Cwin.ini", false));
 
     /** PHP stream wrapper for source disclosure. */
@@ -113,11 +113,11 @@ public class LfiModule implements Scanner {
     private static final Pattern LINUX_PATTERN = Pattern.compile("root:x:");
     private static final Pattern WINDOWS_PATTERN = Pattern.compile("\\[extensions\\]");
     /**
-     * Matches a base64-encoded blob of at least 100 chars — proxy for PHP source.
+     * Matches a base64-encoded blob of at least 100 chars -- proxy for PHP source.
      */
     private static final Pattern PHP_B64_PATTERN = Pattern.compile("[A-Za-z0-9+/=]{100,}");
     /**
-     * Output from id(1) or /etc/passwd inclusion — confirms RCE via log poisoning.
+     * Output from id(1) or /etc/passwd inclusion -- confirms RCE via log poisoning.
      */
     private static final Pattern RCE_OUTPUT = Pattern.compile("uid=\\d+|root:x:|www-data");
 
@@ -165,7 +165,7 @@ public class LfiModule implements Scanner {
         // -----------------------------------------------------------------------
         // Phase 1: Linux traversal
         // -----------------------------------------------------------------------
-        log.accept("[~] LFI: fase 1 — " + linuxPayloads.size() + " Linux payloads (" + PROBE_PATHS.size() + " paths × "
+        log.accept("[~] LFI: fase 1 -- " + linuxPayloads.size() + " Linux payloads (" + PROBE_PATHS.size() + " paths × "
                 + FILE_PARAM_KEYWORDS.size() + " params)");
 
         linuxOuter : for (int pi = 0; pi < PROBE_PATHS.size(); pi++) {
@@ -194,7 +194,7 @@ public class LfiModule implements Scanner {
             }
 
             for (String param : FILE_PARAM_KEYWORDS) {
-                // Anti-FP baseline — fetch with a benign, non-existent file name
+                // Anti-FP baseline -- fetch with a benign, non-existent file name
                 String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=index");
 
                 // Skip if baseline already contains the oracle string (pre-existing content)
@@ -223,7 +223,7 @@ public class LfiModule implements Scanner {
                                     + URLEncoder.encode(payload.value(), "UTF-8") + "'";
 
                             findings.add(Finding.of(id(), path + "?" + param + "=" + payload.value(),
-                                    "LFI — Leitura de /etc/passwd confirmada", Severity.CRITICAL,
+                                    "LFI -- Leitura de /etc/passwd confirmada", Severity.CRITICAL,
                                     "Payload: " + payload.value() + " | Resposta contém 'root:x:' | URL: " + testUrl,
                                     "Path traversal confirma leitura arbitrária de arquivos do sistema. "
                                             + "Exposição de /etc/passwd revela contas locais e pode encadear "
@@ -245,7 +245,7 @@ public class LfiModule implements Scanner {
         // Phase 2: Windows traversal (only if Linux not confirmed)
         // -----------------------------------------------------------------------
         if (!linuxConfirmed) {
-            log.accept("[~] LFI: fase 2 — " + windowsPayloads.size() + " Windows payloads (" + PROBE_PATHS.size()
+            log.accept("[~] LFI: fase 2 -- " + windowsPayloads.size() + " Windows payloads (" + PROBE_PATHS.size()
                     + " paths × " + FILE_PARAM_KEYWORDS.size() + " params)");
 
             windowsOuter : for (int wi = 0; wi < PROBE_PATHS.size(); wi++) {
@@ -275,7 +275,7 @@ public class LfiModule implements Scanner {
                                         + URLEncoder.encode(payload.value(), "UTF-8") + "'";
 
                                 findings.add(Finding.of(id(), path + "?" + param + "=" + payload.value(),
-                                        "LFI — Leitura de windows/win.ini confirmada", Severity.HIGH,
+                                        "LFI -- Leitura de windows/win.ini confirmada", Severity.HIGH,
                                         "Payload: " + payload.value() + " | Resposta contém '[extensions]' | URL: "
                                                 + testUrl,
                                         "Path traversal confirma leitura de arquivos do sistema Windows.", poc,
@@ -291,10 +291,10 @@ public class LfiModule implements Scanner {
         }
 
         // -----------------------------------------------------------------------
-        // Phase 3: PHP stream wrapper — only if PHP was detected
+        // Phase 3: PHP stream wrapper -- only if PHP was detected
         // -----------------------------------------------------------------------
         if (phpDetected) {
-            log.accept("[~] LFI: fase 3 — PHP wrapper php://filter");
+            log.accept("[~] LFI: fase 3 -- PHP wrapper php://filter");
 
             phpOuter : for (String path : PROBE_PATHS) {
                 for (String param : FILE_PARAM_KEYWORDS) {
@@ -323,7 +323,7 @@ public class LfiModule implements Scanner {
                                         "[!!!] LFI PHP wrapper: código-fonte PHP extraído via " + path + "?" + param);
 
                                 findings.add(Finding.of(id(), path + "?" + param + "=" + PHP_WRAPPER_PAYLOAD,
-                                        "LFI — php://filter wrapper confirma leitura de código-fonte PHP",
+                                        "LFI -- php://filter wrapper confirma leitura de código-fonte PHP",
                                         Severity.HIGH,
                                         "php://filter/convert.base64-encode/resource=index.php retornou base64 "
                                                 + "decodificável para código PHP | URL: " + testUrl,
@@ -348,11 +348,11 @@ public class LfiModule implements Scanner {
         // -----------------------------------------------------------------------
         if (linuxConfirmed && serverHeader != null
                 && (SERVER_APACHE.matcher(serverHeader).find() || SERVER_NGINX.matcher(serverHeader).find())) {
-            log.accept("[~] LFI: fase 4 — tentando log poisoning chain (" + serverHeader + ")");
+            log.accept("[~] LFI: fase 4 -- tentando log poisoning chain (" + serverHeader + ")");
             String rceEvidence = tryLogPoisoningChain(ctx, hc, base, confirmedPath, confirmedParam, serverHeader, log);
 
             if (rceEvidence != null) {
-                // RCE chain uses a stricter CVSS — full C/I/A + network scope changed
+                // RCE chain uses a stricter CVSS -- full C/I/A + network scope changed
                 String rceVec = "AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H";
                 double rceScore = CvssCalculator.calculate(rceVec);
 
