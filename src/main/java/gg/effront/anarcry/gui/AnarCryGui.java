@@ -8,6 +8,7 @@ import gg.effront.anarcry.gui.components.LogPane;
 import gg.effront.anarcry.gui.theme.AnarCryLaf;
 import gg.effront.anarcry.gui.views.DashboardView;
 import gg.effront.anarcry.gui.views.ExportDialog;
+import gg.effront.anarcry.gui.views.FindingDetailDialog;
 import gg.effront.anarcry.gui.views.FindingsView;
 import gg.effront.anarcry.gui.views.PreferencesDialog;
 import gg.effront.anarcry.gui.views.RepeaterView;
@@ -25,6 +26,8 @@ import java.awt.KeyEventDispatcher;
 import java.awt.KeyboardFocusManager;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -33,6 +36,7 @@ import java.util.Map;
 
 import javax.swing.JFrame;
 import javax.swing.JMenu;
+import javax.swing.JTable;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
@@ -175,6 +179,8 @@ public class AnarCryGui {
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setJMenuBar(buildMenuBar());
 
+        installFindingDetailHandler(scanFindingsTable);
+
         JSplitPane scanSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, logPane, scanFindingsTable);
         scanSplit.setResizeWeight(0.5);
         scanSplit.setDividerLocation(LOG_DIVIDER_LOCATION);
@@ -201,6 +207,27 @@ public class AnarCryGui {
         frame.setSize(FRAME_WIDTH, FRAME_HEIGHT);
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
+    }
+
+    private void installFindingDetailHandler(FindingsTable table) {
+        JTable jTable = table.getTable();
+        jTable.addMouseListener(new MouseAdapter() {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    int viewRow = jTable.getSelectedRow();
+                    if (viewRow < 0) {
+                        return;
+                    }
+                    int modelRow = jTable.convertRowIndexToModel(viewRow);
+                    List<Finding> all = table.getFindings();
+                    if (modelRow >= 0 && modelRow < all.size()) {
+                        new FindingDetailDialog(frame, all.get(modelRow)).setVisible(true);
+                    }
+                }
+            }
+        });
     }
 
     private void installKeyShortcuts() {
