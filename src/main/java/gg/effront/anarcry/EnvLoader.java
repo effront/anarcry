@@ -37,6 +37,10 @@ public record EnvLoader(String target, String jwt1, String jwt2) {
         if (t.isBlank()) {
             return t;
         }
+        int comma = t.indexOf(',');
+        if (comma > 0) {
+            t = t.substring(0, comma).strip();
+        }
         if (!t.startsWith("http://") && !t.startsWith("https://")) {
             return "https://" + t;
         }

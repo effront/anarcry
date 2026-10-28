@@ -146,7 +146,7 @@ public class CrlfModule implements Scanner {
                         : response;
                 if (responseHeaders.toLowerCase().contains(INJECTED_HEADER_NAME.toLowerCase())) {
                     log.accept("[!!] CRLF: CRÍTICO — injeção via " + headerName + " refletida em response header");
-                    return Finding.of("CRLF", "/",
+                    return Finding.of("CRLF", ctx.targetUrl(),
                             "CRLF Injection via " + headerName + " — header injetado refletido na resposta",
                             Severity.CRITICAL,
                             "Header: " + headerName + " | CRLF + '" + INJECTED_HEADER_NAME + ": "
