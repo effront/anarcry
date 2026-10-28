@@ -49,7 +49,7 @@ import javax.swing.text.JTextComponent;
 
 public class AnarCryGui {
 
-    private static final String FRAME_TITLE = "AnarCry v1.2";
+    private static final String FRAME_TITLE = "AnarCry v1.3";
     private static final int FRAME_WIDTH = 1400;
     private static final int FRAME_HEIGHT = 950;
     private static final int MODULES_PANEL_WIDTH = 260;
@@ -84,6 +84,7 @@ public class AnarCryGui {
         modulesPanel = new GuiModulesPanel();
         dashboardView = new DashboardView();
         findingsView = new FindingsView();
+        findingsView.setJwtSupplier(modulesPanel::getJwt);
         scanFindingsTable = new FindingsTable();
         scanDetailPanel = new FindingDetailPanel();
         targetView = new TargetView();
@@ -250,7 +251,7 @@ public class AnarCryGui {
                     int modelRow = jTable.convertRowIndexToModel(viewRow);
                     List<Finding> all = table.getFindings();
                     if (modelRow >= 0 && modelRow < all.size()) {
-                        new FindingDetailDialog(frame, all.get(modelRow)).setVisible(true);
+                        new FindingDetailDialog(frame, all.get(modelRow), modulesPanel.getJwt()).setVisible(true);
                     }
                 }
             }
@@ -396,7 +397,7 @@ public class AnarCryGui {
 
         JMenuItem about = new JMenuItem("About AnarCry");
         about.addActionListener(e -> JOptionPane.showMessageDialog(frame,
-                "AnarCry v1.2\nSecurity Scanner\nAuthorized testing only.", "About", JOptionPane.INFORMATION_MESSAGE));
+                "AnarCry v1.3\nSecurity Scanner\nAuthorized testing only.", "About", JOptionPane.INFORMATION_MESSAGE));
         menu.add(about);
 
         return menu;

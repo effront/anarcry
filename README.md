@@ -103,13 +103,13 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.2.jar
+java -jar build/libs/anarcry-1.3.jar
 ```
 
 With `.env.local` for pre-configured targets:
 
 ```bash
-java -jar build/libs/anarcry-1.2.jar --env .env.local
+java -jar build/libs/anarcry-1.3.jar --env .env.local
 ```
 
 ---
@@ -333,6 +333,16 @@ ScanRunner.run(ScanContext)
 ---
 
 ## 09 - Changelog
+
+### v1.3
+
+- **Swing GUI migration**: full Swing + FlatLaf GUI replacing Lanterna TUI (Dashboard, Scan, Target, Findings, Repeater, Report, SiteMap tabs)
+- **Privacy Mode**: toggle to redact URLs, JWTs, and IPs across all views (Ctrl+Shift+P)
+- **Inline FindingDetailPanel**: single-click finding row shows tabbed details (Impact/Evidence/Reproduction/Recommendation)
+- **FindingDetailDialog**: double-click opens full detail dialog
+- **Export dialog**: Markdown, JSON, SARIF, HackerOne, Bugcrowd export from GUI
+- **Emdash cleanup**: all unicode dashes replaced with ASCII across codebase and knowledge-base
+- **AGPL-3.0 license**, CODE_OF_CONDUCT.md, SECURITY.md added
 
 ### v1.2
 

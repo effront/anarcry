@@ -19,6 +19,7 @@ import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -38,8 +39,11 @@ public class FindingDetailDialog extends JDialog {
     private static final Color COLOR_LOW = new Color(0x00, 0x94, 0xFF);
     private static final Color COLOR_INFO = new Color(0x7E, 0x89, 0x93);
 
-    public FindingDetailDialog(JFrame parent, Finding finding) {
+    private final String jwtToken;
+
+    public FindingDetailDialog(JFrame parent, Finding finding, String jwtToken) {
         super(parent, finding.severity().name() + " -- " + finding.title(), true);
+        this.jwtToken = jwtToken != null ? jwtToken : "";
         setMinimumSize(new Dimension(DIALOG_WIDTH, DIALOG_HEIGHT));
         setSize(DIALOG_WIDTH, DIALOG_HEIGHT);
         setLocationRelativeTo(parent);
@@ -160,12 +164,19 @@ public class FindingDetailDialog extends JDialog {
     private JPanel buildButtonPanel(Finding f) {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
 
-        JButton copyCurl = new JButton("Copy cURL");
+        JCheckBox bearerCheck = new JCheckBox("Include Bearer");
+        bearerCheck.setVisible(!jwtToken.isBlank());
+        panel.add(bearerCheck);
+
+        JButton copyCurl = new JButton("Copy Repro");
         copyCurl.addActionListener(e -> {
             String curl = buildCurl(f);
+            if (bearerCheck.isSelected() && !jwtToken.isBlank()) {
+                curl = injectBearer(curl, jwtToken);
+            }
             Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(curl), null);
             copyCurl.setText("Copied!");
-            javax.swing.Timer t = new javax.swing.Timer(1500, ev -> copyCurl.setText("Copy cURL"));
+            javax.swing.Timer t = new javax.swing.Timer(1500, ev -> copyCurl.setText("Copy Repro"));
             t.setRepeats(false);
             t.start();
         });
@@ -179,11 +190,28 @@ public class FindingDetailDialog extends JDialog {
     }
 
     private static String buildCurl(Finding f) {
+        String repro = f.reproduction();
+        if (repro != null && !repro.isBlank()) {
+            return repro;
+        }
         String endpoint = f.endpoint();
         if (endpoint == null || endpoint.isBlank() || "/".equals(endpoint)) {
             return "curl -v '<target-url>'";
         }
         return "curl -v '" + endpoint.replace("'", "'\\''") + "'";
+    }
+
+    private static String injectBearer(String cmd, String jwt) {
+        if (cmd.contains("Authorization:") || cmd.contains("Bearer")) {
+            return cmd;
+        }
+        String header = "-H 'Authorization: Bearer " + jwt + "'";
+        int curlIdx = cmd.indexOf("curl ");
+        if (curlIdx >= 0) {
+            int afterCurl = curlIdx + 5;
+            return cmd.substring(0, afterCurl) + header + " " + cmd.substring(afterCurl);
+        }
+        return cmd + " " + header;
     }
 
     private static String safe(String s) {

@@ -4,6 +4,8 @@ import gg.effront.anarcry.gui.PrivacyFilter;
 
 import java.awt.Color;
 import java.awt.Font;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.JScrollPane;
 import javax.swing.JTextPane;
@@ -29,6 +31,7 @@ public class LogPane extends JScrollPane {
     private static final Color COLOR_GRAY = new Color(0x8B, 0x94, 0x9E);
 
     private final JTextPane textPane;
+    private final List<String> rawMessages = new ArrayList<>();
 
     public LogPane() {
         textPane = new JTextPane();
@@ -39,6 +42,7 @@ public class LogPane extends JScrollPane {
         setViewportView(textPane);
         setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        PrivacyFilter.addListener(() -> SwingUtilities.invokeLater(this::rerender));
     }
 
     /**
@@ -46,6 +50,10 @@ public class LogPane extends JScrollPane {
      */
     public void log(String message) {
         SwingUtilities.invokeLater(() -> {
+            rawMessages.add(message);
+            while (rawMessages.size() > MAX_LINES) {
+                rawMessages.removeFirst();
+            }
             String display = PrivacyFilter.apply(message);
             AttributeSet attrs = attrsFor(message);
             Document doc = textPane.getDocument();
@@ -83,6 +91,7 @@ public class LogPane extends JScrollPane {
     /** Clear all log content. Safe to call from any thread. */
     public void clear() {
         SwingUtilities.invokeLater(() -> {
+            rawMessages.clear();
             try {
                 Document doc = textPane.getDocument();
                 doc.remove(0, doc.getLength());
@@ -92,15 +101,40 @@ public class LogPane extends JScrollPane {
         });
     }
 
-    private void trimExcessLines(Document doc) {
-        Element root = doc.getDefaultRootElement();
-        while (root.getElementCount() > MAX_LINES) {
-            Element first = root.getElement(0);
+    private void rerender() {
+        Document doc = textPane.getDocument();
+        try {
+            doc.remove(0, doc.getLength());
+        } catch (BadLocationException ignored) {
+            return;
+        }
+        for (String raw : rawMessages) {
+            String display = PrivacyFilter.apply(raw);
+            AttributeSet attrs = attrsFor(raw);
             try {
-                doc.remove(first.getStartOffset(), first.getEndOffset());
+                if (doc.getLength() > 0) {
+                    doc.insertString(doc.getLength(), "\n", attrs);
+                }
+                doc.insertString(doc.getLength(), display, attrs);
             } catch (BadLocationException ignored) {
                 break;
             }
+        }
+        if (doc.getLength() > 0) {
+            textPane.setCaretPosition(doc.getLength());
+        }
+    }
+
+    private void trimExcessLines(Document doc) {
+        int lineCount = doc.getDefaultRootElement().getElementCount();
+        if (lineCount <= MAX_LINES) {
+            return;
+        }
+        Element first = doc.getDefaultRootElement().getElement(0);
+        try {
+            doc.remove(first.getStartOffset(), first.getEndOffset());
+        } catch (BadLocationException ignored) {
+            // should not happen
         }
     }
 

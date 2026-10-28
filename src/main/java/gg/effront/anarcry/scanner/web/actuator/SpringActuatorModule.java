@@ -157,7 +157,7 @@ public class SpringActuatorModule implements Scanner {
         String snippet = body.length() > 300 ? body.substring(0, 300) + "..." : body;
         return Finding.of("Actuator", ep.path(), "Spring Actuator -- " + ep.description(), ep.severity(),
                 "URL: " + url + " | Body (300 chars): " + snippet,
-                "Endpoint Spring Actuator acessível sem autenticação adequada -- pode expor credenciais, configurações e"
+                "Endpoint Actuator acessível sem autenticação -- pode expor credenciais, configurações e"
                         + "estrutura interna",
                 "curl '" + url + "'",
                 "Restringir acesso ao actuator: spring.security.user.*,"
