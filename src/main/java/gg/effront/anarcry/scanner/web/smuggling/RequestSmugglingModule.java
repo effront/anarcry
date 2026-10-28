@@ -58,7 +58,8 @@ public class RequestSmugglingModule implements Scanner {
         if (clTeTimeout) {
             log.accept("[!!] ReqSmuggling: CRITICAL — CL.TE desync confirmado (probe excedeu " + PROBE_TIMEOUT_MS
                     + "ms vs baseline < " + BASELINE_TIMEOUT_MS + "ms)");
-            findings.add(Finding.of("ReqSmuggling", "/", "HTTP Request Smuggling — CL.TE desync", Severity.CRITICAL,
+            findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(), "HTTP Request Smuggling — CL.TE desync",
+                    Severity.CRITICAL,
                     "CL.TE timing probe: POST com Content-Length=4 e Transfer-Encoding=chunked (corpo de 8 bytes) "
                             + "causou timeout de " + PROBE_TIMEOUT_MS + "ms — backend usa TE e ficou aguardando "
                             + "bytes de chunk que o frontend (usa CL) não repassou",
@@ -81,7 +82,8 @@ public class RequestSmugglingModule implements Scanner {
         boolean teCLTimeout = sendProbeAndCheckTimeout(ctx, host, port, buildTeCLProbe(host), PROBE_TIMEOUT_MS);
         if (teCLTimeout) {
             log.accept("[!!] ReqSmuggling: CRITICAL — TE.CL desync confirmado");
-            findings.add(Finding.of("ReqSmuggling", "/", "HTTP Request Smuggling — TE.CL desync", Severity.CRITICAL,
+            findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(), "HTTP Request Smuggling — TE.CL desync",
+                    Severity.CRITICAL,
                     "TE.CL timing probe: POST com Transfer-Encoding=chunked e Content-Length=1 " + "causou timeout de "
                             + PROBE_TIMEOUT_MS + "ms — backend usa CL e ficou aguardando "
                             + "dados que o frontend (usa TE) não repassou completamente",
@@ -99,15 +101,16 @@ public class RequestSmugglingModule implements Scanner {
         String verdict = probeTeTeObfuscation(ctx, host, port, log);
         if (verdict != null) {
             log.accept("[!!] ReqSmuggling: HIGH — TE.TE obfuscation aceito pelo servidor: " + verdict);
-            findings.add(Finding.of("ReqSmuggling", "/", "HTTP Request Smuggling — TE.TE obfuscation (" + verdict + ")",
-                    Severity.HIGH,
-                    "Probe com Transfer-Encoding obfuscado '" + verdict + "' retornou 200 — "
-                            + "frontend e backend podem interpretar diferentemente, possibilitando desync",
+            findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(),
+                    "HTTP Request Smuggling — TE.TE obfuscation (" + verdict + ")", Severity.HIGH,
+                    "Probe com Transfer-Encoding obfuscado '" + verdict + "' causou timeout de " + PROBE_TIMEOUT_MS
+                            + "ms — servidor processou TE obfuscado como chunked e ficou "
+                            + "aguardando chunk terminal (baseline respondeu em < " + BASELINE_TIMEOUT_MS + "ms)",
                     "Frontend ou backend aceitou Transfer-Encoding com valor não-padrão — "
                             + "atacante pode usar a ambiguidade para smuggling de requests.",
                     "printf 'POST / HTTP/1.1\\r\\nHost: " + host + "\\r\\n"
-                            + "Content-Length: 4\\r\\nTransfer-Encoding: " + verdict + "\\r\\n\\r\\n"
-                            + "1\\r\\nA\\r\\n0\\r\\n\\r\\n' | nc " + host + " " + port,
+                            + "Content-Length: 8\\r\\nTransfer-Encoding: " + verdict + "\\r\\n\\r\\n"
+                            + "5\\r\\nHELLO' | openssl s_client -connect " + host + ":" + port + " -quiet",
                     "Rejeitar Transfer-Encoding com valores não-padrão (xchunked, identity com TE duplo etc.)", _cweId,
                     _cweTitle, _cveVector, _score));
         }
@@ -157,31 +160,31 @@ public class RequestSmugglingModule implements Scanner {
         }
     }
 
-    // Returns the obfuscated TE variant that causes a timeout (server hung waiting
-    // for chunks),
-    // or null if none causes a timeout. A 200 response alone is NOT evidence of
-    // desync —
-    // many servers ignore invalid TE values and respond normally. Only a timeout is
-    // meaningful.
+    private static final int TETE_CONFIRM_THRESHOLD = 2;
+    private static final int TETE_ATTEMPTS = 3;
+
     private String probeTeTeObfuscation(ScanContext ctx, String host, int port, Consumer<String> log) {
         List<String> variants = List.of("xchunked", "chunked, chunked", "chunked\t");
         for (String variant : variants) {
-            // Send an INCOMPLETE chunked body: server that processes the obfuscated TE
-            // will hang waiting for the terminating 0-chunk → SocketTimeoutException.
-            // Servers that ignore it (treat as identity/CL) respond immediately.
+            // Body is "5\r\nHELLO" = 8 bytes. CL matches the raw body length so servers
+            // that ignore the obfuscated TE and use CL get a complete request and respond.
+            // Servers that treat the obfuscated TE as chunked see an incomplete chunk
+            // (missing terminating 0\r\n\r\n) and hang.
             String probe = "POST / HTTP/1.1\r\n" + "Host: " + host + "\r\n"
-                    + "Content-Type: application/x-www-form-urlencoded\r\n" + "Content-Length: 44\r\n"
-                    + "Transfer-Encoding: " + variant + "\r\n" + "\r\n" + "5\r\nHELLO"; // intentionally incomplete — no
-                                                                                        // terminating 0\r\n\r\n
-            try {
-                rawSend(ctx, host, port, probe, PROBE_TIMEOUT_MS);
-                // Got a response without timeout — server ignored the obfuscated TE
-            } catch (java.net.SocketTimeoutException e) {
-                // Timed out — server processed the obfuscated TE and hung on the incomplete
-                // body
+                    + "Content-Type: application/x-www-form-urlencoded\r\n" + "Content-Length: 8\r\n"
+                    + "Transfer-Encoding: " + variant + "\r\n" + "\r\n" + "5\r\nHELLO";
+            int timeouts = 0;
+            for (int attempt = 0; attempt < TETE_ATTEMPTS; attempt++) {
+                try {
+                    rawSend(ctx, host, port, probe, PROBE_TIMEOUT_MS);
+                } catch (java.net.SocketTimeoutException e) {
+                    timeouts++;
+                } catch (Exception e) {
+                    // Connection error — skip attempt
+                }
+            }
+            if (timeouts >= TETE_CONFIRM_THRESHOLD) {
                 return variant;
-            } catch (Exception e) {
-                // Connection error or other — skip
             }
         }
         return null;
