@@ -84,178 +84,184 @@ public class ScanRunner {
 
     public void run(ScanContext ctx) {
         executor.submit(() -> {
-            onScanStart.run();
-            if (!ctx.config().isInScope(ctx.host())) {
-                logCb.accept("[!] Host " + ctx.host() + " fora do scope — scan cancelado");
+            try {
+                runScan(ctx);
+            } catch (Exception e) {
+                logCb.accept("[!] Scan falhou: " + e.getMessage());
+            } finally {
                 onScanFinish.run();
-                return;
             }
-            List<Scanner> modules = new ArrayList<>();
-            if (ctx.has("TLS")) {
-                modules.add(new TlsModule());
-            }
-            if (ctx.has("Headers")) {
-                modules.add(new HeadersModule());
-            }
-            if (ctx.has("HSTS")) {
-                modules.add(new HSTSModule());
-            }
-            if (ctx.has("JWT")) {
-                modules.add(new JwtModule());
-            }
-            if (ctx.has("PQC")) {
-                modules.add(new PqcModule());
-            }
-            if (ctx.has("CORS")) {
-                modules.add(new CorsModule());
-            }
-            if (ctx.has("OAuth")) {
-                modules.add(new OAuthModule());
-            }
-            if (ctx.has("OpenRedirect")) {
-                modules.add(new OpenRedirectModule());
-            }
-            if (ctx.has("SSRF")) {
-                modules.add(new SsrfModule());
-            }
-            if (ctx.has("GraphQL")) {
-                modules.add(new GraphQLModule());
-            }
-            if (ctx.has("CRLF")) {
-                modules.add(new CrlfModule());
-            }
-            if (ctx.has("XXE")) {
-                modules.add(new XxeModule());
-            }
-            if (ctx.has("SSTI")) {
-                modules.add(new SstiModule());
-            }
-            if (ctx.has("IDOR")) {
-                modules.add(new IdorModule());
-            }
-            if (ctx.has("HostHeader")) {
-                modules.add(new HostHeaderModule());
-            }
-            if (ctx.has("Actuator")) {
-                modules.add(new SpringActuatorModule());
-            }
-            if (ctx.has("MassAssign")) {
-                modules.add(new MassAssignmentModule());
-            }
-            if (ctx.has("CachePoisoning")) {
-                modules.add(new CachePoisoningModule());
-            }
-            if (ctx.has("ReqSmuggling")) {
-                modules.add(new RequestSmugglingModule());
-            }
-            if (ctx.has("Crawler")) {
-                modules.add(new CrawlerModule());
-            }
-            if (ctx.has("Infra")) {
-                modules.add(new InfraModule());
-            }
-            modules.addAll(customModules);
-
-            List<Scanner> enrichers = new ArrayList<>();
-            List<Scanner> scanners = new ArrayList<>();
-            for (Scanner m : modules) {
-                if ("Crawler".equals(m.id())) {
-                    enrichers.add(m);
-                } else {
-                    scanners.add(m);
-                }
-            }
-
-            int moduleCount = enrichers.size() + scanners.size();
-            eventCb.accept(new ScanEvent(ScanEvent.Type.SCAN_START, null, 0, moduleCount));
-
-            int[] total = {0};
-
-            // Phase 1: Reconnaissance (blocking)
-            for (int i = 0; i < enrichers.size(); i++) {
-                final Scanner enricher = enrichers.get(i);
-                final int moduleIndex = i + 1;
-                eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_START, enricher.id(), moduleIndex, moduleCount));
-                logCb.accept("[*] Phase 1: Reconnaissance — " + enricher.id());
-                try {
-                    List<Finding> findings = enricher.scan(ctx, logCb);
-                    for (Finding f : findings) {
-                        String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
-                        if (seenFindings.add(dedupKey)) {
-                            if (ctx.config().isSuppressed(f.module(), f.title(), ctx.host())) {
-                                logCb.accept("[~] suppressed: " + f.module() + " — " + f.title());
-                            } else {
-                                findingCb.accept(f);
-                                total[0]++;
-                            }
-                        } else {
-                            logCb.accept("[~] dedup: ignorado finding duplicado — " + f.module() + " " + f.title());
-                        }
-                    }
-                    logCb.accept("[+] " + enricher.id() + ": " + findings.size() + " finding(s), "
-                            + ctx.discoveredPaths().pathCount() + " paths, " + ctx.discoveredPaths().parameterCount()
-                            + " params discovered");
-                } catch (Exception e) {
-                    logCb.accept("[!] " + enricher.id() + " erro: " + e.getMessage());
-                }
-                eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, enricher.id(), moduleIndex, moduleCount));
-            }
-
-            // Phase 2: Scanner modules (parallel)
-            int enricherCount = enrichers.size();
-            List<CompletableFuture<?>> futures = new ArrayList<>();
-
-            if (!scanners.isEmpty()) {
-                logCb.accept("[*] Phase 2: " + scanners.size() + " scanner modules (parallel)");
-
-                for (int i = 0; i < scanners.size(); i++) {
-                    final Scanner module = scanners.get(i);
-                    final int moduleIndex = enricherCount + i + 1;
-                    eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_START, module.id(), moduleIndex, moduleCount));
-                    logCb.accept("[*] Modulo " + module.id() + " iniciado");
-
-                    CompletableFuture<List<Finding>> future = CompletableFuture.supplyAsync(() -> {
-                        try {
-                            return module.scan(ctx, logCb);
-                        } catch (Exception e) {
-                            throw new RuntimeException(e);
-                        }
-                    }, modulePool);
-
-                    futures.add(future.whenComplete((findings, ex) -> {
-                        if (ex != null) {
-                            logCb.accept("[!] " + module.id() + " erro: " + ex.getMessage());
-                        } else {
-                            for (Finding f : findings) {
-                                String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
-                                if (seenFindings.add(dedupKey)) {
-                                    if (ctx.config().isSuppressed(f.module(), f.title(), ctx.host())) {
-                                        logCb.accept("[~] suppressed: " + f.module() + " — " + f.title());
-                                    } else {
-                                        findingCb.accept(f);
-                                        synchronized (total) {
-                                            total[0]++;
-                                        }
-                                    }
-                                } else {
-                                    logCb.accept(
-                                            "[~] dedup: ignorado finding duplicado — " + f.module() + " " + f.title());
-                                }
-                            }
-                            logCb.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
-                        }
-                        eventCb.accept(
-                                new ScanEvent(ScanEvent.Type.MODULE_DONE, module.id(), moduleIndex, moduleCount));
-                    }));
-                }
-            }
-
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-            eventCb.accept(new ScanEvent(ScanEvent.Type.SCAN_DONE, null, moduleCount, moduleCount));
-            logCb.accept("[*] Scan concluído — " + total[0] + " finding(s) no total");
-            onScanFinish.run();
         });
+    }
+
+    private void runScan(ScanContext ctx) {
+        onScanStart.run();
+        if (!ctx.config().isInScope(ctx.host())) {
+            logCb.accept("[!] Host " + ctx.host() + " fora do scope — scan cancelado");
+            return;
+        }
+        List<Scanner> modules = new ArrayList<>();
+        if (ctx.has("TLS")) {
+            modules.add(new TlsModule());
+        }
+        if (ctx.has("Headers")) {
+            modules.add(new HeadersModule());
+        }
+        if (ctx.has("HSTS")) {
+            modules.add(new HSTSModule());
+        }
+        if (ctx.has("JWT")) {
+            modules.add(new JwtModule());
+        }
+        if (ctx.has("PQC")) {
+            modules.add(new PqcModule());
+        }
+        if (ctx.has("CORS")) {
+            modules.add(new CorsModule());
+        }
+        if (ctx.has("OAuth")) {
+            modules.add(new OAuthModule());
+        }
+        if (ctx.has("OpenRedirect")) {
+            modules.add(new OpenRedirectModule());
+        }
+        if (ctx.has("SSRF")) {
+            modules.add(new SsrfModule());
+        }
+        if (ctx.has("GraphQL")) {
+            modules.add(new GraphQLModule());
+        }
+        if (ctx.has("CRLF")) {
+            modules.add(new CrlfModule());
+        }
+        if (ctx.has("XXE")) {
+            modules.add(new XxeModule());
+        }
+        if (ctx.has("SSTI")) {
+            modules.add(new SstiModule());
+        }
+        if (ctx.has("IDOR")) {
+            modules.add(new IdorModule());
+        }
+        if (ctx.has("HostHeader")) {
+            modules.add(new HostHeaderModule());
+        }
+        if (ctx.has("Actuator")) {
+            modules.add(new SpringActuatorModule());
+        }
+        if (ctx.has("MassAssign")) {
+            modules.add(new MassAssignmentModule());
+        }
+        if (ctx.has("CachePoisoning")) {
+            modules.add(new CachePoisoningModule());
+        }
+        if (ctx.has("ReqSmuggling")) {
+            modules.add(new RequestSmugglingModule());
+        }
+        if (ctx.has("Crawler")) {
+            modules.add(new CrawlerModule());
+        }
+        if (ctx.has("Infra")) {
+            modules.add(new InfraModule());
+        }
+        modules.addAll(customModules);
+
+        List<Scanner> enrichers = new ArrayList<>();
+        List<Scanner> scanners = new ArrayList<>();
+        for (Scanner m : modules) {
+            if ("Crawler".equals(m.id())) {
+                enrichers.add(m);
+            } else {
+                scanners.add(m);
+            }
+        }
+
+        int moduleCount = enrichers.size() + scanners.size();
+        eventCb.accept(new ScanEvent(ScanEvent.Type.SCAN_START, null, 0, moduleCount));
+
+        int[] total = {0};
+
+        // Phase 1: Reconnaissance (blocking)
+        for (int i = 0; i < enrichers.size(); i++) {
+            final Scanner enricher = enrichers.get(i);
+            final int moduleIndex = i + 1;
+            eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_START, enricher.id(), moduleIndex, moduleCount));
+            logCb.accept("[*] Phase 1: Reconnaissance — " + enricher.id());
+            try {
+                List<Finding> findings = enricher.scan(ctx, logCb);
+                for (Finding f : findings) {
+                    String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
+                    if (seenFindings.add(dedupKey)) {
+                        if (ctx.config().isSuppressed(f.module(), f.title(), ctx.host())) {
+                            logCb.accept("[~] suppressed: " + f.module() + " — " + f.title());
+                        } else {
+                            findingCb.accept(f);
+                            total[0]++;
+                        }
+                    } else {
+                        logCb.accept("[~] dedup: ignorado finding duplicado — " + f.module() + " " + f.title());
+                    }
+                }
+                logCb.accept("[+] " + enricher.id() + ": " + findings.size() + " finding(s), "
+                        + ctx.discoveredPaths().pathCount() + " paths, " + ctx.discoveredPaths().parameterCount()
+                        + " params discovered");
+            } catch (Exception e) {
+                logCb.accept("[!] " + enricher.id() + " erro: " + e.getMessage());
+            }
+            eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, enricher.id(), moduleIndex, moduleCount));
+        }
+
+        // Phase 2: Scanner modules (parallel)
+        int enricherCount = enrichers.size();
+        List<CompletableFuture<?>> futures = new ArrayList<>();
+
+        if (!scanners.isEmpty()) {
+            logCb.accept("[*] Phase 2: " + scanners.size() + " scanner modules (parallel)");
+
+            for (int i = 0; i < scanners.size(); i++) {
+                final Scanner module = scanners.get(i);
+                final int moduleIndex = enricherCount + i + 1;
+                eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_START, module.id(), moduleIndex, moduleCount));
+                logCb.accept("[*] Modulo " + module.id() + " iniciado");
+
+                CompletableFuture<List<Finding>> future = CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return module.scan(ctx, logCb);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }, modulePool);
+
+                futures.add(future.whenComplete((findings, ex) -> {
+                    if (ex != null) {
+                        logCb.accept("[!] " + module.id() + " erro: " + ex.getMessage());
+                    } else {
+                        for (Finding f : findings) {
+                            String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
+                            if (seenFindings.add(dedupKey)) {
+                                if (ctx.config().isSuppressed(f.module(), f.title(), ctx.host())) {
+                                    logCb.accept("[~] suppressed: " + f.module() + " — " + f.title());
+                                } else {
+                                    findingCb.accept(f);
+                                    synchronized (total) {
+                                        total[0]++;
+                                    }
+                                }
+                            } else {
+                                logCb.accept("[~] dedup: ignorado finding duplicado — " + f.module() + " " + f.title());
+                            }
+                        }
+                        logCb.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
+                    }
+                    eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, module.id(), moduleIndex, moduleCount));
+                }));
+            }
+        }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        eventCb.accept(new ScanEvent(ScanEvent.Type.SCAN_DONE, null, moduleCount, moduleCount));
+        logCb.accept("[*] Scan concluído — " + total[0] + " finding(s) no total");
     }
 
     public void shutdown() {

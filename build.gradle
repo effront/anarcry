@@ -26,6 +26,12 @@ dependencies {
     implementation 'org.bouncycastle:bctls-jdk18on:1.80'
     implementation 'com.google.code.gson:gson:2.11.0'
 
+    // GUI (Swing + FlatLaf)
+    implementation 'com.formdev:flatlaf:3.5.4'
+    implementation 'com.formdev:flatlaf-intellij-themes:3.5.4'
+    implementation 'com.fifesoft:rsyntaxtextarea:3.5.3'
+    implementation 'org.jfree:jfreechart:1.5.5'
+
     testImplementation 'org.bouncycastle:bcpkix-jdk18on:1.80'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.3'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -131,4 +137,45 @@ tasks.register('integrationTest', Test) {
     }
     group = 'verification'
     description = 'Testes que dependem de hosts externos (badssl.com, etc.)'
+}
+
+// ============================================================
+// jpackage — distribuicao nativa (.deb, .rpm)
+// Uso: ./gradlew jpackageDeb   (gera .deb em build/dist/)
+//      ./gradlew jpackageRpm   (gera .rpm em build/dist/)
+// Requer JDK com jpackage (Zulu 27+)
+// ============================================================
+tasks.register('jpackageDeb', Exec) {
+    dependsOn shadowJar
+    group = 'distribution'
+    description = 'Build .deb installer via jpackage'
+    commandLine 'jpackage',
+        '--type', 'deb',
+        '--name', 'AnarCry',
+        '--app-version', version.toString(),
+        '--input', 'build/libs',
+        '--main-jar', "anarcry-${version}.jar",
+        '--main-class', 'gg.effront.anarcry.Main',
+        '--dest', 'build/dist',
+        '--java-options', '--enable-native-access=ALL-UNNAMED',
+        '--linux-deb-maintainer', 'noreply@effront.gg',
+        '--linux-app-category', 'utils',
+        '--description', 'AnarCry Security Scanner'
+}
+
+tasks.register('jpackageRpm', Exec) {
+    dependsOn shadowJar
+    group = 'distribution'
+    description = 'Build .rpm installer via jpackage'
+    commandLine 'jpackage',
+        '--type', 'rpm',
+        '--name', 'AnarCry',
+        '--app-version', version.toString(),
+        '--input', 'build/libs',
+        '--main-jar', "anarcry-${version}.jar",
+        '--main-class', 'gg.effront.anarcry.Main',
+        '--dest', 'build/dist',
+        '--java-options', '--enable-native-access=ALL-UNNAMED',
+        '--linux-rpm-license-type', 'Proprietary',
+        '--description', 'AnarCry Security Scanner'
 }
