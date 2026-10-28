@@ -1,5 +1,6 @@
 package gg.effront.anarcry.gui.views;
 
+import gg.effront.anarcry.gui.PrivacyFilter;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.Severity;
 
@@ -143,7 +144,8 @@ public class FindingDetailDialog extends JDialog {
     }
 
     private JScrollPane buildMonoTab(String text) {
-        JTextArea area = new JTextArea(text != null ? text : "(no data)");
+        String display = text != null ? PrivacyFilter.apply(text) : "(no data)";
+        JTextArea area = new JTextArea(display);
         area.setEditable(false);
         area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
         area.setLineWrap(true);
@@ -185,7 +187,10 @@ public class FindingDetailDialog extends JDialog {
     }
 
     private static String safe(String s) {
-        return s != null && !s.isBlank() ? s : "(no data)";
+        if (s == null || s.isBlank()) {
+            return "(no data)";
+        }
+        return PrivacyFilter.apply(s);
     }
 
     private static Color colorFor(Severity sev) {

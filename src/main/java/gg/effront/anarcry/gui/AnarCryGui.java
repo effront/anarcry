@@ -234,6 +234,14 @@ public class AnarCryGui {
                     openExportDialog();
                     return true;
                 }
+
+                boolean ctrlShift = (mods
+                        & (InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK)) == (InputEvent.CTRL_DOWN_MASK
+                                | InputEvent.SHIFT_DOWN_MASK);
+                if (ctrlShift && code == KeyEvent.VK_P) {
+                    PrivacyFilter.toggle();
+                    return true;
+                }
                 return false;
             }
         });
@@ -303,6 +311,12 @@ public class AnarCryGui {
     private JMenu buildViewMenu() {
         JMenu menu = new JMenu("View");
         menu.setMnemonic(KeyEvent.VK_V);
+
+        JMenuItem privacyItem = new JMenuItem("Toggle Privacy Mode");
+        privacyItem.setAccelerator(
+                KeyStroke.getKeyStroke(KeyEvent.VK_P, InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
+        privacyItem.addActionListener(e -> PrivacyFilter.toggle());
+        menu.add(privacyItem);
 
         JMenuItem toggleTheme = new JMenuItem("Toggle Theme");
         toggleTheme.setAccelerator(
