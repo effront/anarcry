@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=AnarCry
+Comment=Security Scanner -- Automated Vulnerability Detection
+Exec=/opt/anarcry/bin/AnarCry
+Icon=/opt/anarcry/lib/AnarCry.png
+Terminal=false
+Type=Application
+Categories=Security;Development;Utility;
+Keywords=security;scanner;pentest;vulnerability;
+StartupWMClass=AnarCry
