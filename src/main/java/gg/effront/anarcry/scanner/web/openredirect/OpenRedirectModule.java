@@ -30,12 +30,12 @@ public class OpenRedirectModule implements Scanner {
             "/auth/callback", "/oauth/authorize", "/oauth/return", "/sso");
 
     // Payloads ordered by detection value:
-    // 1. Absolute URL — baseline check
-    // 2. Protocol-relative — bypasses "must start with https" check
-    // 3. Encoded slash — bypasses path-prefix check
-    // 4. User-info bypass — browser navigates to evil.com after @
-    // 5. Backslash — normalized to / by IIS and some parsers
-    // 6. Encoded scheme — bypasses regex on raw string
+    // 1. Absolute URL -- baseline check
+    // 2. Protocol-relative -- bypasses "must start with https" check
+    // 3. Encoded slash -- bypasses path-prefix check
+    // 4. User-info bypass -- browser navigates to evil.com after @
+    // 5. Backslash -- normalized to / by IIS and some parsers
+    // 6. Encoded scheme -- bypasses regex on raw string
     private record Payload(String value, String technique) {
     }
 
@@ -79,14 +79,14 @@ public class OpenRedirectModule implements Scanner {
 
                         if ((status == 301 || status == 302 || status == 307 || status == 308)
                                 && location.contains(EVIL_HOST)) {
-                            log.accept("[!!] OpenRedirect: HIGH — " + payload.technique() + " bypass confirmado → "
+                            log.accept("[!!] OpenRedirect: HIGH -- " + payload.technique() + " bypass confirmado → "
                                     + location);
                             findings.add(Finding.of("OpenRedirect", path + "?" + param,
-                                    "Open Redirect — " + payload.technique() + " bypass", Severity.HIGH,
+                                    "Open Redirect -- " + payload.technique() + " bypass", Severity.HIGH,
                                     "URL: " + url + " | Param: " + param + " | Técnica: " + payload.technique()
                                             + " | Location: " + location,
                                     "Parâmetro de redirecionamento aceita URL externa via " + payload.technique()
-                                            + " — permite phishing e roubo de tokens OAuth via redirect",
+                                            + " -- permite phishing e roubo de tokens OAuth via redirect",
                                     "curl -v '" + baseUrl + path + "?" + param + "=https://" + EVIL_HOST + "'",
                                     "Validar redirect_uri contra whitelist de paths relativos; "
                                             + "rejeitar URLs com host diferente; nunca confiar em redirect_uri do"
@@ -95,7 +95,7 @@ public class OpenRedirectModule implements Scanner {
                             break outer;
                         }
                     } catch (Exception e) {
-                        // URI creation may fail for edge-case payloads — skip
+                        // URI creation may fail for edge-case payloads -- skip
                     }
                 }
             }

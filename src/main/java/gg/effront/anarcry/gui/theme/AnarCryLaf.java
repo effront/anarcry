@@ -61,7 +61,7 @@ public final class AnarCryLaf {
     private static void applyDarkCustomizations() {
         applySharedCustomizations();
 
-        // TabbedPane — orange underline like Burp, taller tabs
+        // TabbedPane -- orange underline like Burp, taller tabs
         UIManager.put("TabbedPane.underlineColor", ACCENT);
         UIManager.put("TabbedPane.selectedBackground", BG);
         UIManager.put("TabbedPane.hoverColor", HEADING_BG);
@@ -72,7 +72,7 @@ public final class AnarCryLaf {
         UIManager.put("TabbedPane.showTabSeparators", false);
         UIManager.put("TabbedPane.contentSeparatorHeight", 1);
 
-        // Table — dark rows with alternation
+        // Table -- dark rows with alternation
         UIManager.put("Table.background", BG_DARK);
         UIManager.put("Table.alternateRowColor", BG);
         UIManager.put("Table.selectionBackground", SELECTION);
@@ -83,7 +83,7 @@ public final class AnarCryLaf {
         UIManager.put("TableHeader.separatorColor", new Color(0x4D, 0x4D, 0x4D));
         UIManager.put("TableHeader.bottomSeparatorColor", new Color(0x4D, 0x4D, 0x4D));
 
-        // CheckBox — blue selected like Burp
+        // CheckBox -- blue selected like Burp
         UIManager.put("CheckBox.icon.selectedBorderColor", BLUE);
         UIManager.put("CheckBox.icon.selectedBackground", BLUE);
         UIManager.put("CheckBox.icon.focusedBorderColor", BLUE);
@@ -94,7 +94,7 @@ public final class AnarCryLaf {
         UIManager.put("Component.focusedBorderColor", new Color(0x00, 0x66, 0xCC));
         UIManager.put("Component.focusColor", FOCUS);
 
-        // ProgressBar — orange like Burp
+        // ProgressBar -- orange like Burp
         UIManager.put("ProgressBar.foreground", ACCENT);
         UIManager.put("ProgressBar.arc", 999);
 

@@ -46,7 +46,7 @@ public class CorsModule implements Scanner {
         HttpClient hc = HttpClientFactory.noRedirect();
         log.accept("[~] CORS: iniciando probes em " + baseUrl);
 
-        // Origins ordered by severity — each tests a distinct bypass technique
+        // Origins ordered by severity -- each tests a distinct bypass technique
         List<OriginProbe> origins = List.of(new OriginProbe("https://evil.com", "reflection"),
                 new OriginProbe("null", "null-origin"),
                 new OriginProbe("https://" + ctx.host() + ".evil.com", "prefix-bypass"),
@@ -85,13 +85,13 @@ public class CorsModule implements Scanner {
 
                         // CRITICAL: reflected origin with credentials
                         if (acao.equalsIgnoreCase(origin) && credsAllowed) {
-                            log.accept("[!!] CORS: CRITICAL — " + probe.technique() + authTag
+                            log.accept("[!!] CORS: CRITICAL -- " + probe.technique() + authTag
                                     + " origin com credentials em " + url);
                             findings.add(Finding.of("CORS", path,
                                     "CORS " + probe.technique() + " com credentials" + authTag, Severity.CRITICAL,
                                     "URL: " + url + " | Origin: " + origin + " | ACAO: " + acao + " | ACAC: " + acac,
                                     "Servidor reflete origin via " + probe.technique()
-                                            + " e permite cookies/credenciais — atacante pode ler dados autenticados"
+                                            + " e permite cookies/credenciais -- atacante pode ler dados autenticados"
                                             + " via XHR cross-origin",
                                     "# PoC (hospedar na origem controlada):\nfetch('" + url
                                             + "', {credentials: 'include'})\n  .then(r => r.text())\n  .then(d =>"
@@ -104,11 +104,11 @@ public class CorsModule implements Scanner {
 
                         // HIGH: wildcard without credentials
                         if (acao.equals("*")) {
-                            log.accept("[!] CORS: HIGH — wildcard ACAO" + authTag + " em " + url);
+                            log.accept("[!] CORS: HIGH -- wildcard ACAO" + authTag + " em " + url);
                             findings.add(Finding.of("CORS", path,
-                                    "CORS wildcard — Access-Control-Allow-Origin: *" + authTag, Severity.HIGH,
+                                    "CORS wildcard -- Access-Control-Allow-Origin: *" + authTag, Severity.HIGH,
                                     "URL: " + url + " | ACAO: * | ACAC: " + (acac.isBlank() ? "ausente" : acac),
-                                    "Qualquer origem pode ler a resposta — vazamento de dados para sites externos",
+                                    "Qualquer origem pode ler a resposta -- vazamento de dados para sites externos",
                                     "fetch('" + url + "').then(r => r.text()).then(console.log)",
                                     "Restringir ACAO a origens confiáveis; usar wildcard apenas para recursos"
                                             + "genuinamente públicos",
@@ -117,10 +117,10 @@ public class CorsModule implements Scanner {
 
                         // MEDIUM: null origin accepted
                         if (acao.equalsIgnoreCase("null") && origin.equals("null")) {
-                            log.accept("[!] CORS: MEDIUM — null origin aceita" + authTag + " em " + url);
+                            log.accept("[!] CORS: MEDIUM -- null origin aceita" + authTag + " em " + url);
                             findings.add(Finding.of("CORS", path, "CORS aceita null origin" + authTag, Severity.MEDIUM,
                                     "URL: " + url + " | ACAO: null",
-                                    "null origin aceita — bypass via iframe sandbox ou data: URI no navegador"
+                                    "null origin aceita -- bypass via iframe sandbox ou data: URI no navegador"
                                             + " da vítima",
                                     "<iframe sandbox='allow-scripts' srcdoc=\"<script>" + "fetch('" + url
                                             + "',{credentials:'include'})"
@@ -135,12 +135,12 @@ public class CorsModule implements Scanner {
                                         || probe.technique().equals("prefix-bypass")
                                         || probe.technique().equals("http-downgrade"))) {
                             log.accept(
-                                    "[!] CORS: MEDIUM — " + probe.technique() + authTag + " origin aceita em " + url);
+                                    "[!] CORS: MEDIUM -- " + probe.technique() + authTag + " origin aceita em " + url);
                             findings.add(Finding.of("CORS", path,
                                     "CORS " + probe.technique() + " origin aceita" + authTag, Severity.MEDIUM,
                                     "URL: " + url + " | Origin: " + origin + " | ACAO: " + acao,
                                     "CORS mal configurado aceita " + probe.technique()
-                                            + " — potencialmente explorável via domínio controlado pelo atacante",
+                                            + " -- potencialmente explorável via domínio controlado pelo atacante",
                                     "curl -H 'Origin: " + origin + "' '" + url + "'",
                                     "Validar origin com comparação exata de string contra whitelist; "
                                             + "não usar regex parcial como endsWith ou startsWith",

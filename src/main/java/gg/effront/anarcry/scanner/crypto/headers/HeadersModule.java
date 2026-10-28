@@ -56,7 +56,7 @@ public class HeadersModule implements Scanner {
             int code = conn.getResponseCode();
             log.accept("[~] HEADERS: HTTP " + code);
             headers = conn.getHeaderFields();
-            evidence = "HTTP " + code + " — " + ctx.targetUrl();
+            evidence = "HTTP " + code + " -- " + ctx.targetUrl();
             ctx.requestLog().accept(new RequestRecord("GET", ctx.targetUrl(), code,
                     Math.max(0, conn.getContentLengthLong()), System.currentTimeMillis(), id()));
         } finally {
@@ -95,13 +95,13 @@ public class HeadersModule implements Scanner {
                         ? "CSS injection severamente mitigada: script-src estrito impede escalada para JS; "
                                 + "frame-ancestors 'none' bloqueia clickjacking; img-src restrita limita exfiltração"
                         : "unsafe-inline em style-src permite CSS injection"
-                                + (scriptStrict ? "" : "; script-src não é estrito — escalada para XSS possível")
+                                + (scriptStrict ? "" : "; script-src não é estrito -- escalada para XSS possível")
                                 + (frameAncestorsNone
                                         ? ""
-                                        : "; frame-ancestors ausente/permissivo — clickjacking via iframe")
+                                        : "; frame-ancestors ausente/permissivo -- clickjacking via iframe")
                                 + (imgSrcRestricted
                                         ? ""
-                                        : "; img-src tem wildcard — exfiltração via background:url() possível");
+                                        : "; img-src tem wildcard -- exfiltração via background:url() possível");
                 findings.add(Finding.of("Headers", ctx.targetUrl(), "CSP style-src contém unsafe-inline sem nonce/hash",
                         styleSev, evidence + " | CSP: " + cspVal, styleImpact,
                         "curl -sI " + ctx.targetUrl() + " | grep -i content-security-policy",
@@ -112,7 +112,7 @@ public class HeadersModule implements Scanner {
 
         if (!hasHeader(headers, "X-Frame-Options")) {
             findings.add(Finding.of("Headers", ctx.targetUrl(), "X-Frame-Options ausente", Severity.MEDIUM, evidence,
-                    "Sem X-Frame-Options, a página pode ser embutida em iframes — risco de clickjacking",
+                    "Sem X-Frame-Options, a página pode ser embutida em iframes -- risco de clickjacking",
                     "curl -sI " + ctx.targetUrl() + " | grep -i x-frame-options",
                     "Adicionar: X-Frame-Options: DENY (ou SAMEORIGIN se necessário)", _cweId, _cweTitle, _cveVector,
                     _score));
@@ -167,7 +167,7 @@ public class HeadersModule implements Scanner {
                     if (!low.contains("secure")) {
                         findings.add(Finding.of("Headers", ctx.targetUrl(), "Cookie sem flag Secure: " + cname,
                                 Severity.LOW, evidence + " | Set-Cookie: " + cookie,
-                                "Cookie pode ser transmitido por HTTP — interceptável em rede não cifrada",
+                                "Cookie pode ser transmitido por HTTP -- interceptável em rede não cifrada",
                                 "curl -sI " + ctx.targetUrl() + " | grep -i 'set-cookie'",
                                 "Adicionar a flag Secure em todos os cookies de sessão", _cweId, _cweTitle, _cveVector,
                                 _score));
@@ -175,7 +175,7 @@ public class HeadersModule implements Scanner {
                     if (!low.contains("httponly")) {
                         findings.add(Finding.of("Headers", ctx.targetUrl(), "Cookie sem flag HttpOnly: " + cname,
                                 Severity.LOW, evidence + " | Set-Cookie: " + cookie,
-                                "Cookie acessível via JavaScript — roubo de sessão via XSS",
+                                "Cookie acessível via JavaScript -- roubo de sessão via XSS",
                                 "curl -sI " + ctx.targetUrl() + " | grep -i 'set-cookie'",
                                 "Adicionar a flag HttpOnly em todos os cookies de sessão", _cweId, _cweTitle,
                                 _cveVector, _score));

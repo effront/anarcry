@@ -65,7 +65,7 @@ public class CachePoisoningModule implements Scanner {
                     if (inBody || inLoc) {
                         // Confirm actual cache poisoning: make a second GET WITHOUT the poison
                         // header and check if PROBE_VALUE still appears. Reflection alone is not
-                        // enough — we need evidence the poisoned response was stored.
+                        // enough -- we need evidence the poisoned response was stored.
                         boolean poisonPersisted = false;
                         try {
                             HttpRequest cleanReq = HttpRequest.newBuilder().uri(URI.create(url))
@@ -80,16 +80,16 @@ public class CachePoisoningModule implements Scanner {
 
                         Severity sev = poisonPersisted ? Severity.CRITICAL : Severity.HIGH;
                         String title = poisonPersisted
-                                ? "Web Cache Poisoning — confirmado (resposta envenenada persistiu)"
-                                : "Web Cache Poisoning — header unkeyed refletido (cache não confirmado)";
-                        log.accept("[!!] CachePoisoning: " + sev + " — " + header + " refletido"
+                                ? "Web Cache Poisoning -- confirmado (resposta envenenada persistiu)"
+                                : "Web Cache Poisoning -- header unkeyed refletido (cache não confirmado)";
+                        log.accept("[!!] CachePoisoning: " + sev + " -- " + header + " refletido"
                                 + (poisonPersisted ? " + cache envenenado confirmado" : "") + " em " + url);
                         findings.add(Finding.of("CachePoisoning", path, title, sev, "Header: " + header + "="
                                 + PROBE_VALUE + " | Refletido em " + (inBody ? "body" : "Location")
                                 + (poisonPersisted
-                                        ? " | Segunda request sem header retornou PROBE_VALUE — cache envenenado"
+                                        ? " | Segunda request sem header retornou PROBE_VALUE -- cache envenenado"
                                         : " | Segunda request sem header não retornou PROBE_VALUE"),
-                                "Header não incluso na cache key é refletido na resposta — "
+                                "Header não incluso na cache key é refletido na resposta -- "
                                         + "atacante pode envenenar o cache servindo XSS/redirects maliciosos "
                                         + "para todos os usuários que acessam essa URL",
                                 "curl -H '" + header + ": " + PROBE_VALUE + "' " + url,
@@ -99,7 +99,7 @@ public class CachePoisoningModule implements Scanner {
                         break outer;
                     }
                 } catch (Exception e) {
-                    // Skip connection errors — continue
+                    // Skip connection errors -- continue
                 }
             }
         }
