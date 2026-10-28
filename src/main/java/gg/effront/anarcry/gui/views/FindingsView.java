@@ -1,5 +1,6 @@
 package gg.effront.anarcry.gui.views;
 
+import gg.effront.anarcry.gui.components.FindingDetailPanel;
 import gg.effront.anarcry.gui.components.FindingsTable;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.Severity;
@@ -15,6 +16,7 @@ import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.RowFilter;
@@ -31,6 +33,7 @@ import javax.swing.table.TableRowSorter;
 public class FindingsView extends JPanel {
 
     private final FindingsTable findingsTable;
+    private final FindingDetailPanel detailPanel;
     private final JComboBox<String> severityFilter;
     private final JTextField searchField;
     private final JLabel countLabel;
@@ -76,10 +79,32 @@ public class FindingsView extends JPanel {
         toolbar.add(countLabel);
 
         add(toolbar, BorderLayout.NORTH);
-        add(findingsTable, BorderLayout.CENTER);
 
-        // Double-click opens detail
+        detailPanel = new FindingDetailPanel();
+
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, findingsTable, detailPanel);
+        split.setResizeWeight(0.5);
+        add(split, BorderLayout.CENTER);
+
+        // Selection updates inline detail panel
         JTable jTable = findingsTable.getTable();
+        jTable.getSelectionModel().addListSelectionListener(e -> {
+            if (e.getValueIsAdjusting()) {
+                return;
+            }
+            int viewRow = jTable.getSelectedRow();
+            if (viewRow < 0) {
+                detailPanel.clear();
+                return;
+            }
+            int modelRow = jTable.convertRowIndexToModel(viewRow);
+            List<Finding> all = findingsTable.getFindings();
+            if (modelRow >= 0 && modelRow < all.size()) {
+                detailPanel.show(all.get(modelRow));
+            }
+        });
+
+        // Double-click opens full detail dialog
         jTable.addMouseListener(new MouseAdapter() {
 
             @Override
@@ -110,6 +135,7 @@ public class FindingsView extends JPanel {
     /** Remove all rows. */
     public void clear() {
         findingsTable.clear();
+        detailPanel.clear();
         SwingUtilities.invokeLater(this::updateCount);
     }
 

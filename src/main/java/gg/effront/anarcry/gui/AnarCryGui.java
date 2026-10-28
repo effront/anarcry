@@ -1,6 +1,7 @@
 package gg.effront.anarcry.gui;
 
 import gg.effront.anarcry.EnvLoader;
+import gg.effront.anarcry.gui.components.FindingDetailPanel;
 import gg.effront.anarcry.gui.components.FindingsTable;
 import gg.effront.anarcry.gui.components.GuiModulesPanel;
 import gg.effront.anarcry.gui.components.GuiStatusBar;
@@ -63,6 +64,7 @@ public class AnarCryGui {
     private DashboardView dashboardView;
     private FindingsView findingsView;
     private FindingsTable scanFindingsTable;
+    private FindingDetailPanel scanDetailPanel;
     private TargetView targetView;
     private SiteMapView siteMapView;
     private RepeaterView repeaterView;
@@ -83,6 +85,7 @@ public class AnarCryGui {
         dashboardView = new DashboardView();
         findingsView = new FindingsView();
         scanFindingsTable = new FindingsTable();
+        scanDetailPanel = new FindingDetailPanel();
         targetView = new TargetView();
         siteMapView = new SiteMapView();
         repeaterView = new RepeaterView();
@@ -124,6 +127,7 @@ public class AnarCryGui {
             allFindings.clear();
             findingsView.clear();
             scanFindingsTable.clear();
+            scanDetailPanel.clear();
             dashboardView.clear();
             siteMapView.clear();
             reportView.clear();
@@ -180,9 +184,13 @@ public class AnarCryGui {
         frame.setJMenuBar(buildMenuBar());
 
         installFindingDetailHandler(scanFindingsTable);
+        wireSelectionDetail(scanFindingsTable, scanDetailPanel);
 
-        JSplitPane scanSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, logPane, scanFindingsTable);
-        scanSplit.setResizeWeight(0.5);
+        JSplitPane findingsSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, scanFindingsTable, scanDetailPanel);
+        findingsSplit.setResizeWeight(0.45);
+
+        JSplitPane scanSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, logPane, findingsSplit);
+        scanSplit.setResizeWeight(0.35);
         scanSplit.setDividerLocation(LOG_DIVIDER_LOCATION);
 
         tabs = new JTabbedPane();
@@ -207,6 +215,25 @@ public class AnarCryGui {
         frame.setSize(FRAME_WIDTH, FRAME_HEIGHT);
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
+    }
+
+    private void wireSelectionDetail(FindingsTable table, FindingDetailPanel detail) {
+        JTable jTable = table.getTable();
+        jTable.getSelectionModel().addListSelectionListener(e -> {
+            if (e.getValueIsAdjusting()) {
+                return;
+            }
+            int viewRow = jTable.getSelectedRow();
+            if (viewRow < 0) {
+                detail.clear();
+                return;
+            }
+            int modelRow = jTable.convertRowIndexToModel(viewRow);
+            List<Finding> all = table.getFindings();
+            if (modelRow >= 0 && modelRow < all.size()) {
+                detail.show(all.get(modelRow));
+            }
+        });
     }
 
     private void installFindingDetailHandler(FindingsTable table) {
