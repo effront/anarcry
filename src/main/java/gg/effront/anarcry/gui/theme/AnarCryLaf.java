@@ -120,6 +120,8 @@ public final class AnarCryLaf {
     }
 
     private static void applySharedCustomizations() {
+        UIManager.put("flatlaf.menuBarEmbedded", false);
+        UIManager.put("flatlaf.useWindowDecorations", false);
         UIManager.put("Component.focusWidth", 1);
         UIManager.put("Component.arc", 8);
         UIManager.put("Button.arc", 8);

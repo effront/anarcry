@@ -11,6 +11,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
@@ -37,6 +38,7 @@ public class FindingsView extends JPanel {
     private final JComboBox<String> severityFilter;
     private final JTextField searchField;
     private final JLabel countLabel;
+    private Supplier<String> jwtSupplier = () -> "";
 
     public FindingsView() {
         this(new FindingsTable());
@@ -119,7 +121,7 @@ public class FindingsView extends JPanel {
                     if (modelRow >= 0 && modelRow < all.size()) {
                         Finding f = all.get(modelRow);
                         JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(FindingsView.this);
-                        new FindingDetailDialog(frame, f).setVisible(true);
+                        new FindingDetailDialog(frame, f, jwtSupplier.get()).setVisible(true);
                     }
                 }
             }
@@ -147,6 +149,10 @@ public class FindingsView extends JPanel {
     /** Return the wrapped table component. */
     public FindingsTable getFindingsTable() {
         return findingsTable;
+    }
+
+    public void setJwtSupplier(Supplier<String> supplier) {
+        this.jwtSupplier = supplier;
     }
 
     @SuppressWarnings("unchecked")

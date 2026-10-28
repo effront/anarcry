@@ -145,7 +145,7 @@ public class AnarCryTui {
             }
         }));
 
-        logHistory.add("[*] AnarCry v1.2 -- pronto");
+        logHistory.add("[*] AnarCry v1.3 -- pronto");
         logHistory.add("[*] Configure o alvo e pressione Iniciar para começar");
 
         buildPanels(screen.getTerminalSize());
