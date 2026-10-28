@@ -1,4 +1,4 @@
-# AnarCry — Base de Conhecimento de Vulnerabilidades
+# AnarCry -- Base de Conhecimento de Vulnerabilidades
 
 Base estruturada para o motor de varredura, triagem e geração de relatórios do AnarCry.
 Cada arquivo corresponde a um módulo/finding suportado pela ferramenta e segue o schema

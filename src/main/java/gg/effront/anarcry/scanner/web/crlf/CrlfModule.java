@@ -37,16 +37,16 @@ public class CrlfModule implements Scanner {
             "/%2e%2e%2f%0d%0aSet-Cookie:crlf=injection", "/%2f%2e%2e%0d%0aSet-Cookie:crlf=injection",
             "/%2F..%0d%0aSet-Cookie:crlf=injection", "/%3f%0d%0aSet-Cookie:crlf=injection",
             "/%3f%0dSet-Cookie:crlf=injection"
-    // /%u000a and /%%0a0a skipped — %u and %% are non-standard URI encoding
+    // /%u000a and /%%0a0a skipped -- %u and %% are non-standard URI encoding
     // rejected by URI parser
     );
 
     // Sprint 28: headers whose values are reflected in response headers by
     // vulnerable servers.
-    // Java HttpClient rejects CRLF in header values — must use raw socket.
+    // Java HttpClient rejects CRLF in header values -- must use raw socket.
     private static final List<String> INJECTABLE_HEADERS = List.of("User-Agent", "Referer", "Accept-Language");
 
-    // Injected value: a recognizable marker after CRLF — we look for this in the
+    // Injected value: a recognizable marker after CRLF -- we look for this in the
     // response
     private static final String INJECTED_HEADER_NAME = "X-Crlf-Injected";
     private static final String INJECTED_HEADER_VALUE = "anarcry-crlf-probe";
@@ -84,12 +84,12 @@ public class CrlfModule implements Scanner {
                                 && e.getValue().stream().anyMatch(v -> v.contains("crlf=injection")));
 
                 if (injected) {
-                    log.accept("[!!] CRLF: CRÍTICO — injeção via path confirmada: " + payload);
+                    log.accept("[!!] CRLF: CRÍTICO -- injeção via path confirmada: " + payload);
                     findings.add(Finding.of("CRLF", url,
-                            "CRLF Injection via path — cabeçalho HTTP arbitrário injetável", Severity.CRITICAL,
+                            "CRLF Injection via path -- cabeçalho HTTP arbitrário injetável", Severity.CRITICAL,
                             "Payload: " + payload + " | Set-Cookie: crlf=injection presente na resposta",
                             "Servidor não neutraliza CR (\\r / %0d) e LF (\\n / %0a) em paths refletidos "
-                                    + "em cabeçalhos de resposta — permite injeção de cabeçalhos arbitrários, "
+                                    + "em cabeçalhos de resposta -- permite injeção de cabeçalhos arbitrários, "
                                     + "cookies de sessão falsos, content-type spoofing e HTTP Response Splitting",
                             "curl -v '" + url + "'",
                             "Strip \\r (0x0d) e \\n (0x0a) de toda input usada em cabeçalhos HTTP; "
@@ -99,11 +99,11 @@ public class CrlfModule implements Scanner {
                     return findings;
                 }
             } catch (Exception e) {
-                // URI parsing may reject some payloads — continue
+                // URI parsing may reject some payloads -- continue
             }
         }
 
-        // Phase 2: Sprint 28 — CRLF via HTTP request headers (raw socket)
+        // Phase 2: Sprint 28 -- CRLF via HTTP request headers (raw socket)
         // Java HttpClient rejects CRLF in header values, so we send raw bytes
         log.accept("[~] CRLF: testando injeção via " + INJECTABLE_HEADERS.size() + " request headers (raw socket)");
         Finding headerFinding = scanHeaderInjection(ctx, log);
@@ -145,14 +145,14 @@ public class CrlfModule implements Scanner {
                         ? response.substring(0, response.indexOf("\r\n\r\n"))
                         : response;
                 if (responseHeaders.toLowerCase().contains(INJECTED_HEADER_NAME.toLowerCase())) {
-                    log.accept("[!!] CRLF: CRÍTICO — injeção via " + headerName + " refletida em response header");
+                    log.accept("[!!] CRLF: CRÍTICO -- injeção via " + headerName + " refletida em response header");
                     return Finding.of("CRLF", ctx.targetUrl(),
-                            "CRLF Injection via " + headerName + " — header injetado refletido na resposta",
+                            "CRLF Injection via " + headerName + " -- header injetado refletido na resposta",
                             Severity.CRITICAL,
                             "Header: " + headerName + " | CRLF + '" + INJECTED_HEADER_NAME + ": "
                                     + INJECTED_HEADER_VALUE + "' refletido nos cabeçalhos da resposta",
                             "Servidor reflete o valor do header " + headerName
-                                    + " em cabeçalhos de resposta sem sanitização de CRLF — "
+                                    + " em cabeçalhos de resposta sem sanitização de CRLF -- "
                                     + "permite injeção de cabeçalhos arbitrários: Set-Cookie malicioso, "
                                     + "content-type spoofing, HTTP Response Splitting",
                             "printf 'GET / HTTP/1.1\\r\\nHost: " + host + "\\r\\n" + headerName + ": Mozilla/5.0\\r\\n"

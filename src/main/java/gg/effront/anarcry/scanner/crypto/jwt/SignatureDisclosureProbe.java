@@ -20,7 +20,7 @@ import gg.effront.anarcry.model.CvssCalculator;
 
 public class SignatureDisclosureProbe {
 
-    // Matches: "Expected <sig> got <sig>" — pattern from CVE-2019-7644 / auth0
+    // Matches: "Expected <sig> got <sig>" -- pattern from CVE-2019-7644 / auth0
     // jwt-dotnet
     private static final Pattern DISCLOSURE = Pattern
             .compile("(?i)expected\\s+[A-Za-z0-9+/=_-]+\\s+got\\s+[A-Za-z0-9+/=_-]+");
@@ -56,7 +56,7 @@ public class SignatureDisclosureProbe {
                         return Optional.of(Finding.of("JWT", base + path,
                                 "Signature correta exposta em mensagem de erro (CVE-2019-7644)", Severity.MEDIUM,
                                 "Response body em " + base + path + ": " + truncate(body, 300),
-                                "Servidor revela a assinatura válida em respostas de erro — facilita forgery de tokens"
+                                "Servidor revela a assinatura válida em respostas de erro -- facilita forgery de tokens"
                                         + "sem brute-force",
                                 "curl -H 'Authorization: Bearer " + badToken + "' " + base + path,
                                 "Nunca incluir detalhes de signature em erros; usar mensagens genéricas"
@@ -64,11 +64,11 @@ public class SignatureDisclosureProbe {
                                 _cweId, _cweTitle, _cvssVector, _score));
                     }
                 } catch (Exception e) {
-                    log.accept("[~] JWT: sig disclosure " + path + " — " + e.getMessage());
+                    log.accept("[~] JWT: sig disclosure " + path + " -- " + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            log.accept("[~] JWT: sig disclosure — " + e.getMessage());
+            log.accept("[~] JWT: sig disclosure -- " + e.getMessage());
         }
         return Optional.empty();
     }

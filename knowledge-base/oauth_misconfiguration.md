@@ -10,7 +10,7 @@ vrt_id: "broken_authentication_and_session_management.oauth_misconfiguration"
 ---
 
 ## Summary
-Falhas em fluxos OAuth 2.0/OIDC — `state` ausente, `redirect_uri` permissivo, PKCE não exigido, tokens vazados ou escopo excessivo — permitem account takeover, roubo de token e acesso indevido a recursos.
+Falhas em fluxos OAuth 2.0/OIDC -- `state` ausente, `redirect_uri` permissivo, PKCE não exigido, tokens vazados ou escopo excessivo -- permitem account takeover, roubo de token e acesso indevido a recursos.
 
 ## Description
 OAuth 2.0 delega autorização entre resource owner, client, authorization server e resource server. O fluxo de autorização é seguro apenas quando o client valida o `state`, o authorization server exige correspondência exata de `redirect_uri`, o código é de uso único e vinculado ao client/PKCE, e os tokens são transportados em canais protegidos.
@@ -82,7 +82,7 @@ Variações de bypass de WAF/filtros:
 - Case: HTTPS://ALVO.COM@EVIL.COM
 ```
 
-Casos reais e mentalidade de ataque (RWBH): Facebook, Uber e Twitter ilustram os três padrões mais recorrentes — `redirect_uri` permissivo, `state` ausente e vazamento de token em URLs/Referer.
+Casos reais e mentalidade de ataque (RWBH): Facebook, Uber e Twitter ilustram os três padrões mais recorrentes -- `redirect_uri` permissivo, `state` ausente e vazamento de token em URLs/Referer.
 
 ## Target Context (Crawler Hints)
 - **Parâmetros comuns:** `client_id`, `redirect_uri`, `response_type`, `scope`, `state`, `nonce`, `code`, `access_token`, `id_token`, `refresh_token`, `grant_type`, `code_verifier`.

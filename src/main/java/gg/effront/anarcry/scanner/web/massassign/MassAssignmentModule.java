@@ -143,19 +143,19 @@ public class MassAssignmentModule implements Scanner {
                     if (verifyResp.statusCode() == 200 && ADMIN_PATTERN.matcher(verifyBody).find()
                             && !baselineHasAdmin) {
                         persistedAdmin = true;
-                        log.accept("[!!] MassAssign: CRITICAL — campo admin persistiu após GET em " + verifyUrl);
+                        log.accept("[!!] MassAssign: CRITICAL -- campo admin persistiu após GET em " + verifyUrl);
                     }
                 } catch (Exception ignored) {
                 }
 
                 if (persistedAdmin) {
-                    // Confirmed persistence via GET — CRITICAL
+                    // Confirmed persistence via GET -- CRITICAL
                     findings.add(Finding.of("MassAssign", ep.path(),
-                            "Mass Assignment — campo admin persistido via " + ep.method() + " " + ep.path(),
+                            "Mass Assignment -- campo admin persistido via " + ep.method() + " " + ep.path(),
                             Severity.CRITICAL,
                             "URL: " + url + " | Método: " + ep.method() + " | Status: " + status + " | GET " + verifyUrl
                                     + " confirmou campo admin (não estava no baseline)",
-                            "Servidor aceita E persiste campos privilegiados (admin/role) — "
+                            "Servidor aceita E persiste campos privilegiados (admin/role) -- "
                                     + "confirmado via GET após mutação. Escalada de privilégios confirmada.",
                             ep.method() + " " + url + " -H 'Content-Type: application/json'"
                                     + " -H 'Authorization: Bearer <TOKEN>'" + " -d '" + MASS_PAYLOAD + "'\n"
@@ -165,31 +165,31 @@ public class MassAssignmentModule implements Scanner {
                                     + "allowlist de campos aceitos por endpoint",
                             _cweId, _cweTitle, _cveVector, _score));
                 } else if (mutHasAdmin) {
-                    // Mutation reflected admin fields but GET didn't confirm — suspicious, manual
+                    // Mutation reflected admin fields but GET didn't confirm -- suspicious, manual
                     // review
-                    log.accept("[!] MassAssign: MEDIUM — " + ep.method() + " " + ep.path()
+                    log.accept("[!] MassAssign: MEDIUM -- " + ep.method() + " " + ep.path()
                             + " refletiu campos admin mas GET não confirmou persistência");
                     findings.add(Finding.of("MassAssign", ep.path(),
-                            "Mass Assignment — suspeito (refletido mas não persistido) via " + ep.method() + " "
+                            "Mass Assignment -- suspeito (refletido mas não persistido) via " + ep.method() + " "
                                     + ep.path(),
                             Severity.MEDIUM,
                             "URL: " + url + " | Método: " + ep.method() + " | Status: " + status + " | Body (300): "
                                     + body.substring(0, Math.min(300, body.length())) + " | GET " + verifyUrl
                                     + " não confirmou campo admin",
                             "Endpoint refletiu campos privilegiados na resposta da mutação, mas GET subsequente "
-                                    + "não confirmou persistência — requer revisão manual",
+                                    + "não confirmou persistência -- requer revisão manual",
                             ep.method() + " " + url + " -H 'Content-Type: application/json'"
                                     + " -H 'Authorization: Bearer <TOKEN>'" + " -d '" + MASS_PAYLOAD + "'",
                             "Verificar manualmente se campos como role/admin são aceitos; "
                                     + "usar DTO com allowlist explícita de campos",
                             _cweId, _cweTitle, _cveVector, _score));
                 } else {
-                    // No admin-related evidence — skip (FP avoidance)
+                    // No admin-related evidence -- skip (FP avoidance)
                     log.accept("[+] MassAssign: sem evidência de mass assignment em " + ep.method() + " " + ep.path());
                 }
 
             } catch (Exception e) {
-                // Unreachable endpoint — expected
+                // Unreachable endpoint -- expected
             }
         }
 

@@ -778,7 +778,7 @@ targets owned by giant companies such as Facebook, Google, or Apple! I’m
                      For anyone willing to put in the work, Bug Bounty Bootcamp gives you the
                 foundation you need to make it in bug bounties.
 
-                                                                      —Ben Sadeghipour
+                                                                      --Ben Sadeghipour
                                                              Hacker, Content Creator, and
                                                    Head of Hacker Education at HackerOne
 
@@ -1462,7 +1462,7 @@ Private Programs
 
 Table 1-1: A Comparison of Three Bug Bounty Programs: HackerOne, Facebook, and GitHub
 Program      Asset type       In scope                     Payout amount          Response time
-HackerOne    Social site      https://hackerone.com/       $500–$15,000+          Fast. Average time
+HackerOne    Social site      https://hackerone.com/       $500-$15,000+          Fast. Average time
                               https://api.hackerone.com                           to response is 5
                               *.vpn.hackerone.net                                 hours. Average
                               https://www.hackerone.com                           time to triage is 15
@@ -1481,7 +1481,7 @@ Facebook     Social site,     Instagram                    $500 minimum         
                               Express Wi-Fi
                               Any vulnerability except
                               exclusions are in scope.
-GitHub       Social site      https://blog.github.com/      $617–$30,000          Fast. Average time
+GitHub       Social site      https://blog.github.com/      $617-$30,000          Fast. Average time
                               https://community.github.com/                       to response is 11
                               http://resources.github.com/                        hours. Average
                               And more assets . . .                               time to triage is 23
@@ -2343,13 +2343,13 @@ web page you’re looking for? Let’s find out.
                        client connects to port 80, the web server understands that the client wishes
                        to access its web services (Figure 3-3).
 
-                                                                                           Port 80 – HTTP service
+                                                                                           Port 80 - HTTP service
 
                             Connect to port 80
-    Browser (client)                                   Web server                          Port 25 – Email service
+    Browser (client)                                   Web server                          Port 25 - Email service
 
 
-                                                                                           Port 21 – FTP service
+                                                                                           Port 21 - FTP service
 
 
 Figure 3-3: Ports allow servers to provide multiple services. Port numbers help forward client requests to the
@@ -2531,8 +2531,8 @@ right service.
 
 URL-encoded equivalent by using a URL calculator like URL Decode and
 Encode (https://www.urlencoder.org/).
-    We’ll cover a couple of additional types of character encoding—octal
-encoding and dword encoding—when we discuss SSRFs in Chapter 13. When
+    We’ll cover a couple of additional types of character encoding--octal
+encoding and dword encoding--when we discuss SSRFs in Chapter 13. When
 you see encoded content while investigating a site, always try to decode it to
 discover what the website is trying to communicate. You can use Burp Suite’s
 decoder to decode encoded content. We’ll cover how to do this in the next
@@ -4267,7 +4267,7 @@ Nmap done: 1 IP address (1 host up) scanned in 9.19 seconds
                  you could write a script to scan a target for new subdomains, or enumerate
                  potentially sensitive files and directories on a server. Once you’ve learned
                  how to script, the possibilities are endless.
-                       This section covers bash scripts in particular—what they are and why you
+                       This section covers bash scripts in particular--what they are and why you
                  should use them. You’ll learn how to use bash to simplify your recon process
                  and even write your own tools. I’ll assume that you have basic knowledge of
                  how programming languages work, including variables, conditionals, loops,
@@ -4479,7 +4479,7 @@ mkdir $DIRECTORY
 
 nmap $DOMAIN > $DIRECTORY/nmap
 echo "The results of nmap scan are stored in $DIRECTORY/nmap."
-$PATH_TO_DIRSEARCH/dirsearch.py -u $DOMAIN -e php –simple-report=$DIRECTORY/dirsearch 2
+$PATH_TO_DIRSEARCH/dirsearch.py -u $DOMAIN -e php -simple-report=$DIRECTORY/dirsearch 2
 echo "The results of dirsearch scan are stored in $DIRECTORY/dirsearch."
 
                       We use ${DOMAIN}_recon instead of $DOMAIN_recon 1 because, otherwise,
@@ -4557,7 +4557,7 @@ then
    echo "The results of nmap scan are stored in $DIRECTORY/nmap."
 elif [ $2 == "dirsearch-only" ] 3
 then
-   $PATH_TO_DIRSEARCH/dirsearch.py -u $DOMAIN -e php –simple-report=$DIRECTORY/dirsearch 4
+   $PATH_TO_DIRSEARCH/dirsearch.py -u $DOMAIN -e php -simple-report=$DIRECTORY/dirsearch 4
    echo "The results of dirsearch scan are stored in $DIRECTORY/dirsearch."
 else 5
    nmap $DOMAIN > $DIRECTORY/nmap 6
@@ -5548,11 +5548,11 @@ $ echo "\" is a double quote. \$ is a dollar sign. \` is a backtick. \\ is a bac
                       All crontabs follow this same syntax:
 
                   A B C D E command_to_be_executed
-                  A: Minute (0 – 59)
-                  B: Hour (0 – 23)
-                  C: Day (1 – 31)
-                  D: Month (1 – 12)
-                  E: Weekday (0 – 7) (Sunday is 0 or 7, Monday is 1...)
+                  A: Minute (0 - 59)
+                  B: Hour (0 - 23)
+                  C: Day (1 - 31)
+                  D: Month (1 - 12)
+                  E: Weekday (0 - 7) (Sunday is 0 or 7, Monday is 1...)
 
                       Each line specifies a command to be run and the time at which it should
                   run, using five numbers. The first number, from 0 to 59, specifies the minute
@@ -5952,7 +5952,7 @@ user decides to input a script instead of an email address in the email form?
                   script></b> to the newsletter.</p>
 
                        Validating user input means that the application checks that the user
-                  input meets a certain standard—in this case, does not contain malicious
+                  input meets a certain standard--in this case, does not contain malicious
                   JavaScript code. Sanitizing user input, on the other hand, means that the
                   application modifies special characters in the input that can be used to
                   interfere with HTML logic before further processing.
@@ -6219,7 +6219,7 @@ of going through the server. Attackers are able to attack the DOM when
 Prevention
         To prevent XSS, an application should implement two controls: robust input
         validation and contextual output escaping and encoding. Applications
-        should never insert user-submitted data directly into an HTML document—
+        should never insert user-submitted data directly into an HTML document--
         including, for example, inside <script> tags, HTML tag names, or attri-
         bute names. Instead, the server should validate that user-submitted input
         doesn’t contain dangerous characters that might influence the way browsers
@@ -6488,7 +6488,7 @@ Payload                                  Purpose
                                          <img> tag with an invalid source URL. Once the tag fails
                                          to load, it will run the JavaScript specified in the onerror
                                          attribute.
-<script>alert(1)<!–                      <!- is the start of an HTML comment. This payload will com-
+<script>alert(1)<!-                      <!- is the start of an HTML comment. This payload will com-
                                          ment out the rest of the line in the HTML document to prevent
                                          syntax errors.
 <a onmouseover"alert(1)">test</a>        This payload inserts a link that will cause JavaScript to exe-
@@ -6517,7 +6517,7 @@ javascript:"/*\"/*`/*' /*</template>
 </style></script>-->&lt;svg onload=/*<html/*/onmouseover=alert()//>
 
      The details of this payload are beyond the scope of the book, but it con-
-tains multiple ways of creating an XSS—so if one method fails, another one
+tains multiple ways of creating an XSS--so if one method fails, another one
 can still induce the XSS.
      Another way of testing for XSS more efficiently is to use generic test
 strings instead of XSS payloads. Insert a string of special HTML characters
@@ -8872,7 +8872,7 @@ Cookie: session_cookie=YOUR_SESSION_COOKIE;
 </html>
 
                      For CSRFs that you could execute via a GET request, attackers can often
-                embed the request as an image directly—for example, as an image posted to
+                embed the request as an image directly--for example, as an image posted to
                 a forum. This way, any user who views the forum page would be affected:
 
 <img src="https://email.example.com/set_password?new_password=this_account_is_now_mine">
@@ -9002,10 +9002,10 @@ Mechanisms
                    type of IDOR happens when applications reference a system file directly. For
                    example, this request allows users to access a file they’ve uploaded: https://
                    example.com/uploads?file=user1234-01.jpeg.
-                       Since the value of the file parameter is user1234–01.jpeg, we can
+                       Since the value of the file parameter is user1234-01.jpeg, we can
                    easily deduce that user-uploaded files follow the naming convention of
                    USER_ID-FILE_NUMBER.FILE_EXTENSION. Therefore, another user’s uploaded files
-                   might be named user1233–01.jpeg. If the application doesn’t restrict users’
+                   might be named user1233-01.jpeg. If the application doesn’t restrict users’
 
 
 176   Chapter 10
@@ -9961,7 +9961,7 @@ Hunting for SQL Injections
                    SELECT Title, Body FROM Emails
                    WHERE Username='vickie' AND AccessKey='ZB6w0YLjzvAVmp6zvr'
                    UNION SELECT 1,
-                   CONVERT((SELECT Password FROM Users WHERE Username="admin"), DATE); –-
+                   CONVERT((SELECT Password FROM Users WHERE Username="admin"), DATE); --
 
                        The CONVERT(VALUE, FORMAT) function attempts to convert VALUE to the
                    format specified by FORMAT. Therefore, this query will force the database to
@@ -12616,7 +12616,7 @@ data, you can start to test for the presence of functionalities needed for
 XXE attacks. This usually involves sending a few trial-and-error XXE pay-
 loads and observing the application’s response.
     If the application is returning results from the parser, you might be
-able to carry out a classic XXE attack—that is, you can read the leaked files
+able to carry out a classic XXE attack--that is, you can read the leaked files
 directly from the server’s response. To search for classic XXEs, first check
 whether XML entities are interpreted by inserting XML entities into the
 XML input and see if it loads properly:
@@ -12853,7 +12853,7 @@ Figure 15-1: When you unarchive a DOCX file, you will see a few folders containi
                    Sometimes the application does not return the results of XML parsing to
                    the user. In this case, you can still exfiltrate data to a server that you control
                    by forcing the XML parser to make an external request with the desired
-                   data in the request URL—the blind XXE attacks mentioned earlier. Then
+                   data in the request URL--the blind XXE attacks mentioned earlier. Then
                    you can monitor your server logs to retrieve the exfiltrated data. At this
                    point, you might think the payload of a blind XXE looks like this:
 
@@ -13212,10 +13212,10 @@ Injection!"]
                 then generates an HTML page dynamically by providing the template with
                 the values it needs 2. You can see that the code is rendering the template
                 with the values Chapter Contents as the list_title 3, and Here are the contents
-                of chapter 16. as the list_description 4, and a list of values— Mechanisms Of
+                of chapter 16. as the list_description 4, and a list of values-- Mechanisms Of
                 Template Injection, Preventing Template Injection, Hunting For Template Injection,
                 Escalating Template Injection, Automating Template Injection, and Find Your First
-                Template Injection!—as the item_list 5.
+                Template Injection!--as the item_list 5.
                     The template engine will combine the data provided in the Python script
                 and the template file example.jinja to create this HTML page:
 
@@ -13879,7 +13879,7 @@ circumvent the application’s access control.
                     authentication, or MFA, is the practice of requiring users to prove their iden-
                     tities in more than one way. MFA protects users in the event of password
                     compromise by requiring them to authenticate with both a password and
-                    another proof of identity—typically a phone number or an email account,
+                    another proof of identity--typically a phone number or an email account,
                     but sometimes via an authentication app, a physical key, or even fingerprints.
                     Most MFA implementations prompt the user to authenticate using both a
                     password and an authorization code delivered via email or text message.
@@ -17547,7 +17547,7 @@ What Are APIs?
                      "id": 1050118621198921728,
                      "id_str": "1050118621198921728",
                      "text": "To make room for more expression, we will now count all emojis
-                   as equal—including those with gender... and skin t... https://t.co/
+                   as equal--including those with gender... and skin t... https://t.co/
                    MkGjXf9aXm",
                      "truncated": true,
                      "entities": {
@@ -18103,8 +18103,8 @@ credentials.
                    ing that limit.
 
                    Testing for Technical Bugs
-                   Many of the bugs that we’ve discussed in this book so far—such as SQL injec-
-                   tion, deserialization issues, XXEs, template injections, SSRF, and RCEs—are
+                   Many of the bugs that we’ve discussed in this book so far--such as SQL injec-
+                   tion, deserialization issues, XXEs, template injections, SSRF, and RCEs--are
                    caused by improper input validation. Sometimes developers forget to imple-
                    ment proper input validation mechanisms for APIs.
                         APIs are therefore susceptible to many of the other vulnerabilities that
@@ -18534,10 +18534,10 @@ Total requests: 6
 ID           Response   Lines    Word     Chars       Payload
 ===================================================================
 
-000000002:     404          46 L     120 W    1256 Ch     "admin – pass"
-000000001:     404          46 L     120 W    1256 Ch     "admin – secret"
-000000003:     404          46 L     120 W    1256 Ch     "admin – password"
-000000006:     404          46 L     120 W    1256 Ch     "administrator – password"
+000000002:     404          46 L     120 W    1256 Ch     "admin - pass"
+000000001:     404          46 L     120 W    1256 Ch     "admin - secret"
+000000003:     404          46 L     120 W    1256 Ch     "admin - password"
+000000006:     404          46 L     120 W    1256 Ch     "administrator - password"
 
 
 376   Chapter 25
@@ -18545,8 +18545,8 @@ ID           Response   Lines    Word     Chars       Payload
 
 ---
 
-000000004:   404          46 L     120 W    1256 Ch      "administrator – secret"
-000000005:   404          46 L     120 W    1256 Ch      "administrator – pass"
+000000004:   404          46 L     120 W    1256 Ch      "administrator - secret"
+000000005:   404          46 L     120 W    1256 Ch      "administrator - pass"
 
 Total time: 0.153867
 Processed Requests: 6
@@ -18581,7 +18581,7 @@ Requests/sec.: 38.99447
                    redirects occurred during the request. See if you can construct a payload
                    that redirects users to your site:
 
-                   $ wfuzz -w wordlist.txt -v –-follow http://example.com?redirect=FUZZ
+                   $ wfuzz -w wordlist.txt -v --follow http://example.com?redirect=FUZZ
 
                        Finally, test for vulnerabilities such as XSS and SQL injection by fuzzing
                    URL parameters, POST parameters, or other user input locations with com-
@@ -18711,43 +18711,43 @@ Adding to Your Automated Testing Toolkit
                                    INDEX
 
 
-Symbols                                    Android, 335, 347–354
+Symbols                                    Android, 335, 347-354
 ../, 279, 287, 325                              Android Debug Bridge (ADB), 351
 .bash_profile, 81                               Android Package (APK), 350
 /etc/passwd, 252, 291                                 Activities, 350
-/etc/shadow, 177, 249, 253–260, 279, 332              AndroidManifest.xml, 350
-.git directory, 328–330. See also Git                 assets, 351
+/etc/shadow, 177, 249, 253-260, 279, 332              AndroidManifest.xml, 350
+.git directory, 328-330. See also Git                 assets, 351
       annotated tags, 330                             BroadcastReceivers, 350
       blobs, 330                                      classes.dex, 351
       commits, 330                                    ContentProviders, 350
       trees, 330                                      lib, 351
                                                       MANIFEST.MF, 351
 A                                                     META-INF, 351
-access control, 43, 175, 177–178, 278,                res, 351
-           324, 364–365. See also                     resources.arsc, 351
+access control, 43, 175, 177-178, 278,                res, 351
+           324, 364-365. See also                     resources.arsc, 351
            broken access control                      res/values/strings.xml, 354
-access tokens, 312–316, 364–365                       Services, 350
+access tokens, 312-316, 364-365                       Services, 350
      long-lived tokens, 316                     Android Studio, 352
 account takeover, 172, 185, 321                 developer options, 352
 active scanning, 69. See also passive      Apache
            scanning                             Apache Cassandra, 199
 ADB. See Android Debug Bridge (ADB)             Apache Commons FileUpload, 243
-admin panels, 70–71, 278, 321                   Apache CouchDB, 199
+admin panels, 70-71, 278, 321                   Apache CouchDB, 199
 AFL. See American Fuzzy Lop (AFL)               Apache Groovy, 243
-alert box, 116, 122–126                    APIs. See application programming
-allowlist, 133, 141, 194, 215, 220–221.               interfaces (APIs)
+alert box, 116, 122-126                    APIs. See application programming
+allowlist, 133, 141, 194, 215, 220-221.               interfaces (APIs)
            See also blocklist              APK. See Android Package (APK)
 Altdns, 69                                 Apktool, 352
-Amass, 68                                  application logic errors, 275–281, 379.
+Amass, 68                                  application logic errors, 275-281, 379.
 Amazon Elastic Compute Cloud (EC2),                   See also business logic
            77, 226. See also Amazon Web               vulnerabilities
            Services (AWS)                  application programming interfaces
-Amazon S3, 74–77, 226. See also                       (APIs), 6, 34, 355–367
+Amazon S3, 74-77, 226. See also                       (APIs), 6, 34, 355-367
            Amazon Web Services (AWS)            API-centric applications, 361
      Lazys3, 74                                 API enumeration, 362
      S3 buckets, 61, 64, 74                     API keys, 75, 226
 Amazon Web Services (AWS), 61, 75,         apt-get, 219
-           308, 316                        ASCII, 126–127, 138–140, 293
+           308, 316                        ASCII, 126-127, 138-140, 293
      awscli, 75                            ASNs. See autonomous systems (ASNs)
 American Fuzzy Lop (AFL), 370              asset, 4. See also scope
 
@@ -18755,7 +18755,7 @@ American Fuzzy Lop (AFL), 370              asset, 4. See also scope
 ---
 
               attack scenarios, 19                               intruder, 54, 129, 370, 372
-              attack surface, 5–6, 25, 61–62, 104, 309           repeater, 56
+              attack surface, 5-6, 25, 61-62, 104, 309           repeater, 56
               authentication app, 276                            SQLiPy, 203
               authentication keys, 62                        business impact, 17, 27, 104, 379. See
               authorization code, 276, 314                            also business priorities
@@ -18766,7 +18766,7 @@ American Fuzzy Lop (AFL), 370              asset, 4. See also scope
               Ayrey, Dylan, 339                              business requirements, 279
 
               B                                              C
-              bash script, 62, 80–104, 372                   CA. See certificate authority (CA)
+              bash script, 62, 80-104, 372                   CA. See certificate authority (CA)
               basic authentication, 376                      capitalization, 126
               Big List of Naughty Strings, 372               CAPTCHA, 65
               billion laughs attack, 258. See also           Capture the Flag, 12, 28
@@ -18776,23 +18776,23 @@ American Fuzzy Lop (AFL), 370              asset, 4. See also scope
               black-box testing, 336. See also gray-box      cat command, 92
                          testing, white-box testing          CDATA. See character data (CDATA)
               blocklist, 126, 133, 215. See also allowlist   Censys, 67, 70, 104
-              broken access control, 275–281, 364. See       central processing units (CPUs), 206
+              broken access control, 275-281, 364. See       central processing units (CPUs), 206
                          also access control                 certificate authority (CA), 50
-              brute-forcing, 42, 54, 70–71, 376–377          certificate parsing, 67
-                    directory brute-forcing, 62, 70–71       certificate pinning, 349–350, 353
+              brute-forcing, 42, 54, 70-71, 376-377          certificate parsing, 67
+                    directory brute-forcing, 62, 70-71       certificate pinning, 349-350, 353
                     URL brute-forcing, 278                   cert pinning. See certificate pinning
               bug bounty                                     character data (CDATA), 259
                     bug bounty hunter, 3                     chmod, 82
-                    bug bounty platforms, 8                  clickjacking, 143–154, 163–165
-                    bug bounty program, 3–4                  client, 34. See also server
-                    notes, 58                                client IDs, 313–315
+                    bug bounty platforms, 8                  clickjacking, 143-154, 163-165
+                    bug bounty program, 3-4                  client, 34. See also server
+                    notes, 58                                client IDs, 313-315
                     private programs, 11                     Cloud computing, 226
               bug chains, 27                                 CNAME, 308
               Bugcrowd, 4, 8, 17                                  dangling CNAMEs, 309
               bug slump, 27                                  Cobalt, 4, 8
-              built-in functions, 270–272, 288               Codecademy, 44, 80
+              built-in functions, 270-272, 288               Codecademy, 44, 80
               BuiltWith, 79, 104                             code injection, 283. See also command
-              Burp, 39, 47–58                                          injection, RCE
+              Burp, 39, 47-58                                          injection, RCE
                     AuthMatrix, 185                          command injection, 285, 343. See also
                     Auto Repeater, 185                                 code injection, RCE
                     Autorize, 185                            command substitution, 84, 101, 292
@@ -18814,16 +18814,16 @@ CORS. See Cross-Origin Resource            directory traversal, 43, 177, 279, 32
           Sharing (CORS)                            also path traversal
 CPUs. See central processing units         DNS. See Domain Name System (DNS)
           (CPUs)                           DOCTYPE, 248
-Cron, 102–103, 318                         document.cookie, 115
-    crontabs, 102–103                      Document Object Model (DOM),
-Cross-Origin Resource Sharing                       117–118
-          (CORS), 297–298, 302–306         document type definition (DTD),
-cross-site request forgery (CSRF), 128,             248–250, 253–260
-          152, 155–174                     DOM. See Document Object Model
-cross-site scripting (XSS), 111–129, 308            (DOM)
+Cron, 102-103, 318                         document.cookie, 115
+    crontabs, 102-103                      Document Object Model (DOM),
+Cross-Origin Resource Sharing                       117-118
+          (CORS), 297-298, 302-306         document type definition (DTD),
+cross-site request forgery (CSRF), 128,             248-250, 253-260
+          152, 155-174                     DOM. See Document Object Model
+cross-site scripting (XSS), 111-129, 308            (DOM)
 CSRF. See cross-site request               domain name, 33. See also hostname
-          forgery (CSRF)                   Domain Name System (DNS), 34–35
-cryptography, 6–7, 339                         DNS records, 222
+          forgery (CSRF)                   Domain Name System (DNS), 34-35
+cryptography, 6-7, 339                         DNS records, 222
     weak cryptography, 339                          AAAA records, 222
 CSS. See Cascading Style Sheets (CSS)               A records, 222
 CTF. See Capture the Flag                      DNS zone transfers, 68
@@ -18842,17 +18842,17 @@ Damn Vulnerable Web Application, 203       echo command, 83
 data:, 122, 138                            EdOverflow, 125, 317
 database, 188                              Eloquent JavaScript, 44
 data entry points, 371                     embedded browser, 47, 50
-data exfiltration, 259                     emulator, 6, 348–349, 352–353
-data injection points, 371                     mobile emulator, 348–349
+data exfiltration, 259                     emulator, 6, 348-349, 352-353
+data injection points, 371                     mobile emulator, 348-349
 debugging mode, 351                        encoding
 debug messages, 64                             base64 encoding, 38, 138, 181
 Denial-of-Service Attacks (DoS), 10,           content encoding, 38
           200, 258                             decimal encoding, 223
     ReDoS, 63                                  double encoding, 139
 dependencies, 76, 250, 288, 340                double word (dword) encoding,
-    outdated dependencies, 76, 340                   223–224
+    outdated dependencies, 76, 340                   223-224
 descriptive error, 196, 257, 266, 268          hex encoding, 38, 223
-deserialization, 231–246                       mixed encoding, 223
+deserialization, 231-246                       mixed encoding, 223
 developer comments, 324, 328, 331,             octal encoding, 223
           340, 345                             URL decoding, 138
 developer tools, 129                           URL encoding, 38, 138, 181, 223
@@ -18863,21 +18863,21 @@ developer tools, 129                           URL encoding, 38, 138, 181, 223
 
 ---
 
-              encryption, 312, 338–339, 353           GitHub, 75, 316
+              encryption, 312, 338-339, 353           GitHub, 75, 316
               entropy, 77, 159, 182, 339                   GitHub gists, 327
-              ERB. See Embedded Ruby template              GitHub Pages, 308–309, 317
+              ERB. See Embedded Ruby template              GitHub Pages, 308-309, 317
                         (ERB)                              repositories, 75
               escaping, 119                           Gitleaks, 328
                   escape character, 101, 119, 293     Gitrob, 77
                   output escaping, 119                Global Regular Expression Print
-              eval, 284–285, 336–338                            (grep), 88–89
-              event listener, 298–300, 302–303, 305   GoDaddy, 219
-                  onclick, 122                        Google Cloud, 226–227, 316
+              eval, 284-285, 336-338                            (grep), 88-89
+              event listener, 298-300, 302-303, 305   GoDaddy, 219
+                  onclick, 122                        Google Cloud, 226-227, 316
                   onerror, 122                        Google dorking, 62, 65, 74, 134, 278
                   onload, 122                         Google Hacking Database, 65
               executable, 7                           Graphical User Interface (GUI), 373
-              Extensible Markup Language (XML),       GraphQL, 179, 358–365
-                        247–260, 309, 357–358              Clairvoyance, 362
+              Extensible Markup Language (XML),       GraphQL, 179, 358-365
+                        247-260, 309, 357-358              Clairvoyance, 362
                   external entities, 248                   introspection, 360-361
                   parameter entities, 256                       __schema, 360
                   XML entities, 248                             __type, 361
@@ -18885,31 +18885,31 @@ developer tools, 129                           URL encoding, 38, 138, 181, 223
               EyeWitness, 71, 316                          queries, 359
                                                            Playground, 362
               F                                       gray-box testing, 336. See also black-box
-              file inclusion, 286–287                           testing, white-box testing
+              file inclusion, 286-287                           testing, white-box testing
                     local file inclusions, 287        grep. See Global Regular Expression
                     remote file inclusion, 286                  Print (grep)
               File Transfer Protocol (FTP), 260       GUI. See Graphical User Interface
               filter bypass, 128, 293                           (GUI)
               fingerprinting, 78
-              Firefox, 46–52, 124, 160–161            H
+              Firefox, 46-52, 124, 160-161            H
               Flash, 111                              hacker blogs, 28
               Frida, 350, 353                         HackerOne, 4, 8, 11, 17, 111, 233
                     Objection, 350                        Hacktivity, 209
                     Universal Android SSL Pinning     hacking, 61
                          Bypass, 350                      hacking environment, 45
               FTP. See File Transfer Protocol (FTP)   HackTricks, 273
-              fuzzing, 125, 195, 363, 370–379         hardcoded secrets, 76, 338–339, 354
+              fuzzing, 125, 195, 363, 370-379         hardcoded secrets, 76, 338-339, 354
                     FuzzDB, 372                       hardware, 7
-                    fuzzers, 369–379                  hashing, 177
+                    fuzzers, 369-379                  hashing, 177
                     web application fuzzing, 370      Haverbeke, Marijn, 44
                                                       HMAC, 42
               G
                                                       Hostinger, 219
-              gadgets, 238, 243–245
+              gadgets, 238, 243-245
                                                       hostname, 67, 296. See also domain
-                   gadget chains, 243–245
+                   gadget chains, 243-245
                                                                name
-              getopts, 92–98
+              getopts, 92-98
                                                       HTML. See Hypertext Markup
               Git, 328
                                                                Language (HTML)
@@ -18927,16 +18927,16 @@ developer tools, 129                           URL encoding, 38, 138, 181, 223
 ---
 
 Hypertext Markup Language                input redirection, 83
-        (HTML), 34                       input validation, 119–120, 250, 288,
+        (HTML), 34                       input validation, 119-120, 250, 288,
    HTML tag, 123                                    291, 293, 366
-HyperText Transfer Protocol (HTTP),      insecure deserialization, 231–246,
-        36–39                                       337–338, 366–367
+HyperText Transfer Protocol (HTTP),      insecure deserialization, 231-246,
+        36-39                                       337-338, 366-367
    cookies, 39                           insecure direct object references
-        cookie sharing, 308                         (IDORs), 175–186, 353–354
+        cookie sharing, 308                         (IDORs), 175-186, 353-354
         double-submit cookie, 167             blind IDORs, 183
    request headers, 36                        read-based IDORs, 184
         Authorization, 36, 376                write-based IDORs, 184
-        Cookie, 36                       instance metadata, 226–229, 255
+        Cookie, 36                       instance metadata, 226-229, 255
         Host, 36                         integrated development environment
         Origin, 297                                 (IDE), 59
         Referer, 36                      internal network, 214. See also private
@@ -18945,35 +18945,35 @@ HyperText Transfer Protocol (HTTP),      insecure deserialization, 231–246,
    response bodies, 37, 324              internet, 33
    response headers, 37, 151, 324             internet security controls, 38
         Access-Control-Allow-Origin,     Internet Engineering Task Force
-            37, 297–298, 302–305                    (IETF), 222
+            37, 297-298, 302-305                    (IETF), 222
         Content-Security-Policy, 37,     Internet of Things (IoT), 5, 7, 122, 347,
             120, 149, 151                           358
         Content-Type, 37, 242, 251       Internet Protocol (IP), 34
         frame-ancestors, 149                  IPv4, 34
         Location, 37                          IPv6, 34, 222
-        Set-Cookie, 37, 150, 156              IP addresses, 65–66
+        Set-Cookie, 37, 150, 156              IP addresses, 65-66
         X-Frame-Options, 37, 149, 151,              IP range, 66
-            153–154                                 reserved IP addresses, 218
+            153-154                                 reserved IP addresses, 218
    response times, 9                     Intigriti, 4, 8
    status code, 36, 219                  iOS, 348, 350, 353
                                          IoT. See Internet of Things (IoT)
 I                                        IP. See Internet Protocol (IP)
-identity assertion, 309–312
-identity provider, 309–314, 316, 319     J
+identity assertion, 309-312
+identity provider, 309-314, 316, 319     J
 IDE. See integrated development          java.io.Serializable, 241
-          environment (IDE)                   readObject(), 241–242, 244
+          environment (IDE)                   readObject(), 241-242, 244
 IDORs. See insecure direct object             writeObject(), 241
-          references (IDORs)             javascript:, 122–126
+          references (IDORs)             javascript:, 122-126
 IETF. See Internet Engineering Task      JavaScript (JS), 34, 44, 111, 353
           Force (IETF)                        Angular, 120
-iframe, 144–154, 158, 160, 163–164,           fromCharCode(), 126
-          298–299, 304                   Jenkins, 69
-     double iframe, 152                  jq, 90–91
-     frame-busting, 151–152              jQuery, 118
+iframe, 144-154, 158, 160, 163-164,           fromCharCode(), 126
+          298-299, 304                   Jenkins, 69
+     double iframe, 152                  jq, 90-91
+     frame-busting, 151-152              jQuery, 118
 information leaks, 170, 226, 229,             js.do, 127
-          295, 312, 324, 331–332, 354,        React, 120
-          363–365                             Retire.js, 180
-inline scripts, 113–114                       Vue.js, 120
+          295, 312, 324, 331-332, 354,        React, 120
+          363-365                             Retire.js, 180
+inline scripts, 113-114                       Vue.js, 120
 
 
                                                                         Index   385
@@ -18982,27 +18982,27 @@ inline scripts, 113–114                       Vue.js, 120
 ---
 
               JS. See JavaScript (JS)               multifactor authentication (MFA),
-              JSON, 68, 184, 234, 357                        276–277, 280
+              JSON, 68, 184, 234, 357                        276-277, 280
               JSONP. See JSON with Padding          multithreading, 206
                          (JSONP)                    MySQL, 188, 196, 198, 201
-              JSON Web Tokens (JWT), 41–43
+              JSON Web Tokens (JWT), 41-43
                    alg field, 42                    N
                    header, 41                       Namecheap, 223
-              JSON with Padding (JSONP), 300–302,   Netcat, 219
-                         305–306. See also JSON     NetRange, 66
+              JSON with Padding (JSONP), 300-302,   Netcat, 219
+                         305-306. See also JSON     NetRange, 66
               JWT. See JSON Web Tokens (JWT). See   network perimeter, 214
-                         also JSON                  network scanning, 215, 224–228
-                                                    NoSQL, 188, 199–201
-              K                                         NoSQL injections, 199–201
+                         also JSON                  network scanning, 215, 224-228
+                                                    NoSQL, 188, 199-201
+              K                                         NoSQL injections, 199-201
               Kali Linux, 46                            NoSQLMap, 200
               KeyHacks, 76                          nslookup, 66, 222
-              Kibana, 64                            NULL origin, 297–298, 303–305
+              Kibana, 64                            NULL origin, 297-298, 303-305
               Kubernetes, 227
                                                     O
               L
-                                                    OAuth, 141, 312–316, 320–321
+                                                    OAuth, 141, 312-316, 320-321
               Learn Python the Hard Way, 44
-                                                        redirect_uri, 313–316
+                                                        redirect_uri, 313-316
               LinkFinder, 331
                                                     object-oriented programming
               Linux, 62
@@ -19011,8 +19011,8 @@ inline scripts, 113–114                       Vue.js, 120
                                                     Obsidian, 59
               low-hanging fruit, 25
                                                     Offensive Security, 120
-              M                                     open redirect, 131–141, 221, 314–316,
-              macOS, 62                                      338, 342–343
+              M                                     open redirect, 131-141, 221, 314-316,
+              macOS, 62                                      338, 342-343
               man, 96                                   open redirect chain, 315
               man-in-the-middle attacks, 349            parameter-based open redirects, 135
               Markdown, 59                              referer-based open redirects, 132,
@@ -19022,13 +19022,13 @@ inline scripts, 113–114                       Vue.js, 120
               memory leaks, 370                     outbound requests, 228, 249, 252
               methodology, 25, 27                   out-of-band interaction, 289
               MFA. See multifactor authentication   out-of-band techniques, 219
-                        (MFA)                       output redirection, 83–84
+                        (MFA)                       output redirection, 83-84
               Miessler, Daniel, 372                 OWASP, 28, 72
               mind-mapping, 59                          Code Review Guide, 336
-              mitigation process, 19–21                 Dependency-Check tool, 340
+              mitigation process, 19-21                 Dependency-Check tool, 340
               mkdir, 83                                 Deserialization Cheat Sheet, 244
               mobile applications, 6                    IoTGoat, 122
-              mobile hacking, 347–354                   Mobile Security Testing Guide, 348
+              mobile hacking, 347-354                   Mobile Security Testing Guide, 348
               Mobile Security Framework, 353            SQL injection prevention cheat
               MongoDB, 199                                   sheet, 195
               monitoring system, 318                    Web Security Testing Guide, 367
@@ -19045,48 +19045,48 @@ P                                             programming, 44
 parameterized queries, 192. See also              expression, 262
           prepared statements                     for loop, 93
 parent directory, 279, 325                        function library, 96
-passive scanning, 69–70. See also active          functions, 87
+passive scanning, 69-70. See also active          functions, 87
           scanning                                if-else statements, 86
 password-cracking, 269                            interactive programs, 97
-Pastebin, 77–78, 324, 327–328                     statement, 262
+Pastebin, 77-78, 324, 327-328                     statement, 262
      pastebin-scraper, 328                        while loop, 98
      PasteHunter, 78, 328                     Project Sonar, 70
 paste dump sites, 327                         proof of concept (POC), 18
-path enumeration, 374–375                         POC generation, 174
-path traversal, 177, 279, 325, 366–367.       property-oriented programming chain,
-          See also directory traversal                 238–239
+path enumeration, 374-375                         POC generation, 174
+path traversal, 177, 279, 325, 366-367.       property-oriented programming chain,
+          See also directory traversal                 238-239
 PATH variable, 81                             protocol, 43, 120, 296, 325
 pattern matching, 89                          proxy, 46, 52, 72, 348
 payload, 41, 54, 154                              proxy services, 216
-payouts, 9–11                                     web proxy, 45
+payouts, 9-11                                     web proxy, 45
 Periscope, 153                                publicly disclosed reports, 25. See also
 permissions, 178                                       write-up
-permutations, 69, 74–75                       publicly disclosed vulnerabilities, 324
-phishing, 129, 132, 140, 309                  Python, 44, 244–245, 262–273, 289–292
-PHP, 61, 70–71, 232–241                           dictionary, 272
+permutations, 69, 74-75                       publicly disclosed vulnerabilities, 324
+phishing, 129, 132, 140, 309                  Python, 44, 244-245, 262-273, 289-292
+PHP, 61, 70-71, 232-241                           dictionary, 272
      ExtendsClass, 232                            object, 270
      instantiation, 235, 239                  Q
-     magic methods, 235–238
+     magic methods, 235-238
                                               Quora, 77
      object injection vulnerabilities,
           233, 238                            R
-          unserialize(), 235                  race conditions, 205–212, 366, 370
+          unserialize(), 235                  race conditions, 205-212, 366, 370
      wrappers, 259                            randomization, 178
-phpmyadmin, 70, 79                            rate-limiting, 365–366, 378
+phpmyadmin, 70, 79                            rate-limiting, 365-366, 378
 PHPSESSID, 79                                 RCE. See remote code execution (RCE)
 POC. See proof of concept                     reachable machines, 224
 POP chain. See property-oriented              recon. See reconnaissance
-          programming chain                   reconnaissance, 25, 61–107, 243, 360, 369
+          programming chain                   reconnaissance, 25, 61-107, 243, 360, 369
 pop-up, 154                                        recon APIs, 104
-port, 35                                      referer, 132–135, 141–163, 168–169, 315
+port, 35                                      referer, 132-135, 141-163, 168-169, 315
      port number, 35, 296                     regex. See regular expression
-     port scanning, 62, 69                    regular expression, 77, 88–90, 221, 298,
-Postman, 362                                            338–339
-postMessage(), 298–306                             constants, 89
-prepared statements, 192–194                       operators, 89
+     port scanning, 62, 69                    regular expression, 77, 88-90, 221, 298,
+Postman, 362                                            338-339
+postMessage(), 298-306                             constants, 89
+prepared statements, 192-194                       operators, 89
 principle of least privilege, 201, 210, 288        RexEgg, 90
-private network, 218. See also internal       remote code execution (RCE), 236–237,
-          network                                       283–293, 337
+private network, 218. See also internal       remote code execution (RCE), 236-237,
+          network                                       283-293, 337
 Programmer Help, 273                               blind RCEs, 288
                                                    classic RCEs, 288
 
@@ -19112,30 +19112,30 @@ Programmer Help, 273                               blind RCEs, 288
               REST. See Representational State              server logs, 64
                        Transfer (REST)                      server status, 64
               return-oriented programming, 241         server-side request forgery (SSRF),
-              reverse engineering, 6                              213–229, 278
+              reverse engineering, 6                              213-229, 278
               reverse shell, 285                            blind SSRF, 214
               rooted device, 6                         server-side template injections (SSTIs),
-              RSA, 42                                             261–274
+              RSA, 42                                             261-274
                                                        server-side vulnerabilities, 6
               S                                        service banner, 218
               S3. See Amazon S3                        service enumeration, 69
               safe concurrency, 206                    service provider, 309
-              same-origin policy (SOP), 43, 295–306    session, 39–40
-              SameSite, 149–152, 159–160                    session cookie, 115, 156–160,
-              SAML. See Security Assertion Markup                 162–172, 308–309, 318–321.
+              same-origin policy (SOP), 43, 295-306    session, 39-40
+              SameSite, 149-152, 159-160                    session cookie, 115, 156-160,
+              SAML. See Security Assertion Markup                 162-172, 308-309, 318-321.
                         Language (SAML)                           See also session ID
               sandbox                                       session ID, 39. See also session
-                   sandbox environment, 265–166                   cookie
-                   sandbox escape, 269–273                  session management, 39
+                   sandbox environment, 265-166                   cookie
+                   sandbox escape, 269-273                  session management, 39
               sanitizing, 114                          Shaw, Zed, 44
               SAST. See static analysis security       shebang, 80
                         testing (SAST)                 shell
               SCA. See software composition                 commands, 285
                         analysis (SCA)                      interpreter, 62
               scanner, 72                              Shopify, 359
-              scheduling, 206                          signature, 40–43, 311–312, 319–321, 351
-              scope, 9–13, 26                          single sign-on (SSO), 307–321
-                   scope discovery, 65                      shared-session SSO, 308–309
+              scheduling, 206                          signature, 40-43, 311-312, 319-321, 351
+              scope, 9-13, 26                          single sign-on (SSO), 307-321
+                   scope discovery, 65                      shared-session SSO, 308-309
               search engine, 63                        SlideShare, 77
               SecLists, 68, 372                        Snapper, 71, 316
               secret-bridge, 325                       SOAP, 358
@@ -19150,9 +19150,9 @@ Programmer Help, 273                               blind RCEs, 288
 
 ---
 
-SOP. See same-origin policy (SOP)             Subject Alternative Name, 67–68
+SOP. See same-origin policy (SOP)             Subject Alternative Name, 67-68
      source code review, 76, 328,             Sublime Text, 59
-           335–346, 351, 378. See also        superdomain, 296
+           335-346, 351, 378. See also        superdomain, 296
            static analysis security testing   SVG, 253
            (SAST), static code analysis       Swagger, 363
 source command, 96                            Synack, 4, 8
@@ -19160,9 +19160,9 @@ spidering, 62, 71                             synchronization, 210
 Spring Framework, 243                         syntax error, 123
 SQL. See Structured Query Language            system root, 279
            (SQL)
-SQL injections, 187–203                       T
-     blind, 188, 195                          technology stack, 6, 69, 78–79, 104
-     Boolean based, 196                       template engines, 261–266
+SQL injections, 187-203                       T
+     blind, 188, 195                          technology stack, 6, 69, 78-79, 104
+     Boolean based, 196                       template engines, 261-266
      classic, 188, 195                             Embedded Ruby template
      error based, 195                                   (ERB), 266
      first-order, 191                              FreeMarker, 266
@@ -19178,12 +19178,12 @@ SSL. See Secure Sockets Layer (SSL)           third-party service, 308
 SSL pinning. See certificate pinning          threads, 206
 SSO. See single sign-on (SSO)                 time-of-check/time-of-use vulnerabilities.
 SSRF. See server-side request                           See race conditions
-           forgery (SSRF)                     time throttling, 366, 373–374
+           forgery (SSRF)                     time throttling, 366, 373-374
 SSRFmap, 220                                  token-based authentication, 40
 SSTIs. See server-side template               token forgery, 40
            injections (SSTIs)                 Tomnomnom, 78
 Stack Overflow, 77                            tplmap, 273
-state-changing action, 149, 161               triage, 8–9
+state-changing action, 149, 161               triage, 8-9
 static analysis security testing (SAST),      truffleHog, 77, 328, 339
            346. See also source code          tuple, 270
            review, static code analysis       Tutorials Point, 232
@@ -19191,13 +19191,13 @@ static code analysis, 378. See also source    Twitter, 356
            code review, static analysis
            security testing (SAST)            U
 Structured Query Language (SQL),              Unarchiver, 253
-           187–188                            unexpected behavior, 370
+           187-188                            unexpected behavior, 370
 SubBrute, 68                                  Unicode, 140
-subdomain, 64–65                              Unix, 46, 81, 100–102, 177, 249, 279,
+subdomain, 64-65                              Unix, 46, 81, 100-102, 177, 249, 279,
      sibling subdomains, 296                           290, 292, 325, 372
-     subdomain enumeration, 68–69, 379        Unrouted addresses, 228
-     subdomain takeovers, 308–309,            URLs, 63
-           316–318                                absolute URL, 133–134, 325
+     subdomain enumeration, 68-69, 379        Unrouted addresses, 228
+     subdomain takeovers, 308-309,            URLs, 63
+           316-318                                absolute URL, 133-134, 325
 
 
                                                                              Index    389
@@ -19213,7 +19213,7 @@ subdomain, 64–65                              Unix, 46, 81, 100–102, 177, 24
               URL validation, 133, 136                           reverse whois, 65
               USB debugging, 351                                 whois.cymru.com, 67
               user input, 342                               Wikipedia, 63
-              user-interface redressing, 143. See also      wildcard, 63, 101, 292, 297–299
+              user-interface redressing, 143. See also      wildcard, 63, 101, 292, 297-299
                        clickjacking                         Windows 353
                                                             WordPress, 7, 79, 280
               V                                             write-up, 28
@@ -19227,13 +19227,13 @@ subdomain, 64–65                              Unix, 46, 81, 100–102, 177, 24
               virtual environment, 352                               (XML)
               vulnerabilities, 61                           XML bomb, 258. See also billion laughs
               vulnerability disclosure programs                      attack
-                        (VDPs), 10                          XML external entity (XXE), 247–260
+                        (VDPs), 10                          XML external entity (XXE), 247-260
               vulnerability report, 16. See also write-up       blind XXE, 252
                    severity, 16                                 classic XXE, 251
                    steps to reproduce, 18                   XMLHttpRequest, 128, 170
               vulnerability scanners, 25                    XmlLint, 259
                                                             X-Powered-By, 79, 324
-              W                                             XSS, 111–129
+              W                                             XSS, 111-129
               W3Schools, 188                                    blind XSS, 116, 125
               WAF. See web application firewall                 reflected XSS, 117, 343
                        (WAF)                                    self-XSS, 119, 171
@@ -19250,10 +19250,10 @@ subdomain, 64–65                              Unix, 46, 81, 100–102, 177, 24
               web-hosting service, 223
               web page, 34                                  Z
               Web Services Description Language             ZAP. See Zed Attack Proxy (ZAP)
-                       (WSDL), 358, 362                     Zed Attack Proxy (ZAP), 47, 72–73, 174,
+                       (WSDL), 358, 362                     Zed Attack Proxy (ZAP), 47, 72-73, 174,
               web shell, 202                                          362, 374
               web spidering, 62, 71                         zip command, 254
-              Wfuzz, 370–371, 374–379                       zlib, 331
+              Wfuzz, 370-371, 374-379                       zlib, 331
 
 390   Index
 
@@ -19294,7 +19294,7 @@ isbn 978-1-71850-090-7
 
                       “The foundation you need to
                         make it in bug bounties.”
-                           —Ben Sadeghipour, Head of Hacker
+                           --Ben Sadeghipour, Head of Hacker
                                Education at HackerOne
 A comprehensive guide for any web application                               Configure Burp Suite to intercept traffic
 hacker, Bug Bounty Bootcamp explores                                        and hunt for bugs

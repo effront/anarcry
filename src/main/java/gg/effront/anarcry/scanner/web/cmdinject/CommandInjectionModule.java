@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * CommandInjectionModule — CWE-78 scanner.
+ * CommandInjectionModule -- CWE-78 scanner.
  *
  * Phase 1 (active): injects command separators appending 'id' and matches RCE
  * output (uid=, root:x:, www-data, nobody) in response body. Phase 2
@@ -50,7 +50,7 @@ public class CommandInjectionModule implements Scanner {
     private static final List<String> SLEEP_PAYLOADS = List.of("; sleep 5", "| sleep 5", "&& sleep 5", "$(sleep 5)",
             "; ping -c 5 127.0.0.1");
 
-    // RCE output detection pattern — anchored to avoid false matches on substrings
+    // RCE output detection pattern -- anchored to avoid false matches on substrings
     // such as "userid" or "product_id". The (?i) flag makes it case-insensitive.
     private static final java.util.regex.Pattern RCE_OUTPUT = java.util.regex.Pattern
             .compile("(?i)(uid=\\d+|root:x:|www-data|nobody)");
@@ -104,7 +104,7 @@ public class CommandInjectionModule implements Scanner {
 
                 // Anti-FP: skip param if baseline already contains RCE pattern
                 if (RCE_OUTPUT.matcher(baseline).find()) {
-                    log.accept("[~] CmdInjection: baseline contém padrão RCE — pulando " + param + " em " + path);
+                    log.accept("[~] CmdInjection: baseline contém padrão RCE -- pulando " + param + " em " + path);
                     continue;
                 }
 
@@ -130,14 +130,14 @@ public class CommandInjectionModule implements Scanner {
                             // Anti-FP: ensure RCE output was NOT present in baseline
                             if (!baseline.contains(hit)) {
                                 String endpoint = path + "?" + param + "=" + encoded;
-                                log.accept("[!!!] CmdInjection CRITICAL — injeção ativa confirmada: " + endpoint
+                                log.accept("[!!!] CmdInjection CRITICAL -- injeção ativa confirmada: " + endpoint
                                         + " (saída: " + hit + ")");
                                 findings.add(Finding.of(id(), endpoint,
-                                        "OS Command Injection — execução de comandos confirmada", Severity.CRITICAL,
+                                        "OS Command Injection -- execução de comandos confirmada", Severity.CRITICAL,
                                         "Payload: " + injected + " → saída detectada: " + hit + " | URL: " + base
                                                 + endpoint,
                                         "Execução arbitrária de comandos do SO via injeção no parâmetro '" + param
-                                                + "' — acesso total ao servidor comprometido",
+                                                + "' -- acesso total ao servidor comprometido",
                                         "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
                                                 + injected + "'",
                                         "Nunca passe input do usuário diretamente a funções de execução "
@@ -174,16 +174,16 @@ public class CommandInjectionModule implements Scanner {
                             continue;
                         }
                         String endpoint = path + "?" + param + "=" + encoded;
-                        log.accept("[!!!] CmdInjection CRITICAL — blind injection temporal confirmada: " + endpoint
+                        log.accept("[!!!] CmdInjection CRITICAL -- blind injection temporal confirmada: " + endpoint
                                 + " (elapsed: " + elapsed + "ms, baseline: " + baselineMs + "ms)");
                         findings.add(Finding.of(id(), endpoint,
-                                "OS Command Injection Blind (Time-Based) — sleep confirmado proporcionalmente",
+                                "OS Command Injection Blind (Time-Based) -- sleep confirmado proporcionalmente",
                                 Severity.CRITICAL,
                                 "Payload: " + injected + " → elapsed: " + elapsed + "ms" + " (baseline: " + baselineMs
                                         + "ms, delta: " + (elapsed - baselineMs) + "ms)"
                                         + " | Verificação proporcional: confirmada" + " | URL: " + base + endpoint,
                                 "Command injection cega confirmada via delay temporal proporcional no parâmetro '"
-                                        + param + "' — execução no SO comprovada mesmo sem saída visível",
+                                        + param + "' -- execução no SO comprovada mesmo sem saída visível",
                                 "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "=" + injected
                                         + "'",
                                 "Nunca passe input do usuário a funções de execução de comandos. "
@@ -193,8 +193,8 @@ public class CommandInjectionModule implements Scanner {
                         break outer;
                     } else {
                         log.accept("[~] CmdInjection: spike temporal detectado em " + path + "?" + param + " (delta="
-                                + (elapsed - baselineMs) + "ms) — verificação proporcional"
-                                + " falhou, LOW confidence — não reportando");
+                                + (elapsed - baselineMs) + "ms) -- verificação proporcional"
+                                + " falhou, LOW confidence -- não reportando");
                     }
                 }
             }
@@ -283,7 +283,7 @@ public class CommandInjectionModule implements Scanner {
             try {
                 Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
             } catch (Exception e) {
-                // Timeout or connection drop — counts as a significant delay
+                // Timeout or connection drop -- counts as a significant delay
                 return System.currentTimeMillis() - t0;
             }
             return System.currentTimeMillis() - t0;
@@ -310,19 +310,20 @@ public class CommandInjectionModule implements Scanner {
             String param, String separator) {
         String sep = extractSeparatorPrefix(separator);
         if (sep == null) {
-            // Cannot extract separator — skip proportional check, treat as unconfirmed
+            // Cannot extract separator -- skip proportional check, treat as unconfirmed
             return false;
         }
 
         try {
-            // Probe sleep 1 — expect delta ≈ 1000 ms (700 – 1700 ms window, 30 % tolerance)
+            // Probe sleep 1 -- expect delta ≈ 1000 ms (700 - 1700 ms window, 30 %
+            // tolerance)
             long d1 = measureElapsedRaw(ctx, hc, base, path, param, sep + "sleep 1");
             long delta1 = d1 - baselineMs;
             if (delta1 < 700L || delta1 > 1700L) {
                 return false;
             }
 
-            // Probe sleep 3 — expect delta ≈ 3000 ms (2100 – 3900 ms window, 30 %
+            // Probe sleep 3 -- expect delta ≈ 3000 ms (2100 - 3900 ms window, 30 %
             // tolerance)
             long d3 = measureElapsedRaw(ctx, hc, base, path, param, sep + "sleep 3");
             long delta3 = d3 - baselineMs;
@@ -357,7 +358,7 @@ public class CommandInjectionModule implements Scanner {
      * proportional verification can construct "sep + sleep N" probes.
      *
      * Examples: "; sleep 5" → "; " "| sleep 5" → "| " "&& sleep 5" → "&& " "$(sleep
-     * 5)" → null (subshell — skip proportional test) "; ping -c 5 …" → "; "
+     * 5)" → null (subshell -- skip proportional test) "; ping -c 5 …" → "; "
      */
     private String extractSeparatorPrefix(String payload) {
         if (payload.startsWith("; ")) {

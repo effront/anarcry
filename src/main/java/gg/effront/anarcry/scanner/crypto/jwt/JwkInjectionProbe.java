@@ -69,7 +69,7 @@ public class JwkInjectionProbe {
                                 "JWK header injection aceita ativamente (CVE-2018-0114)", Severity.CRITICAL,
                                 "Probe em " + base + path
                                         + " → HTTP 200 com chave JWK attacker-controlled injetada no header",
-                                "Servidor confia na chave pública embutida no próprio token — atacante pode self-sign"
+                                "Servidor confia na chave pública embutida no próprio token -- atacante pode self-sign"
                                         + "qualquer payload",
                                 "python3 jwt_tool.py <token> -X i",
                                 "Ignorar o campo jwk no header do token; usar apenas chaves pré-configuradas no"
@@ -77,18 +77,18 @@ public class JwkInjectionProbe {
                                 _cweId, _cweTitle, _cvssVector, _score));
                     }
                 } catch (Exception ex) {
-                    log.accept("[~] JWT: JWK injection " + path + " — " + ex.getMessage());
+                    log.accept("[~] JWT: JWK injection " + path + " -- " + ex.getMessage());
                 }
             }
         } catch (Exception e) {
-            log.accept("[~] JWT: JWK injection — " + e.getMessage());
+            log.accept("[~] JWT: JWK injection -- " + e.getMessage());
         }
         return Optional.empty();
     }
 
     private static String b64urlUnsigned(BigInteger val) {
         byte[] b = val.toByteArray();
-        // BigInteger.toByteArray() can prefix a 0x00 sign byte — strip it for JWK
+        // BigInteger.toByteArray() can prefix a 0x00 sign byte -- strip it for JWK
         if (b.length > 1 && b[0] == 0) {
             b = Arrays.copyOfRange(b, 1, b.length);
         }

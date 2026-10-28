@@ -84,23 +84,23 @@ public class HostHeaderModule implements Scanner {
                         String title;
                         if (target.isPasswordReset()) {
                             sev = Severity.HIGH;
-                            title = "Host Header Injection — password reset poisoning via " + headerName;
+                            title = "Host Header Injection -- password reset poisoning via " + headerName;
                         } else {
                             sev = Severity.MEDIUM;
-                            title = "Host Header Injection — " + headerName + " refletido em " + target.path();
+                            title = "Host Header Injection -- " + headerName + " refletido em " + target.path();
                         }
 
                         String evidence = bodyReflects ? "Body contém: " + PROBE_HOST : "Location: " + location;
 
-                        log.accept("[!!] HostHeader: " + sev + " — " + headerName + " em " + target.path());
+                        log.accept("[!!] HostHeader: " + sev + " -- " + headerName + " em " + target.path());
                         findings.add(Finding.of("HostHeader", target.path(), title, sev,
                                 "URL: " + url + " | Header: " + headerName + ": " + PROBE_HOST + " | Evidência: "
                                         + evidence,
                                 target.isPasswordReset()
-                                        ? "Servidor usa o header " + headerName + " para gerar link de reset — "
+                                        ? "Servidor usa o header " + headerName + " para gerar link de reset -- "
                                                 + "atacante pode enviar link de reset apontando para domínio controlado"
                                         : "Servidor reflete o valor de " + headerName
-                                                + " — possível cache poisoning ou open redirect",
+                                                + " -- possível cache poisoning ou open redirect",
                                 "curl -H '" + headerName + ": " + PROBE_HOST + "' '" + url + "'",
                                 "Ignorar headers Host customizáveis; usar hostname configurado na aplicação para links"
                                         + "de reset; " + "implementar allowlist de hosts permitidos",

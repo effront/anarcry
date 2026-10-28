@@ -83,7 +83,7 @@ public class ReportEngine {
             sb.append("**Impact:** ").append(f.impact()).append("  \n");
             sb.append("**Reproduction:**\n```\n").append(f.reproduction()).append("\n```\n");
             sb.append("**Recommendation:** ").append(f.recommendation()).append("  \n");
-            sb.append("**CWE:** ").append(f.cweId()).append(" — ").append(f.cweTitle()).append("  \n");
+            sb.append("**CWE:** ").append(f.cweId()).append(" -- ").append(f.cweTitle()).append("  \n");
             sb.append("**CVSS v3.1:** ").append(f.cvssScore()).append(" (").append(f.cvssVector()).append(")  \n");
             sb.append("\n---\n\n");
         }
@@ -110,8 +110,8 @@ public class ReportEngine {
             sb.append("**Program:** ").append(programName).append("\n");
             sb.append("**Asset:** ").append(targetUrl).append("\n");
             sb.append("**Severity:** ").append(h1SeverityLabel(f)).append(" (CVSS ")
-                    .append(String.format("%.1f", f.cvssScore())).append(" — ").append(f.cvssVector()).append(")\n");
-            sb.append("**Weakness:** ").append(f.cweId()).append(" — ").append(f.cweTitle()).append("\n\n");
+                    .append(String.format("%.1f", f.cvssScore())).append(" -- ").append(f.cvssVector()).append(")\n");
+            sb.append("**Weakness:** ").append(f.cweId()).append(" -- ").append(f.cweTitle()).append("\n\n");
 
             sb.append("## Summary\n\n");
             sb.append(kbSummary).append("\n\n");
@@ -185,7 +185,7 @@ public class ReportEngine {
             sb.append("**Classification (VRT):** `").append(vrt).append("`\n");
             sb.append("**Severity:** ").append(f.severity()).append(" (CVSS ")
                     .append(String.format("%.1f", f.cvssScore())).append(")\n");
-            sb.append("**Weakness:** ").append(f.cweId()).append(" — ").append(f.cweTitle()).append("\n");
+            sb.append("**Weakness:** ").append(f.cweId()).append(" -- ").append(f.cweTitle()).append("\n");
             sb.append("**Endpoint:** `").append(f.endpoint()).append("`\n\n");
 
             sb.append("### Summary\n\n");

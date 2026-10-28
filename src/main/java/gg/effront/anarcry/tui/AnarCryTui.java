@@ -145,7 +145,7 @@ public class AnarCryTui {
             }
         }));
 
-        logHistory.add("[*] AnarCry v1.2 — pronto");
+        logHistory.add("[*] AnarCry v1.2 -- pronto");
         logHistory.add("[*] Configure o alvo e pressione Iniciar para começar");
 
         buildPanels(screen.getTerminalSize());
@@ -165,7 +165,7 @@ public class AnarCryTui {
         });
 
         window.addWindowListener(new WindowListenerAdapter() {
-            // Character shortcuts (q/e/?) — blocked when a TextBox has focus so typing
+            // Character shortcuts (q/e/?) -- blocked when a TextBox has focus so typing
             // isn't hijacked
             @Override
             public void onInput(Window basePane, KeyStroke keyStroke, AtomicBoolean deliverEvent) {
@@ -203,7 +203,7 @@ public class AnarCryTui {
                 }
             }
 
-            // F-key navigation — placed in onUnhandledInput so it fires after the focused
+            // F-key navigation -- placed in onUnhandledInput so it fires after the focused
             // component (TextBox) has already returned UNHANDLED, guaranteeing delivery
             // regardless of which component currently holds focus.
             @Override
@@ -345,14 +345,14 @@ public class AnarCryTui {
 
     private Component buildFindingsContent() {
         var p = new Panel(new BorderLayout());
-        p.addComponent(findingsPanel.withBorder(Borders.singleLine("FINDINGS — Enter: detalhe  F2: voltar ao scan")),
+        p.addComponent(findingsPanel.withBorder(Borders.singleLine("FINDINGS -- Enter: detalhe  F2: voltar ao scan")),
                 BorderLayout.Location.CENTER);
         return p;
     }
 
     private Component buildSiteMapContent() {
         var p = new Panel(new BorderLayout());
-        p.addComponent(siteMapPanel.withBorder(Borders.singleLine("SITE MAP — F7  requisições HTTP interceptadas")),
+        p.addComponent(siteMapPanel.withBorder(Borders.singleLine("SITE MAP -- F7  requisições HTTP interceptadas")),
                 BorderLayout.Location.CENTER);
         return p;
     }
@@ -367,7 +367,7 @@ public class AnarCryTui {
         p.addComponent(new EmptySpace(new TerminalSize(1, 1)));
 
         if (snap.isEmpty()) {
-            Label lbl = new Label("  Nenhum scan ainda — F2 Scan para começar");
+            Label lbl = new Label("  Nenhum scan ainda -- F2 Scan para começar");
             lbl.setForegroundColor(TextColor.ANSI.WHITE);
             p.addComponent(lbl);
             return p.withBorder(Borders.singleLine("Dashboard"));
@@ -400,7 +400,7 @@ public class AnarCryTui {
             p.addComponent(new Label("  Top findings críticos:"));
             snap.stream().filter(f -> f.severity() == Severity.CRITICAL || f.severity() == Severity.HIGH).limit(5)
                     .forEach(f -> {
-                        Label fl = new Label("    [" + f.severity().name() + "] " + f.module() + " — " + f.title());
+                        Label fl = new Label("    [" + f.severity().name() + "] " + f.module() + " -- " + f.title());
                         fl.setForegroundColor(severityColor(f.severity()));
                         p.addComponent(fl);
                     });
@@ -689,7 +689,7 @@ public class AnarCryTui {
         }));
         panel.addComponent(buttons);
 
-        dialog.setComponent(panel.withBorder(Borders.singleLine(f.severity().name() + " — " + f.title())));
+        dialog.setComponent(panel.withBorder(Borders.singleLine(f.severity().name() + " -- " + f.title())));
 
         dialog.addWindowListener(new WindowListenerAdapter() {
             @Override
@@ -758,7 +758,7 @@ public class AnarCryTui {
         } catch (Exception ignored) {
         }
 
-        addToLog("[!] Clipboard indisponível — pressione Ctrl+C no terminal para copiar:");
+        addToLog("[!] Clipboard indisponível -- pressione Ctrl+C no terminal para copiar:");
         addToLog("    " + text.lines().findFirst().orElse(text));
     }
 

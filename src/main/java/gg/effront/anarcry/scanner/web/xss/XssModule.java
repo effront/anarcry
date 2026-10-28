@@ -31,7 +31,7 @@ public class XssModule implements Scanner {
     private static final List<String> PARAMS = List.of("q", "query", "search", "name", "msg", "text", "content", "page",
             "input", "s", "keyword", "filter");
 
-    // DOM sink patterns — dangerous assignments/calls that may receive
+    // DOM sink patterns -- dangerous assignments/calls that may receive
     // attacker-controlled data
     private static final Pattern DOM_SINKS = Pattern
             .compile("innerHTML\\s*=|outerHTML\\s*=|document\\.write\\s*\\(|eval\\s*\\(|"
@@ -67,14 +67,14 @@ public class XssModule implements Scanner {
 
         log.accept("[~] XSS: iniciando probe em " + base);
 
-        // Phase 3 (DOM sink analysis) — fetch root page once and scan JS inline
+        // Phase 3 (DOM sink analysis) -- fetch root page once and scan JS inline
         String rootBody = fetchBody(ctx, hc, base + "/");
         if (!rootBody.isEmpty()) {
             var m = DOM_SINKS.matcher(rootBody);
             if (m.find()) {
                 String sink = m.group().trim();
                 log.accept("[~] XSS DOM: sink '" + sink + "' encontrado em /");
-                findings.add(Finding.of(id(), "/", "DOM XSS — Sink Perigoso Detectado (" + sink + ")", Severity.INFO,
+                findings.add(Finding.of(id(), "/", "DOM XSS -- Sink Perigoso Detectado (" + sink + ")", Severity.INFO,
                         "Sink '" + sink + "' encontrado no HTML/JS de " + base + "/",
                         "Potential DOM-based XSS: o sink '" + sink + "' pode receber dados controláveis "
                                 + "pelo atacante via location.search, location.hash ou document.referrer "
@@ -131,7 +131,7 @@ public class XssModule implements Scanner {
 
                     if (!appEscapes && payloadBody.contains(marker)) {
                         log.accept("[!!] XSS HIGH: '" + htmlPayload + "' refletido sem encoding em " + endpoint);
-                        findings.add(Finding.of(id(), endpoint, "Reflected XSS — Payload Executável Refletido",
+                        findings.add(Finding.of(id(), endpoint, "Reflected XSS -- Payload Executável Refletido",
                                 Severity.HIGH,
                                 "Payload '" + htmlPayload + "' refletido sem encoding HTML em " + base + endpoint
                                         + " | Canary: " + canary + " | Marker: " + marker,
@@ -155,7 +155,7 @@ public class XssModule implements Scanner {
                     String endpoint = path + "?" + param + "=" + canary;
                     log.accept("[~] XSS MEDIUM: canary refletido, nenhum payload confirmou execução em " + endpoint);
                     findings.add(Finding.of(id(), endpoint,
-                            "Reflected XSS (Potencial) — Reflexão de Input Sem Contexto Executável", Severity.MEDIUM,
+                            "Reflected XSS (Potencial) -- Reflexão de Input Sem Contexto Executável", Severity.MEDIUM,
                             "Canary '" + canary + "' refletido em " + base + endpoint + " | " + phase2Payloads.size()
                                     + " payloads testados sem execução confirmada; "
                                     + "contexto de injeção requer análise manual",
