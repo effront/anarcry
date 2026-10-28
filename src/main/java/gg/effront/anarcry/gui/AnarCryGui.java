@@ -84,6 +84,7 @@ public class AnarCryGui {
         modulesPanel = new GuiModulesPanel();
         dashboardView = new DashboardView();
         findingsView = new FindingsView();
+        findingsView.setJwtSupplier(modulesPanel::getJwt);
         scanFindingsTable = new FindingsTable();
         scanDetailPanel = new FindingDetailPanel();
         targetView = new TargetView();
@@ -250,7 +251,7 @@ public class AnarCryGui {
                     int modelRow = jTable.convertRowIndexToModel(viewRow);
                     List<Finding> all = table.getFindings();
                     if (modelRow >= 0 && modelRow < all.size()) {
-                        new FindingDetailDialog(frame, all.get(modelRow)).setVisible(true);
+                        new FindingDetailDialog(frame, all.get(modelRow), modulesPanel.getJwt()).setVisible(true);
                     }
                 }
             }
