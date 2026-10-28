@@ -1,7 +1,9 @@
 package gg.effront.anarcry.gui.components;
 
+import gg.effront.anarcry.gui.PrivacyFilter;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.Severity;
+
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -56,6 +58,8 @@ public class FindingsTable extends JPanel {
         table.getColumnModel().getColumn(4).setPreferredWidth(300);
 
         add(new JScrollPane(table), BorderLayout.CENTER);
+
+        PrivacyFilter.addListener(() -> SwingUtilities.invokeLater(model::fireTableDataChanged));
     }
 
     /** Add a finding row. Safe to call from any thread. */
@@ -129,7 +133,7 @@ public class FindingsTable extends JPanel {
                 case 0 -> f.severity();
                 case 1 -> f.cvssScore();
                 case 2 -> f.module();
-                case 3 -> f.endpoint();
+                case 3 -> PrivacyFilter.apply(f.endpoint());
                 case 4 -> f.title();
                 default -> "";
             };

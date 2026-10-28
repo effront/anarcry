@@ -1,5 +1,6 @@
 package gg.effront.anarcry.gui.views;
 
+import gg.effront.anarcry.gui.PrivacyFilter;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.Severity;
 
@@ -51,6 +52,8 @@ public class ReportView extends JPanel {
         preview.setEditable(false);
         preview.setText(emptyHtml());
         add(new JScrollPane(preview), BorderLayout.CENTER);
+
+        PrivacyFilter.addListener(() -> SwingUtilities.invokeLater(this::refreshPreview));
     }
 
     public void update(List<Finding> findings, String targetUrl) {
@@ -160,6 +163,7 @@ public class ReportView extends JPanel {
         if (s == null) {
             return "";
         }
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        String text = PrivacyFilter.apply(s);
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }
