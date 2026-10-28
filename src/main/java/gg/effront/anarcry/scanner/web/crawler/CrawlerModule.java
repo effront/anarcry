@@ -83,7 +83,7 @@ public class CrawlerModule implements Scanner {
         log.accept("[~] Crawler: " + kbPaths.size() + " KB hint paths merged from " + ctx.enabledModules().size()
                 + " modules");
 
-        // 1. GET targetUrl — extrair paths do HTML
+        // 1. GET targetUrl -- extrair paths do HTML
         try {
             var req = HttpRequest.newBuilder().uri(URI.create(ctx.targetUrl())).timeout(Duration.ofSeconds(8)).GET()
                     .build();
@@ -130,7 +130,7 @@ public class CrawlerModule implements Scanner {
                     log.accept("[!!] Crawler: OpenAPI/Swagger exposto em " + p);
                     findings.add(new Finding("Crawler", p, "OpenAPI/Swagger spec exposta sem autenticação",
                             Severity.MEDIUM, "GET " + base + p + " → HTTP 200 | Size: " + resp.body().length(),
-                            "Especificação API exposta publicamente — revela todos os endpoints, parâmetros e schemas",
+                            "Especificação API exposta publicamente -- revela todos os endpoints, parâmetros e schemas",
                             "curl '" + base + p + "'", "Proteger /api-docs com autenticação ou remover de produção",
                             "CWE-200", "Exposure of Sensitive Information to an Unauthorized Actor",
                             "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3));

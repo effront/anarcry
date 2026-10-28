@@ -54,7 +54,7 @@ Indicadores de prontidão a coletar:
 - VPN/IPsec, SSH, S/MIME e code signing cobertos pelo plano
 ```
 
-Casos reais e mentalidade de ataque (RWBH): a mentalidade é de risco futuro — inventariar onde a criptografia clássica protege dados de longa vida e simular a migração híbrida antes que a quebra seja viável.
+Casos reais e mentalidade de ataque (RWBH): a mentalidade é de risco futuro -- inventariar onde a criptografia clássica protege dados de longa vida e simular a migração híbrida antes que a quebra seja viável.
 
 ## Target Context (Crawler Hints)
 - **Parâmetros comuns:** não se aplica (transporte); observar `SNI`, `Host` e versão TLS.

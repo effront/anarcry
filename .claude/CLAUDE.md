@@ -1,4 +1,4 @@
-# AnarCry — Claude Context
+# AnarCry -- Claude Context
 
 ## Project Overview
 
@@ -106,7 +106,7 @@ public interface Scanner {
 }
 ```
 
-Findings are created via `Finding.of(module, endpoint, title, severity, evidence, impact, reproduction, recommendation)` — CWE and CVSS are auto-resolved from `CweRegistry`.
+Findings are created via `Finding.of(module, endpoint, title, severity, evidence, impact, reproduction, recommendation)` -- CWE and CVSS are auto-resolved from `CweRegistry`.
 
 ### Module Registration
 
@@ -133,8 +133,8 @@ java -jar build/libs/anarcry-1.0.jar # Run TUI
 ## CI/CD
 
 **Workflows** (`.github/workflows/`):
-- `lint.yml` — Spotless (Google Java Format) + Checkstyle on push/PR
-- `security-scan.yml` — SpotBugs + FindSecBugs on push/PR + weekly Monday 9AM UTC
+- `lint.yml` -- Spotless (Google Java Format) + Checkstyle on push/PR
+- `security-scan.yml` -- SpotBugs + FindSecBugs on push/PR + weekly Monday 9AM UTC
 
 ## Code Quality Standards
 
@@ -149,9 +149,9 @@ java -jar build/libs/anarcry-1.0.jar # Run TUI
 
 ### Code Style
 - Records over classes for immutable data (Finding, ScanContext, ScanEvent, etc.)
-- `java.net.http.HttpClient` (HTTP/2 by default) — no third-party HTTP libs
+- `java.net.http.HttpClient` (HTTP/2 by default) -- no third-party HTTP libs
 - BouncyCastle for all crypto operations (TLS, JWT, PQC)
-- No external logging framework — `Consumer<String> log` callback pattern
+- No external logging framework -- `Consumer<String> log` callback pattern
 
 ## Key Patterns
 
@@ -171,7 +171,7 @@ Http.send(ctx, httpClient, request, bodyHandler, moduleId);
 ```
 
 ### Scope Control
-`ScanConfig.isInScope(host)` enforces target scope — scan is cancelled if host is out of scope.
+`ScanConfig.isInScope(host)` enforces target scope -- scan is cancelled if host is out of scope.
 
 ## Ethical Use
 
@@ -179,17 +179,19 @@ AnarCry is designed for **authorized security testing** only:
 - Always obtain written authorization before scanning
 - Respect scope boundaries configured in ScanConfig
 - Never scan targets without explicit permission
-- Findings are for defensive purposes — helping teams fix vulnerabilities
+- Findings are for defensive purposes -- helping teams fix vulnerabilities
 
 ## Claude Rules
 
 1. **NO EMOJIS** in code, comments, logs, commit messages, or output
-2. **NO AUTO-COMMITS** — always ask before `git add`, `git commit`, `git push`
-3. **NO AUTO-DOCUMENTATION** — do not create .md files unless explicitly requested
-4. **AUTHORIZED CONTEXT ONLY** — scanner modules exist for pentest/CTF/defensive use
-5. **Spotless before commit** — always run `./gradlew spotlessApply` before staging
-6. **Never use `git add .`** — add files by name explicitly
+2. **NO AUTO-COMMITS** -- always ask before `git add`, `git commit`, `git push`
+3. **NO AUTO-DOCUMENTATION** -- do not create .md files unless explicitly requested
+4. **AUTHORIZED CONTEXT ONLY** -- scanner modules exist for pentest/CTF/defensive use
+5. **Spotless before commit** -- always run `./gradlew spotlessApply` before staging
+6. **Never use `git add .`** -- add files by name explicitly
+7. **NO EMDASH/ENDASH** -- use `--` instead of emdash and `-` instead of endash everywhere (code, comments, reports, KB)
+8. **NO CO-AUTHORED-BY** -- never add Co-Authored-By or attribution lines to commits or PRs
 
 ---
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-10-28

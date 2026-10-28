@@ -20,15 +20,15 @@ public class JkuHeaderAnalyzer {
 
         Severity sev = insecure ? Severity.HIGH : Severity.MEDIUM;
         String detail = insecure
-                ? "jku aponta para URL insegura (" + jku + ") — facilita JWKS hijacking local"
+                ? "jku aponta para URL insegura (" + jku + ") -- facilita JWKS hijacking local"
                 : "jku presente (" + jku
-                        + ") — servidor busca JWKS remotamente; atacante pode hospedar chave maliciosa";
+                        + ") -- servidor busca JWKS remotamente; atacante pode hospedar chave maliciosa";
 
         String _cweId = CweRegistry.cweId("JWT");
         String _cweTitle = CweRegistry.cweTitle("JWT");
         String _cvssVector = CweRegistry.cvssVector("JWT");
         double _score = CvssCalculator.calculate(_cvssVector);
-        return Optional.of(Finding.of("JWT", "(token)", "jku header presente — risco de JWKS hijacking", sev,
+        return Optional.of(Finding.of("JWT", "(token)", "jku header presente -- risco de JWKS hijacking", sev,
                 "jku=" + jku + " | " + evidence, detail,
                 "Hospedar JWKS em URL controlada pelo atacante com par de chaves RSA gerado localmente:\n"
                         + "python3 jwt_tool.py <token> -X s -ju https://evil.com/jwks.json",

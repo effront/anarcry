@@ -37,7 +37,7 @@ public class NullSignatureProbe {
                     return Optional.of(Finding.of("JWT", base + path,
                             "Null signature aceita ativamente (CVE-2020-28042)", Severity.CRITICAL,
                             "Probe em " + base + path + " → HTTP 200 com signature vazia",
-                            "Servidor aceita tokens sem assinatura — o payload pode ser forjado livremente mantendo o"
+                            "Servidor aceita tokens sem assinatura -- o payload pode ser forjado livremente mantendo o"
                                     + "algoritmo original",
                             "curl -H 'Authorization: Bearer " + nullToken + "' " + base + path,
                             "Rejeitar tokens cuja signature esteja ausente ou vazia; validar presença de signature para"
@@ -45,7 +45,7 @@ public class NullSignatureProbe {
                             _cweId, _cweTitle, _cvssVector, _score));
                 }
             } catch (Exception e) {
-                log.accept("[~] JWT: null sig " + path + " — " + e.getMessage());
+                log.accept("[~] JWT: null sig " + path + " -- " + e.getMessage());
             }
         }
         return Optional.empty();

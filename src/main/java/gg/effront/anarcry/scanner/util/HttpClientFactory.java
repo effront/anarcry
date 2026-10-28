@@ -6,11 +6,11 @@ import javax.net.ssl.SSLParameters;
 
 public final class HttpClientFactory {
 
-    // HTTP/2, follows redirects — general purpose (Headers, JWT, CORS, OAuth,
+    // HTTP/2, follows redirects -- general purpose (Headers, JWT, CORS, OAuth,
     // GraphQL, CRLF, XXE, SSTI, IDOR)
     private static volatile HttpClient http2Instance;
 
-    // HTTP/1.1, no redirect — for SSRF and OpenRedirect probing
+    // HTTP/1.1, no redirect -- for SSRF and OpenRedirect probing
     private static volatile HttpClient noRedirectInstance;
 
     private HttpClientFactory() {
@@ -46,7 +46,7 @@ public final class HttpClientFactory {
         return noRedirectInstance;
     }
 
-    // Follows up to 1 redirect — used by SSRF redirect-bypass probing
+    // Follows up to 1 redirect -- used by SSRF redirect-bypass probing
     public static HttpClient followOne() throws Exception {
         SSLParameters params = new SSLParameters();
         params.setEndpointIdentificationAlgorithm("");

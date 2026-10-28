@@ -73,7 +73,7 @@ Bypasses comuns:
 - HSTS ausente em HTTP antes do redirect 301
 ```
 
-Casos reais e mentalidade de ataque (RWBH): a ausência de headers é usada como amplificador — o atacante procura uma página autenticada framável, um upload com MIME sniffing ou uma CSP permissiva para transformar um achado baixo em clickjacking/XSS.
+Casos reais e mentalidade de ataque (RWBH): a ausência de headers é usada como amplificador -- o atacante procura uma página autenticada framável, um upload com MIME sniffing ou uma CSP permissiva para transformar um achado baixo em clickjacking/XSS.
 
 ## Target Context (Crawler Hints)
 - **Parâmetros comuns:** não se aplica; avaliar todas as respostas HTML e de API.

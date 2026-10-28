@@ -67,7 +67,8 @@ public class SsrfModule implements Scanner {
 
     // Patterns in response body that prove the server actually fetched the target
     // URL.
-    // Deliberately excludes the probe IP (169.254.169.254) — that string can appear
+    // Deliberately excludes the probe IP (169.254.169.254) -- that string can
+    // appear
     // in the
     // body simply because Next.js / React SSR reflects query-string params in
     // __NEXT_DATA__,
@@ -154,7 +155,7 @@ public class SsrfModule implements Scanner {
                     activePaths.add(path);
                 }
             } catch (Exception e) {
-                // Unreachable path — skip
+                // Unreachable path -- skip
             }
             if (activePaths.size() >= MAX_ACTIVE_PATHS) {
                 log.accept("[~] SSRF: cap de " + MAX_ACTIVE_PATHS + " paths ativos atingido, pulando restantes");
@@ -167,12 +168,12 @@ public class SsrfModule implements Scanner {
             return findings;
         }
         long totalProbes = (long) activePaths.size() * urlParams.size() * SSRF_PROBES.size();
-        log.accept("[~] SSRF: " + activePaths.size() + "/" + probePaths.size() + " paths ativos — " + totalProbes
+        log.accept("[~] SSRF: " + activePaths.size() + "/" + probePaths.size() + " paths ativos -- " + totalProbes
                 + " probes");
 
         outer : for (int pi = 0; pi < activePaths.size(); pi++) {
             String path = activePaths.get(pi);
-            log.accept("[~] SSRF: [" + (pi + 1) + "/" + activePaths.size() + "] " + path + " — " + urlParams.size()
+            log.accept("[~] SSRF: [" + (pi + 1) + "/" + activePaths.size() + "] " + path + " -- " + urlParams.size()
                     + " params × " + SSRF_PROBES.size() + " probes");
             for (String param : urlParams) {
                 for (SsrfProbe probe : SSRF_PROBES) {
@@ -191,15 +192,15 @@ public class SsrfModule implements Scanner {
                             Matcher m = METADATA_PATTERN.matcher(body);
                             if (m.find()) {
                                 String match = m.group();
-                                log.accept("[!!] SSRF: " + probe.severity() + " — " + probe.label()
+                                log.accept("[!!] SSRF: " + probe.severity() + " -- " + probe.label()
                                         + " acessível via param=" + param + " path=" + path);
                                 findings.add(Finding.of("SSRF", path + "?" + param,
-                                        "SSRF — servidor acessa " + probe.label() + " (param: " + param + ")",
+                                        "SSRF -- servidor acessa " + probe.label() + " (param: " + param + ")",
                                         probe.severity(),
                                         "URL: " + url + " | Indicador: " + match + " | Body (200 chars): "
                                                 + body.substring(0, Math.min(200, body.length())),
                                         "Servidor faz requisição para " + probe.url()
-                                                + " e retorna o conteúdo na resposta HTTP — "
+                                                + " e retorna o conteúdo na resposta HTTP -- "
                                                 + "atacante pode acessar serviços internos, "
                                                 + "credenciais de cloud e metadados de instância",
                                         "curl '" + url + "'",
@@ -211,7 +212,7 @@ public class SsrfModule implements Scanner {
                             }
                         }
                     } catch (Exception e) {
-                        // Connection errors and URI issues are expected — skip
+                        // Connection errors and URI issues are expected -- skip
                     }
                 }
             }
@@ -235,11 +236,11 @@ public class SsrfModule implements Scanner {
                             Matcher m = METADATA_PATTERN.matcher(body);
                             if (resp.statusCode() == 200 && m.find()) {
                                 String match = m.group();
-                                log.accept("[!!] SSRF: via redirect — " + probe.label() + " param=" + param);
+                                log.accept("[!!] SSRF: via redirect -- " + probe.label() + " param=" + param);
                                 findings.add(Finding.of("SSRF", path + "?" + param,
-                                        "SSRF via redirect bypass — " + probe.label() + " (param: " + param + ")",
+                                        "SSRF via redirect bypass -- " + probe.label() + " (param: " + param + ")",
                                         probe.severity(), "URL: " + url + " | Via redirect | Indicador: " + match,
-                                        "Servidor segue redirect para " + probe.url() + " — bypass via 301",
+                                        "Servidor segue redirect para " + probe.url() + " -- bypass via 301",
                                         "curl -L '" + url + "'",
                                         "Validar URL final após resolução de redirects; bloquear ranges internos mesmo"
                                                 + "via redirect",
@@ -272,15 +273,15 @@ public class SsrfModule implements Scanner {
                             Matcher m = METADATA_PATTERN.matcher(body);
                             if (resp.statusCode() == 200 && m.find()) {
                                 String match = m.group();
-                                log.accept("[!!] SSRF: via relay bypass — " + probe.label() + " param=" + param
+                                log.accept("[!!] SSRF: via relay bypass -- " + probe.label() + " param=" + param
                                         + " relay=" + relayBase);
                                 findings.add(Finding.of("SSRF", path + "?" + param,
-                                        "SSRF via open-redirect relay bypass — " + probe.label() + " (param: " + param
+                                        "SSRF via open-redirect relay bypass -- " + probe.label() + " (param: " + param
                                                 + ")",
                                         probe.severity(),
                                         "URL: " + url + " | Relay: " + relayBase + " | Indicador: " + match,
                                         "Servidor segue redirect do relay para " + probe.url()
-                                                + " — WAF bypassado via dominio intermediario controlado pelo atacante",
+                                                + " -- WAF bypassado via dominio intermediario controlado pelo atacante",
                                         "curl -L '" + url + "'",
                                         "Validar URL final apos resolucao de redirects; bloquear ranges internos mesmo"
                                                 + " via redirect chain; nao confiar apenas no host inicial da URL",

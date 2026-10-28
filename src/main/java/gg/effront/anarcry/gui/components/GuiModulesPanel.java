@@ -1,5 +1,7 @@
 package gg.effront.anarcry.gui.components;
 
+import gg.effront.anarcry.gui.PrivacyFilter;
+
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -23,6 +25,7 @@ import javax.swing.JSeparator;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 
 public class GuiModulesPanel extends JPanel {
 
@@ -42,6 +45,10 @@ public class GuiModulesPanel extends JPanel {
 
     private final JButton startButton;
     private final JButton stopButton;
+
+    private String rawTarget = "https://";
+    private String rawJwt = "";
+    private String rawJwt2 = "";
 
     private Runnable onStart = () -> {
     };
@@ -158,6 +165,8 @@ public class GuiModulesPanel extends JPanel {
         bottom.add(buttonPanel);
 
         add(bottom, BorderLayout.SOUTH);
+
+        PrivacyFilter.addListener(() -> SwingUtilities.invokeLater(this::onPrivacyChanged));
     }
 
     // ---------------------------------------------------------------------------
@@ -165,15 +174,24 @@ public class GuiModulesPanel extends JPanel {
     // ---------------------------------------------------------------------------
 
     public String getTarget() {
-        return targetField.getText().trim();
+        if (!PrivacyFilter.isEnabled()) {
+            rawTarget = targetField.getText();
+        }
+        return rawTarget.trim();
     }
 
     public String getJwt() {
-        return jwtField.getText().trim();
+        if (!PrivacyFilter.isEnabled()) {
+            rawJwt = jwtField.getText();
+        }
+        return rawJwt.trim();
     }
 
     public String getJwt2() {
-        return jwt2Field.getText().trim();
+        if (!PrivacyFilter.isEnabled()) {
+            rawJwt2 = jwt2Field.getText();
+        }
+        return rawJwt2.trim();
     }
 
     public Set<String> getEnabledModules() {
@@ -187,15 +205,18 @@ public class GuiModulesPanel extends JPanel {
     }
 
     public void setTarget(String t) {
-        targetField.setText(t);
+        rawTarget = t != null ? t : "";
+        targetField.setText(PrivacyFilter.isEnabled() ? PrivacyFilter.apply(rawTarget) : rawTarget);
     }
 
     public void setJwt(String j) {
-        jwtField.setText(j);
+        rawJwt = j != null ? j : "";
+        jwtField.setText(PrivacyFilter.isEnabled() ? PrivacyFilter.apply(rawJwt) : rawJwt);
     }
 
     public void setJwt2(String j) {
-        jwt2Field.setText(j);
+        rawJwt2 = j != null ? j : "";
+        jwt2Field.setText(PrivacyFilter.isEnabled() ? PrivacyFilter.apply(rawJwt2) : rawJwt2);
     }
 
     public void setOnStart(Runnable r) {
@@ -211,6 +232,27 @@ public class GuiModulesPanel extends JPanel {
     public void setScanning(boolean scanning) {
         startButton.setEnabled(!scanning);
         stopButton.setEnabled(scanning);
+    }
+
+    private void onPrivacyChanged() {
+        if (PrivacyFilter.isEnabled()) {
+            rawTarget = targetField.getText();
+            rawJwt = jwtField.getText();
+            rawJwt2 = jwt2Field.getText();
+            targetField.setText(PrivacyFilter.apply(rawTarget));
+            jwtField.setText(PrivacyFilter.apply(rawJwt));
+            jwt2Field.setText(PrivacyFilter.apply(rawJwt2));
+            targetField.setEditable(false);
+            jwtField.setEditable(false);
+            jwt2Field.setEditable(false);
+        } else {
+            targetField.setText(rawTarget);
+            jwtField.setText(rawJwt);
+            jwt2Field.setText(rawJwt2);
+            targetField.setEditable(true);
+            jwtField.setEditable(true);
+            jwt2Field.setEditable(true);
+        }
     }
 
     // ---------------------------------------------------------------------------
