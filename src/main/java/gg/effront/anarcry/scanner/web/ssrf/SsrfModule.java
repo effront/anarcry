@@ -8,6 +8,7 @@ import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
+import gg.effront.anarcry.scanner.util.ProbeExecutor;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -17,6 +18,8 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -143,7 +146,8 @@ public class SsrfModule implements Scanner {
                             + " high-value), " + urlParams.size() + " params (+" + crawlerParams + " from Crawler)");
         }
 
-        // Filter to only paths that exist (avoid 404 noise x 14 probes x 24 params)
+        // Phase 1: Filter to only paths that exist (avoid 404 noise x 14 probes x 24
+        // params) -- sequential with cap
         List<String> activePaths = new ArrayList<>();
         log.accept("[~] SSRF: verificando " + probePaths.size() + " paths em " + baseUrl);
         for (String path : probePaths) {
@@ -171,129 +175,180 @@ public class SsrfModule implements Scanner {
         log.accept("[~] SSRF: " + activePaths.size() + "/" + probePaths.size() + " paths ativos -- " + totalProbes
                 + " probes");
 
-        outer : for (int pi = 0; pi < activePaths.size(); pi++) {
-            String path = activePaths.get(pi);
-            log.accept("[~] SSRF: [" + (pi + 1) + "/" + activePaths.size() + "] " + path + " -- " + urlParams.size()
-                    + " params × " + SSRF_PROBES.size() + " probes");
-            for (String param : urlParams) {
-                for (SsrfProbe probe : SSRF_PROBES) {
-                    try {
-                        String encoded = URLEncoder.encode(probe.url(), "UTF-8");
-                        String url = baseUrl + path + "?" + param + "=" + encoded;
-                        HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(5))
-                                .GET().build();
-                        HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
-                        String body = resp.body() != null ? resp.body() : "";
+        int concurrency = ctx.config().probeConcurrency();
 
-                        String trimmed = body.stripLeading();
-                        boolean isHtml = trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")
-                                || trimmed.startsWith("<!doctype");
-                        if (resp.statusCode() == 200 && !body.isBlank() && !isHtml) {
-                            Matcher m = METADATA_PATTERN.matcher(body);
-                            if (m.find()) {
-                                String match = m.group();
-                                log.accept("[!!] SSRF: " + probe.severity() + " -- " + probe.label()
-                                        + " acessível via param=" + param + " path=" + path);
-                                findings.add(Finding.of("SSRF", path + "?" + param,
-                                        "SSRF -- servidor acessa " + probe.label() + " (param: " + param + ")",
-                                        probe.severity(),
-                                        "URL: " + url + " | Indicador: " + match + " | Body (200 chars): "
-                                                + body.substring(0, Math.min(200, body.length())),
-                                        "Servidor faz requisição para " + probe.url()
-                                                + " e retorna o conteúdo na resposta HTTP -- "
-                                                + "atacante pode acessar serviços internos, "
-                                                + "credenciais de cloud e metadados de instância",
-                                        "curl '" + url + "'",
-                                        "Bloquear ranges RFC1918 e link-local (169.254.x.x) na camada de rede; "
-                                                + "usar allowlist de hosts externos; validar e resolver DNS antes de"
-                                                + "conectar",
-                                        _cweId, _cweTitle, _cveVector, _score));
-                                break outer;
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Connection errors and URI issues are expected -- skip
+        // Phase 2: Main probing -- parallelized by path
+        AtomicBoolean cancelMain = new AtomicBoolean(false);
+        List<Callable<List<Finding>>> mainTasks = new ArrayList<>();
+        for (int pi = 0; pi < activePaths.size(); pi++) {
+            final String path = activePaths.get(pi);
+            final int pathIdx = pi;
+            mainTasks.add(() -> {
+                List<Finding> local = new ArrayList<>();
+                log.accept("[~] SSRF: [" + (pathIdx + 1) + "/" + activePaths.size() + "] " + path + " -- "
+                        + urlParams.size() + " params x " + SSRF_PROBES.size() + " probes");
+                for (String param : urlParams) {
+                    if (cancelMain.get()) {
+                        return local;
                     }
-                }
-            }
-        }
-
-        // Redirect bypass: only top params × critical probes (not the full 4k+ combo)
-        if (findings.isEmpty()) {
-            log.accept("[~] SSRF: testando redirect bypass (" + activePaths.size() + " paths × "
-                    + REDIRECT_PARAMS.size() + " params × " + REDIRECT_PROBES.size() + " probes)...");
-            redirectOuter : for (String path : activePaths) {
-                for (String param : REDIRECT_PARAMS) {
-                    for (SsrfProbe probe : REDIRECT_PROBES) {
+                    for (SsrfProbe probe : SSRF_PROBES) {
+                        if (cancelMain.get()) {
+                            return local;
+                        }
                         try {
                             String encoded = URLEncoder.encode(probe.url(), "UTF-8");
                             String url = baseUrl + path + "?" + param + "=" + encoded;
                             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
-                                    .timeout(Duration.ofSeconds(6)).GET().build();
-                            HttpResponse<String> resp = Http.send(ctx, hcFollow, req,
-                                    HttpResponse.BodyHandlers.ofString(), id());
+                                    .timeout(Duration.ofSeconds(5)).GET().build();
+                            HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(),
+                                    id());
                             String body = resp.body() != null ? resp.body() : "";
-                            Matcher m = METADATA_PATTERN.matcher(body);
-                            if (resp.statusCode() == 200 && m.find()) {
-                                String match = m.group();
-                                log.accept("[!!] SSRF: via redirect -- " + probe.label() + " param=" + param);
-                                findings.add(Finding.of("SSRF", path + "?" + param,
-                                        "SSRF via redirect bypass -- " + probe.label() + " (param: " + param + ")",
-                                        probe.severity(), "URL: " + url + " | Via redirect | Indicador: " + match,
-                                        "Servidor segue redirect para " + probe.url() + " -- bypass via 301",
-                                        "curl -L '" + url + "'",
-                                        "Validar URL final após resolução de redirects; bloquear ranges internos mesmo"
-                                                + "via redirect",
-                                        _cweId, _cweTitle, _cveVector, _score));
-                                break redirectOuter;
+
+                            String trimmed = body.stripLeading();
+                            boolean isHtml = trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")
+                                    || trimmed.startsWith("<!doctype");
+                            if (resp.statusCode() == 200 && !body.isBlank() && !isHtml) {
+                                Matcher m = METADATA_PATTERN.matcher(body);
+                                if (m.find()) {
+                                    String match = m.group();
+                                    log.accept("[!!] SSRF: " + probe.severity() + " -- " + probe.label()
+                                            + " acessível via param=" + param + " path=" + path);
+                                    local.add(Finding.of("SSRF", path + "?" + param,
+                                            "SSRF -- servidor acessa " + probe.label() + " (param: " + param + ")",
+                                            probe.severity(),
+                                            "URL: " + url + " | Indicador: " + match + " | Body (200 chars): "
+                                                    + body.substring(0, Math.min(200, body.length())),
+                                            "Servidor faz requisição para " + probe.url()
+                                                    + " e retorna o conteúdo na resposta HTTP -- "
+                                                    + "atacante pode acessar serviços internos, "
+                                                    + "credenciais de cloud e metadados de instância",
+                                            "curl '" + url + "'",
+                                            "Bloquear ranges RFC1918 e link-local "
+                                                    + "(169.254.x.x) na camada de rede; "
+                                                    + "usar allowlist de hosts externos; "
+                                                    + "validar e resolver DNS antes de conectar",
+                                            _cweId, _cweTitle, _cveVector, _score));
+                                    cancelMain.set(true);
+                                    return local;
+                                }
                             }
                         } catch (Exception e) {
-                            // expected
+                            // Connection errors and URI issues are expected -- skip
                         }
                     }
                 }
+                return local;
+            });
+        }
+        findings.addAll(ProbeExecutor.run(mainTasks, concurrency, cancelMain));
+
+        // Phase 3: Redirect bypass -- parallelized by path
+        if (findings.isEmpty()) {
+            log.accept("[~] SSRF: testando redirect bypass (" + activePaths.size() + " paths x "
+                    + REDIRECT_PARAMS.size() + " params x " + REDIRECT_PROBES.size() + " probes)...");
+            AtomicBoolean cancelRedirect = new AtomicBoolean(false);
+            List<Callable<List<Finding>>> redirectTasks = new ArrayList<>();
+            for (String path : activePaths) {
+                final String fPath = path;
+                redirectTasks.add(() -> {
+                    List<Finding> local = new ArrayList<>();
+                    for (String param : REDIRECT_PARAMS) {
+                        if (cancelRedirect.get()) {
+                            return local;
+                        }
+                        for (SsrfProbe probe : REDIRECT_PROBES) {
+                            if (cancelRedirect.get()) {
+                                return local;
+                            }
+                            try {
+                                String encoded = URLEncoder.encode(probe.url(), "UTF-8");
+                                String url = baseUrl + fPath + "?" + param + "=" + encoded;
+                                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
+                                        .timeout(Duration.ofSeconds(6)).GET().build();
+                                HttpResponse<String> resp = Http.send(ctx, hcFollow, req,
+                                        HttpResponse.BodyHandlers.ofString(), id());
+                                String body = resp.body() != null ? resp.body() : "";
+                                Matcher m = METADATA_PATTERN.matcher(body);
+                                if (resp.statusCode() == 200 && m.find()) {
+                                    String match = m.group();
+                                    log.accept("[!!] SSRF: via redirect -- " + probe.label() + " param=" + param);
+                                    local.add(Finding.of("SSRF", fPath + "?" + param,
+                                            "SSRF via redirect bypass -- " + probe.label() + " (param: " + param + ")",
+                                            probe.severity(), "URL: " + url + " | Via redirect | Indicador: " + match,
+                                            "Servidor segue redirect para " + probe.url() + " -- bypass via 301",
+                                            "curl -L '" + url + "'",
+                                            "Validar URL final após resolução de redirects; bloquear ranges internos"
+                                                    + " mesmo via redirect",
+                                            _cweId, _cweTitle, _cveVector, _score));
+                                    cancelRedirect.set(true);
+                                    return local;
+                                }
+                            } catch (Exception e) {
+                                // expected
+                            }
+                        }
+                    }
+                    return local;
+                });
             }
+            findings.addAll(ProbeExecutor.run(redirectTasks, concurrency, cancelRedirect));
         }
 
-        // Phase 3: open-redirect relay bypass (WAF evasion via controlled intermediary)
+        // Phase 4: Open-redirect relay bypass -- parallelized by path
         String relayBase = ctx.config().redirectRelayUrl();
         if (findings.isEmpty() && !relayBase.isBlank()) {
             log.accept("[~] SSRF: testando open-redirect relay bypass via " + relayBase);
-            relayOuter : for (String path : activePaths) {
-                for (String param : REDIRECT_PARAMS) {
-                    for (SsrfProbe probe : REDIRECT_PROBES) {
-                        try {
-                            String relayUrl = relayBase + URLEncoder.encode(probe.url(), "UTF-8");
-                            String url = baseUrl + path + "?" + param + "=" + URLEncoder.encode(relayUrl, "UTF-8");
-                            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
-                                    .timeout(Duration.ofSeconds(6)).GET().build();
-                            HttpResponse<String> resp = Http.send(ctx, hcFollow, req,
-                                    HttpResponse.BodyHandlers.ofString(), id());
-                            String body = resp.body() != null ? resp.body() : "";
-                            Matcher m = METADATA_PATTERN.matcher(body);
-                            if (resp.statusCode() == 200 && m.find()) {
-                                String match = m.group();
-                                log.accept("[!!] SSRF: via relay bypass -- " + probe.label() + " param=" + param
-                                        + " relay=" + relayBase);
-                                findings.add(Finding.of("SSRF", path + "?" + param,
-                                        "SSRF via open-redirect relay bypass -- " + probe.label() + " (param: " + param
-                                                + ")",
-                                        probe.severity(),
-                                        "URL: " + url + " | Relay: " + relayBase + " | Indicador: " + match,
-                                        "Servidor segue redirect do relay para " + probe.url()
-                                                + " -- WAF bypassado via dominio intermediario do atacante",
-                                        "curl -L '" + url + "'",
-                                        "Validar URL final apos resolucao de redirects; bloquear ranges internos mesmo"
-                                                + " via redirect chain; nao confiar apenas no host inicial da URL",
-                                        _cweId, _cweTitle, _cveVector, _score));
-                                break relayOuter;
+            AtomicBoolean cancelRelay = new AtomicBoolean(false);
+            List<Callable<List<Finding>>> relayTasks = new ArrayList<>();
+            for (String path : activePaths) {
+                final String fPath = path;
+                relayTasks.add(() -> {
+                    List<Finding> local = new ArrayList<>();
+                    for (String param : REDIRECT_PARAMS) {
+                        if (cancelRelay.get()) {
+                            return local;
+                        }
+                        for (SsrfProbe probe : REDIRECT_PROBES) {
+                            if (cancelRelay.get()) {
+                                return local;
                             }
-                        } catch (Exception e) {
-                            // expected
+                            try {
+                                String relayUrl = relayBase + URLEncoder.encode(probe.url(), "UTF-8");
+                                String url = baseUrl + fPath + "?" + param + "=" + URLEncoder.encode(relayUrl, "UTF-8");
+                                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
+                                        .timeout(Duration.ofSeconds(6)).GET().build();
+                                HttpResponse<String> resp = Http.send(ctx, hcFollow, req,
+                                        HttpResponse.BodyHandlers.ofString(), id());
+                                String body = resp.body() != null ? resp.body() : "";
+                                Matcher m = METADATA_PATTERN.matcher(body);
+                                if (resp.statusCode() == 200 && m.find()) {
+                                    String match = m.group();
+                                    log.accept("[!!] SSRF: via relay bypass -- " + probe.label() + " param=" + param
+                                            + " relay=" + relayBase);
+                                    local.add(Finding.of("SSRF", fPath + "?" + param,
+                                            "SSRF via open-redirect relay bypass -- " + probe.label() + " (param: "
+                                                    + param + ")",
+                                            probe.severity(),
+                                            "URL: " + url + " | Relay: " + relayBase + " | Indicador: " + match,
+                                            "Servidor segue redirect do relay para " + probe.url()
+                                                    + " -- WAF bypassado via dominio intermediario do atacante",
+                                            "curl -L '" + url + "'",
+                                            "Validar URL final apos resolucao de redirects; bloquear ranges internos"
+                                                    + " mesmo via redirect chain; nao confiar apenas no host inicial"
+                                                    + " da URL",
+                                            _cweId, _cweTitle, _cveVector, _score));
+                                    cancelRelay.set(true);
+                                    return local;
+                                }
+                            } catch (Exception e) {
+                                // expected
+                            }
                         }
                     }
-                }
+                    return local;
+                });
             }
+            findings.addAll(ProbeExecutor.run(relayTasks, concurrency, cancelRelay));
         }
 
         if (findings.isEmpty()) {
@@ -301,5 +356,4 @@ public class SsrfModule implements Scanner {
         }
         return findings;
     }
-
 }

