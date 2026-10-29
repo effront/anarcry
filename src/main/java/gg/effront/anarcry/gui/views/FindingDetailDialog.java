@@ -14,6 +14,8 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -168,25 +170,81 @@ public class FindingDetailDialog extends JDialog {
         bearerCheck.setVisible(!jwtToken.isBlank());
         panel.add(bearerCheck);
 
-        JButton copyCurl = new JButton("Copy Repro");
-        copyCurl.addActionListener(e -> {
-            String curl = buildCurl(f);
-            if (bearerCheck.isSelected() && !jwtToken.isBlank()) {
-                curl = injectBearer(curl, jwtToken);
+        List<String[]> terminals = splitTerminals(buildCurl(f));
+        if (terminals.size() > 1) {
+            for (int i = 0; i < terminals.size(); i++) {
+                final int idx = i;
+                String label = terminals.get(i)[0];
+                String cmd = terminals.get(i)[1];
+                JButton btn = new JButton("Copy " + label);
+                btn.addActionListener(e -> {
+                    String text = cmd;
+                    if (bearerCheck.isSelected() && !jwtToken.isBlank()) {
+                        text = injectBearer(text, jwtToken);
+                    }
+                    copyToClipboard(text);
+                    String orig = "Copy " + label;
+                    btn.setText("Copied!");
+                    javax.swing.Timer t = new javax.swing.Timer(1500, ev -> btn.setText(orig));
+                    t.setRepeats(false);
+                    t.start();
+                });
+                panel.add(btn);
             }
-            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(curl), null);
-            copyCurl.setText("Copied!");
-            javax.swing.Timer t = new javax.swing.Timer(1500, ev -> copyCurl.setText("Copy Repro"));
-            t.setRepeats(false);
-            t.start();
-        });
-        panel.add(copyCurl);
+        } else {
+            JButton copyCurl = new JButton("Copy Repro");
+            copyCurl.addActionListener(e -> {
+                String curl = terminals.getFirst()[1];
+                if (bearerCheck.isSelected() && !jwtToken.isBlank()) {
+                    curl = injectBearer(curl, jwtToken);
+                }
+                copyToClipboard(curl);
+                copyCurl.setText("Copied!");
+                javax.swing.Timer t = new javax.swing.Timer(1500, ev -> copyCurl.setText("Copy Repro"));
+                t.setRepeats(false);
+                t.start();
+            });
+            panel.add(copyCurl);
+        }
 
         JButton close = new JButton("Close");
         close.addActionListener(e -> dispose());
         panel.add(close);
 
         return panel;
+    }
+
+    private static void copyToClipboard(String text) {
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+    }
+
+    private static List<String[]> splitTerminals(String repro) {
+        List<String[]> result = new ArrayList<>();
+        String[] parts = repro.split("(?m)^# Terminal \\d+:\\s*\\n?|\\n# Terminal \\d+:\\s*\\n?");
+        String[] labels = extractLabels(repro);
+        int labelIdx = 0;
+        for (String part : parts) {
+            String trimmed = part.strip();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            String label = labelIdx < labels.length ? labels[labelIdx] : "T" + (labelIdx + 1);
+            result.add(new String[]{label, trimmed});
+            labelIdx++;
+        }
+        if (result.isEmpty()) {
+            result.add(new String[]{"Repro", repro});
+        }
+        return result;
+    }
+
+    private static String[] extractLabels(String repro) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("# Terminal (\\d+):").matcher(repro);
+        List<String> labels = new ArrayList<>();
+        while (m.find()) {
+            labels.add("T" + m.group(1));
+        }
+        return labels.toArray(new String[0]);
     }
 
     private static String buildCurl(Finding f) {
