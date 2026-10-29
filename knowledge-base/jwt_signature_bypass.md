@@ -102,6 +102,24 @@ Casos reais e mentalidade de ataque (RWBH): em APIs mobile e SSO de programas co
 - **Paths comuns:** `/api/me`, `/api/v1/user`, `/oauth/token`, `/oauth/introspect`, `/.well-known/jwks.json`, `/login`, `/admin`, `/graphql`.
 - **Sinais:** JWT em cookies (`access_token`, `session`), header `alg` refletido, JWKS público, `kid` previsível, ausência de `exp`/`aud`.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tecnica |
+|-----|---------|-----|-----------|---------|
+| CVE-2018-0114 | Cisco node-jose | 2018 | Atacante re-assina tokens usando chave embarcada no proprio token | JWK Injection |
+| CVE-2018-1000539 | Nov json-jwt (Ruby) | 2018 | Verificacao incorreta de assinatura em AES-GCM JWE | Signature Bypass |
+| CVE-2019-7644 | Auth0 WCF-Service-JWT | 2019 | Assinatura esperada vazada em mensagem de erro | Signature Disclosure |
+| CVE-2019-20933 | InfluxDB | 2020 | Bypass de autenticacao via SharedSecret vazio no JWT | Empty Secret |
+| CVE-2020-15084 | Auth0 express-jwt | 2020 | Campo algorithms nao enforced -- fallback para none | alg:none Bypass |
+| CVE-2020-28042 | ServiceStack | 2020 | Verificacao de assinatura aceita tokens com signature de tamanho zero | Null Signature |
+| CVE-2021-46743 | Firebase PHP-JWT | 2022 | Confusao de algoritmo RS256/HS256 via kid em key ring misto | Algorithm Confusion |
+| CVE-2022-21449 | Oracle Java SE 17/18 | 2022 | "Psychic Signatures" -- ECDSA aceita assinatura (0,0) como valida | ECDSA Bypass |
+| CVE-2022-23540 | Auth0 jsonwebtoken | 2022 | jwt.verify() sem algoritmo definido faz fallback para none | alg:none Bypass |
+| CVE-2022-39227 | python-jwt | 2022 | Spoofing de identidade por manipulacao de claims verificados | Token Forgery |
+| CVE-2024-21664 | lestrrat-go/jwx | 2024 | Campo signature presente em payload JSON causa parsing incorreto | Signature Bypass |
+| CVE-2024-37568 | Authlib (Python) | 2024 | Confusao de algoritmo -- HMAC verificado com chave publica assimetrica | Algorithm Confusion |
+| CVE-2024-54150 | xmidt-org cjwt (C) | 2024 | Confusao de tipo de assinatura permite bypass completo | Algorithm Confusion |
+
 ## Recommendation
 1. Fixar o algoritmo esperado por endpoint; nunca confiar no `alg` do token. Rejeitar `none` explicitamente.
 2. Usar bibliotecas maduras e atualizadas (jjwt, Nimbus JOSE+JWT, Spring Security OAuth2 Resource Server) e validar `iss`, `aud`, `exp`, `nbf`, `iat`, `sub`.

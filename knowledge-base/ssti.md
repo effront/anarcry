@@ -101,6 +101,20 @@ Bypasses de WAF/filtros:
 
 Casos reais e mentalidade de ataque (RWBH): Uber (templates de e-mail/notificação) e outros programas mostram que o bug aparece em previews, relatórios e mensagens; o atacante identifica o engine por `{{7*7}}`/`${7*7}` e escala para reflexão e RCE.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2019-3396 | Confluence Server | 2019 | SSTI via Widget Connector macro -- path traversal + RCE sem autenticacao | Velocity (RCE) |
+| CVE-2019-11581 | Jira Server | 2019 | SSTI em ContactAdministrators e SendBulkMail -- RCE via template Velocity | Velocity (RCE) |
+| CVE-2019-8341 | Jinja2 | 2019 | SSTI em from_string() quando source vem de input do usuario -- RCE em Python | Jinja2 (RCE) |
+| CVE-2019-10074 | Apache OFBiz | 2019 | RCE via Freemarker markup em campo textarea de Form Widget | Freemarker (RCE) |
+| CVE-2020-11994 | Apache Camel | 2020 | SSTI nos componentes de templating -- file disclosure e RCE | Multi-engine (RCE) |
+| CVE-2020-1961 | Apache Syncope | 2020 | SSTI em mail templates -- injeccao de template em notificacoes | Multi-engine (RCE) |
+| CVE-2021-39115 | Jira Service Management | 2021 | RCE via template injection para usuarios Jira Administrators | Velocity (RCE) |
+| CVE-2022-22954 | VMware Workspace ONE | 2022 | RCE pre-auth via server-side template injection -- explorado in-the-wild | Server-side (RCE) |
+| CVE-2023-22527 | Confluence Data Center | 2024 | Template injection pre-auth em versoes antigas -- RCE sem credenciais | OGNL (RCE) |
+
 ## Target Context (Crawler Hints)
 - **Parâmetros comuns:** `name`, `message`, `subject`, `template`, `preview`, `content`, `body`, `title`, `email`, `username`, `comment`, `description`, `lang`, `theme`.
 - **Paths comuns:** `/preview`, `/render`, `/email/preview`, `/template`, `/report`, `/invoice`, `/notification`, `/admin/templates`, `/api/render`.
