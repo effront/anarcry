@@ -1,37 +1,39 @@
 package gg.effront.anarcry.scanner;
 
 import gg.effront.anarcry.model.RequestRecord;
+import gg.effront.anarcry.scanner.util.WafState;
 
 import java.net.URI;
 import java.util.Set;
 import java.util.function.Consumer;
 
 public record ScanContext(String targetUrl, String jwtToken, String jwtToken2, Set<String> enabledModules,
-        ScanConfig config, Consumer<RequestRecord> requestLog, DiscoveredPaths discoveredPaths) {
+        ScanConfig config, Consumer<RequestRecord> requestLog, DiscoveredPaths discoveredPaths, WafState wafState) {
 
     public ScanContext(String targetUrl, String jwtToken, Set<String> enabledModules) {
         this(targetUrl, jwtToken, "", enabledModules, ScanConfig.defaults(), r -> {
-        }, new DiscoveredPaths());
+        }, new DiscoveredPaths(), new WafState());
     }
 
     public ScanContext(String targetUrl, String jwtToken, String jwtToken2, Set<String> enabledModules) {
         this(targetUrl, jwtToken, jwtToken2, enabledModules, ScanConfig.defaults(), r -> {
-        }, new DiscoveredPaths());
+        }, new DiscoveredPaths(), new WafState());
     }
 
     public ScanContext(String targetUrl, String jwtToken, Set<String> enabledModules, String jwtToken2) {
         this(targetUrl, jwtToken, jwtToken2, enabledModules, ScanConfig.defaults(), r -> {
-        }, new DiscoveredPaths());
+        }, new DiscoveredPaths(), new WafState());
     }
 
     public ScanContext(String targetUrl, String jwtToken, Set<String> enabledModules, String jwtToken2,
             Consumer<RequestRecord> requestLog) {
-        this(targetUrl, jwtToken, jwtToken2, enabledModules, ScanConfig.defaults(), requestLog, new DiscoveredPaths());
+        this(targetUrl, jwtToken, jwtToken2, enabledModules, ScanConfig.defaults(), requestLog, new DiscoveredPaths(),
+                new WafState());
     }
 
     public ScanContext(String targetUrl, String jwtToken, Set<String> enabledModules, String jwtToken2,
             ScanConfig config, Consumer<RequestRecord> requestLog) {
-        this(targetUrl, jwtToken, jwtToken2, enabledModules, config, requestLog, new DiscoveredPaths());
+        this(targetUrl, jwtToken, jwtToken2, enabledModules, config, requestLog, new DiscoveredPaths(), new WafState());
     }
 
     public String host() {

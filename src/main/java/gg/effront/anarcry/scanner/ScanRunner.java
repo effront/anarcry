@@ -2,6 +2,8 @@ package gg.effront.anarcry.scanner;
 
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.RequestRecord;
+import gg.effront.anarcry.scanner.util.HttpClientFactory;
+import gg.effront.anarcry.scanner.util.WafEvasion;
 import gg.effront.anarcry.scanner.web.cors.CorsModule;
 import gg.effront.anarcry.scanner.web.crlf.CrlfModule;
 import gg.effront.anarcry.scanner.web.graphql.GraphQLModule;
@@ -118,7 +120,7 @@ public class ScanRunner {
             }
         };
         ScanContext ctx = new ScanContext(origCtx.targetUrl(), origCtx.jwtToken(), origCtx.jwtToken2(),
-                origCtx.enabledModules(), origCtx.config(), safeReqLog, origCtx.discoveredPaths());
+                origCtx.enabledModules(), origCtx.config(), safeReqLog, origCtx.discoveredPaths(), origCtx.wafState());
         List<Scanner> modules = new ArrayList<>();
         if (ctx.has("TLS")) {
             modules.add(new TlsModule());
@@ -240,6 +242,22 @@ public class ScanRunner {
                 safeLog.accept("[!] " + enricher.id() + " erro: " + e.getMessage());
             }
             eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, enricher.id(), moduleIndex, moduleCount));
+        }
+
+        // Phase 1.5: WAF detection probe
+        if (ctx.wafState().isWafDetected()) {
+            safeLog.accept(
+                    "[*] Phase 1.5: WAF detectado (" + ctx.wafState().wafProduct() + ") -- probing bypass strategies");
+            try {
+                WafEvasion.Strategy effective = WafEvasion.probeStrategies(ctx, HttpClientFactory.http2(),
+                        ctx.targetUrl(), "WafProbe", safeLog);
+                if (effective != null) {
+                    ctx.wafState().markEffectiveStrategy(effective);
+                    safeLog.accept("[+] WAF bypass: usando " + effective + " para modulos de payload");
+                }
+            } catch (Exception e) {
+                safeLog.accept("[!] WAF probe falhou: " + e.getMessage());
+            }
         }
 
         // Phase 2: Scanner modules (parallel)

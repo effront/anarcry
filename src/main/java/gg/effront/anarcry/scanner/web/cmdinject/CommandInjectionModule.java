@@ -10,6 +10,7 @@ import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.ProbeExecutor;
+import gg.effront.anarcry.scanner.util.WafEvasion;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -130,7 +131,7 @@ public class CommandInjectionModule implements Scanner {
                         if (cancel.get()) {
                             return local;
                         }
-                        String injected = "testvalue" + payload;
+                        String injected = "testvalue" + WafEvasion.evasionPayload(ctx, payload);
                         String encoded;
                         try {
                             encoded = URLEncoder.encode(injected, "UTF-8");
@@ -313,7 +314,7 @@ public class CommandInjectionModule implements Scanner {
      */
     private long measureElapsed(ScanContext ctx, HttpClient hc, String base, String path, String param,
             String sleepPayload) {
-        String injected = "testvalue" + sleepPayload;
+        String injected = "testvalue" + WafEvasion.evasionPayload(ctx, sleepPayload);
         try {
             String encoded = URLEncoder.encode(injected, "UTF-8");
             String url = base + path + "?" + param + "=" + encoded;
@@ -382,7 +383,7 @@ public class CommandInjectionModule implements Scanner {
      */
     private long measureElapsedRaw(ScanContext ctx, HttpClient hc, String base, String path, String param,
             String payload) throws Exception {
-        String encoded = URLEncoder.encode("testvalue" + payload, "UTF-8");
+        String encoded = URLEncoder.encode("testvalue" + WafEvasion.evasionPayload(ctx, payload), "UTF-8");
         String url = base + path + "?" + param + "=" + encoded;
         HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(10)).GET().build();
         long t0 = System.currentTimeMillis();

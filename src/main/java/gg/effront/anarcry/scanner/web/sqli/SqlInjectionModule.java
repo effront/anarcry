@@ -10,6 +10,7 @@ import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.ProbeExecutor;
+import gg.effront.anarcry.scanner.util.WafEvasion;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -103,7 +104,7 @@ public class SqlInjectionModule implements Scanner {
                         if (cancel.get()) {
                             return local;
                         }
-                        String encoded = URLEncoder.encode(payload, "UTF-8");
+                        String encoded = URLEncoder.encode(WafEvasion.evasionPayload(ctx, payload), "UTF-8");
                         String url = base + path + "?" + param + "=" + encoded;
                         try {
                             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
@@ -155,7 +156,7 @@ public class SqlInjectionModule implements Scanner {
                         if (cancel.get()) {
                             return local;
                         }
-                        String encoded = URLEncoder.encode(tp.payload(), "UTF-8");
+                        String encoded = URLEncoder.encode(WafEvasion.evasionPayload(ctx, tp.payload()), "UTF-8");
                         String url = base + path + "?" + param + "=" + encoded;
                         try {
                             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
