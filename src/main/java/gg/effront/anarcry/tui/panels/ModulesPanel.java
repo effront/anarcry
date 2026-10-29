@@ -49,9 +49,14 @@ public class ModulesPanel extends Panel {
     private final CheckBox cachePoisoningCheck;
     private final CheckBox reqSmugglingCheck;
     private final CheckBox infraCheck;
+    private final CheckBox sqliCheck;
+    private final CheckBox xssCheck;
+    private final CheckBox lfiCheck;
+    private final CheckBox cmdInjectionCheck;
     private final PasteableTextBox targetBox;
     private final PasteableTextBox jwtTokenBox;
     private final PasteableTextBox jwtToken2Box;
+    private final PasteableTextBox concurrencyBox;
 
     public ModulesPanel(int width, LogPanel logPanel, FindingsPanel findingsPanel, ScanRunner scanRunner) {
         super(new LinearLayout(Direction.VERTICAL));
@@ -104,6 +109,14 @@ public class ModulesPanel extends Panel {
         reqSmugglingCheck.setChecked(true);
         infraCheck = new CheckBox(infraLabel());
         infraCheck.setChecked(false);
+        sqliCheck = new CheckBox("SQLi");
+        sqliCheck.setChecked(true);
+        xssCheck = new CheckBox("XSS");
+        xssCheck.setChecked(true);
+        lfiCheck = new CheckBox("LFI");
+        lfiCheck.setChecked(true);
+        cmdInjectionCheck = new CheckBox("CmdInjection");
+        cmdInjectionCheck.setChecked(true);
 
         Label reconLabel = new Label("── RECON ───────────────");
         reconLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.CYAN);
@@ -138,6 +151,10 @@ public class ModulesPanel extends Panel {
         addComponent(massAssignCheck);
         addComponent(cachePoisoningCheck);
         addComponent(reqSmugglingCheck);
+        addComponent(sqliCheck);
+        addComponent(xssCheck);
+        addComponent(lfiCheck);
+        addComponent(cmdInjectionCheck);
         addComponent(idorCheck);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
@@ -158,6 +175,12 @@ public class ModulesPanel extends Panel {
         addComponent(new Label("JWT Token 2 (IDOR):"));
         jwtToken2Box = new PasteableTextBox(new TerminalSize(width - 2, 2));
         addComponent(jwtToken2Box);
+
+        addComponent(new EmptySpace(new TerminalSize(1, 1)));
+        addComponent(new Label("Probe Concurrency:"));
+        concurrencyBox = new PasteableTextBox(new TerminalSize(6, 1));
+        concurrencyBox.setText(String.valueOf(ScanConfig.DEFAULT_PROBE_CONCURRENCY));
+        addComponent(concurrencyBox);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
         addComponent(new Label("─".repeat(width - 2)));
@@ -310,6 +333,18 @@ public class ModulesPanel extends Panel {
         if (reqSmugglingCheck.isChecked()) {
             modules.add("ReqSmuggling");
         }
+        if (sqliCheck.isChecked()) {
+            modules.add("SQLi");
+        }
+        if (xssCheck.isChecked()) {
+            modules.add("XSS");
+        }
+        if (lfiCheck.isChecked()) {
+            modules.add("LFI");
+        }
+        if (cmdInjectionCheck.isChecked()) {
+            modules.add("CmdInjection");
+        }
 
         if (modules.isEmpty()) {
             logPanel.log("[!] Nenhum módulo selecionado");
@@ -317,8 +352,19 @@ public class ModulesPanel extends Panel {
         }
 
         String jwt2 = jwtToken2Box.getText().trim();
-        logPanel.log("[*] Iniciando scan em " + target + " ...");
-        ScanConfig cfg = new ScanConfig(0, "", java.util.Set.of(), SuppressionLoader.loadFromCwd(), "");
+        int concurrency = ScanConfig.DEFAULT_PROBE_CONCURRENCY;
+        try {
+            concurrency = Integer.parseInt(concurrencyBox.getText().trim());
+            if (concurrency < 1) {
+                concurrency = 1;
+            } else if (concurrency > 64) {
+                concurrency = 64;
+            }
+        } catch (NumberFormatException ignored) {
+            // keep default
+        }
+        logPanel.log("[*] Iniciando scan em " + target + " (concurrency=" + concurrency + ") ...");
+        ScanConfig cfg = new ScanConfig(0, "", java.util.Set.of(), SuppressionLoader.loadFromCwd(), "", concurrency);
         scanRunner.run(new ScanContext(target, jwt, modules, jwt2, cfg, requestLogCb));
     }
 }
