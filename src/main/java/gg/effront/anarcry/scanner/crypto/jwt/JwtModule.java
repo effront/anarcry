@@ -117,19 +117,20 @@ public class JwtModule implements Scanner {
             long now = System.currentTimeMillis() / 1000;
             if (exp < now) {
                 log.accept("[!] JWT: token expirado (exp=" + exp + ")");
-                findings.add(Finding.of("JWT", "(token)", "JWT expirado ainda aceito potencialmente", Severity.HIGH,
+                findings.add(Finding.of("JWT", "(token)", "JWT expirado ainda aceito potencialmente", Severity.MEDIUM,
                         evidence + " | exp=" + exp + " (agora=" + now + ")",
                         "Token vencido sendo submetido -- verificar se o servidor valida o claim exp",
                         "Reenviar o token no header: Authorization: Bearer <token_expirado>",
-                        "Garantir validação do claim exp na autenticação do servidor", _cweId, _cweTitle, _cvssVector,
-                        _score));
+                        "Garantir validação do claim exp na autenticação do servidor", "CWE-613",
+                        "Insufficient Session Expiration", "AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N", 5.4));
             }
         } else {
             log.accept("[~] JWT: sem claim exp");
             findings.add(Finding.of("JWT", "(token)", "JWT sem claim exp (sem validade)", Severity.LOW, evidence,
                     "Tokens sem exp não expiram -- se comprometidos, permanecem válidos indefinidamente",
                     "Inspecionar o payload: echo '" + (parts.length > 1 ? parts[1] : "") + "' | base64 -d",
-                    "Incluir claim exp com validade curta (ex: 15 minutos)", _cweId, _cweTitle, _cvssVector, _score));
+                    "Incluir claim exp com validade curta (ex: 15 minutos)", "CWE-613",
+                    "Insufficient Session Expiration", "AV:N/AC:H/PR:L/UI:N/S:U/C:L/I:N/A:N", 3.1));
         }
 
         // 4. kid (passivo)
@@ -140,8 +141,8 @@ public class JwtModule implements Scanner {
                     "kid=" + kid + " | " + evidence,
                     "Parâmetro kid sem sanitização pode causar path traversal ou injeção SQL",
                     "Forjar token com kid: ../../dev/null (key=vazio) ou kid: ' UNION SELECT 'secret'--",
-                    "Validar e sanitizar o parâmetro kid; usar whitelist de IDs válidos", _cweId, _cweTitle,
-                    _cvssVector, _score));
+                    "Validar e sanitizar o parâmetro kid; usar whitelist de IDs válidos", "CWE-20",
+                    "Improper Input Validation", "AV:N/AC:H/PR:L/UI:N/S:U/C:L/I:N/A:N", 3.1));
         }
 
         // 5. RS256 informativo
@@ -152,7 +153,7 @@ public class JwtModule implements Scanner {
                     "Se o servidor aceitar HS256 com a chave pública como segredo, a assinatura pode ser forjada",
                     "Obter chave pública e recriar token HS256 usando-a como segredo HMAC",
                     "Substituir alg:RS256 por alg:HS256 e assinar com a chave pública do servidor", _cweId, _cweTitle,
-                    _cvssVector, _score));
+                    "AV:N/AC:H/PR:H/UI:R/S:U/C:N/I:N/A:N", 0.0));
         }
 
         // 6. jku (passivo -- novo)
