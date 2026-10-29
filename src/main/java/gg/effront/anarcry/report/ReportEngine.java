@@ -85,6 +85,7 @@ public class ReportEngine {
             sb.append("**Recommendation:** ").append(f.recommendation()).append("  \n");
             sb.append("**CWE:** ").append(f.cweId()).append(" -- ").append(f.cweTitle()).append("  \n");
             sb.append("**CVSS v3.1:** ").append(f.cvssScore()).append(" (").append(f.cvssVector()).append(")  \n");
+            appendCves(sb, f.module());
             sb.append("\n---\n\n");
         }
         return sb.toString();
@@ -139,6 +140,8 @@ public class ReportEngine {
 
             sb.append("## Mitigation\n\n");
             sb.append(kbRecommendation).append("\n\n");
+
+            appendCvesH1(sb, f.module());
 
             sb.append("## Supporting Material\n\n");
             sb.append("- Scanner: AnarCry\n");
@@ -214,6 +217,8 @@ public class ReportEngine {
             sb.append("### Remediation\n\n");
             sb.append(kbRecommendation).append("\n\n");
 
+            appendCves(sb, f.module());
+
             sb.append("---\n\n");
         }
 
@@ -242,6 +247,37 @@ public class ReportEngine {
     // -------------------------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------------------------
+
+    private void appendCves(StringBuilder sb, String module) {
+        KnowledgeBase kb = KnowledgeBase.getInstance();
+        List<KnowledgeEntry.CveEntry> cves = kb.byModule(module).map(KnowledgeEntry::notableCves).orElse(List.of());
+        if (cves.isEmpty()) {
+            return;
+        }
+        sb.append("\n**Known CVEs:**\n\n");
+        sb.append("| CVE | Product | Year | Type |\n");
+        sb.append("|-----|---------|------|------|\n");
+        for (KnowledgeEntry.CveEntry c : cves) {
+            sb.append("| ").append(c.cve()).append(" | ").append(escape(c.product())).append(" | ").append(c.year())
+                    .append(" | ").append(escape(c.type())).append(" |\n");
+        }
+        sb.append("\n");
+    }
+
+    private void appendCvesH1(StringBuilder sb, String module) {
+        KnowledgeBase kb = KnowledgeBase.getInstance();
+        List<KnowledgeEntry.CveEntry> cves = kb.byModule(module).map(KnowledgeEntry::notableCves).orElse(List.of());
+        if (cves.isEmpty()) {
+            return;
+        }
+        sb.append("## Known CVEs\n\n");
+        sb.append("This vulnerability class has been assigned multiple CVEs in widely-used products:\n\n");
+        for (KnowledgeEntry.CveEntry c : cves) {
+            sb.append("- **").append(c.cve()).append("** (").append(c.product()).append(", ").append(c.year())
+                    .append("): ").append(c.description()).append("\n");
+        }
+        sb.append("\n");
+    }
 
     private String escape(String s) {
         return s == null ? "" : s.replace("|", "\\|").replace("\n", " ");
