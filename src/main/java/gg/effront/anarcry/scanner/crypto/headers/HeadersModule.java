@@ -51,9 +51,10 @@ public class HeadersModule implements Scanner {
 
         final Map<String, List<String>> headers;
         final String evidence;
+        final int code;
         try {
             conn.connect();
-            int code = conn.getResponseCode();
+            code = conn.getResponseCode();
             log.accept("[~] HEADERS: HTTP " + code);
             headers = conn.getHeaderFields();
             evidence = "HTTP " + code + " -- " + ctx.targetUrl();
@@ -61,6 +62,27 @@ public class HeadersModule implements Scanner {
                     Math.max(0, conn.getContentLengthLong()), System.currentTimeMillis(), id()));
         } finally {
             conn.disconnect();
+        }
+
+        if (code == 403) {
+            String server = getHeader(headers, "Server");
+            boolean wafLikely = server != null
+                    && (server.toLowerCase().contains("cloudflare") || server.toLowerCase().contains("akamai")
+                            || server.toLowerCase().contains("awselb") || server.toLowerCase().contains("incapsula")
+                            || server.toLowerCase().contains("sucuri") || server.toLowerCase().contains("ddos-guard"));
+            if (wafLikely) {
+                log.accept("[!] HEADERS: HTTP 403 com Server: " + server
+                        + " -- possivel bloqueio por WAF, headers nao confiaveis");
+                findings.add(
+                        Finding.of("Headers", ctx.targetUrl(), "Possivel bloqueio por WAF -- headers nao confiaveis",
+                                Severity.INFO, evidence + " | Server: " + server,
+                                "Response 403 de WAF (" + server
+                                        + ") -- headers reportados pertencem ao WAF, nao a aplicacao real."
+                                        + " Findings de headers ausentes nao sao confiaveis neste contexto.",
+                                "curl -sI " + ctx.targetUrl(),
+                                "Testar com IP/dominio interno ou bypass de WAF para obter headers reais"));
+                return findings;
+            }
         }
 
         if (!hasHeader(headers, "Content-Security-Policy")) {
