@@ -9,6 +9,7 @@ import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
+import gg.effront.anarcry.scanner.util.ProbeExecutor;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -20,6 +21,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -29,6 +32,10 @@ import java.util.function.Consumer;
  * output (uid=, root:x:, www-data, nobody) in response body. Phase 2
  * (time-based blind): injects sleep payloads and measures timing differential
  * with proportional confirmation to eliminate slow-server FPs.
+ *
+ * <p>
+ * Paths are probed in parallel via {@link ProbeExecutor}; within each path,
+ * params and phases stay sequential.
  */
 public class CommandInjectionModule implements Scanner {
 
@@ -87,118 +94,151 @@ public class CommandInjectionModule implements Scanner {
                 + NETWORK_KEYWORDS.size() + " params, " + activePayloads.size() + " active + " + sleepPayloads.size()
                 + " sleep payloads)");
 
-        outer : for (int pi = 0; pi < PATHS.size(); pi++) {
-            String path = PATHS.get(pi);
-            log.accept("[~] CmdInjection: [" + (pi + 1) + "/" + PATHS.size() + "] " + path);
-            for (String param : NETWORK_KEYWORDS) {
+        AtomicBoolean cancel = new AtomicBoolean(false);
+        List<Callable<List<Finding>>> tasks = new ArrayList<>();
 
-                // Only probe params whose name contains a network keyword (always true
-                // here since NETWORK_KEYWORDS IS the param list, but the check is explicit
-                // so subclasses or future callers that pass a different set still work).
-                if (!containsAnyKeyword(param)) {
-                    continue;
-                }
+        for (int pi = 0; pi < PATHS.size(); pi++) {
+            final String path = PATHS.get(pi);
+            final int pathIdx = pi;
+            tasks.add(() -> {
+                List<Finding> local = new ArrayList<>();
+                log.accept("[~] CmdInjection: [" + (pathIdx + 1) + "/" + PATHS.size() + "] " + path);
+                for (String param : NETWORK_KEYWORDS) {
+                    if (cancel.get()) {
+                        return local;
+                    }
 
-                // ── Baseline ────────────────────────────────────────────────────
-                String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=testvalue");
-
-                // Anti-FP: skip param if baseline already contains RCE pattern
-                if (RCE_OUTPUT.matcher(baseline).find()) {
-                    log.accept("[~] CmdInjection: baseline contém padrão RCE -- pulando " + param + " em " + path);
-                    continue;
-                }
-
-                // ── Phase 1: Active output-based injection ───────────────────────
-                for (String payload : activePayloads) {
-                    String injected = "testvalue" + payload;
-                    String encoded;
-                    try {
-                        encoded = URLEncoder.encode(injected, "UTF-8");
-                    } catch (Exception e) {
+                    // Only probe params whose name contains a network keyword (always true
+                    // here since NETWORK_KEYWORDS IS the param list, but the check is
+                    // explicit so subclasses or future callers that pass a different set
+                    // still work).
+                    if (!containsAnyKeyword(param)) {
                         continue;
                     }
-                    String probeUrl = base + path + "?" + param + "=" + encoded;
-                    try {
-                        HttpRequest req = HttpRequest.newBuilder().uri(URI.create(probeUrl))
-                                .timeout(Duration.ofSeconds(8)).GET().build();
-                        HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
-                        String body = resp.body() != null ? resp.body() : "";
 
-                        java.util.regex.Matcher m = RCE_OUTPUT.matcher(body);
-                        if (resp.statusCode() < 500 && m.find()) {
-                            String hit = m.group(1);
-                            // Anti-FP: ensure RCE output was NOT present in baseline
-                            if (!baseline.contains(hit)) {
-                                String endpoint = path + "?" + param + "=" + encoded;
-                                log.accept("[!!!] CmdInjection CRITICAL -- injeção ativa confirmada: " + endpoint
-                                        + " (saída: " + hit + ")");
-                                findings.add(Finding.of(id(), endpoint,
-                                        "OS Command Injection -- execução de comandos confirmada", Severity.CRITICAL,
-                                        "Payload: " + injected + " → saída detectada: " + hit + " | URL: " + base
-                                                + endpoint,
-                                        "Execução arbitrária de comandos do SO via injeção no parâmetro '" + param
-                                                + "' -- acesso total ao servidor comprometido",
-                                        "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
-                                                + injected + "'",
-                                        "Nunca passe input do usuário diretamente a funções de execução "
-                                                + "de comandos (exec/system/popen/ProcessBuilder). "
-                                                + "Use APIs de linguagem seguras, validação allowlist "
-                                                + "estrita e sandbox isolado.",
-                                        cweId, cweTitle, cvssVec, score));
-                                break outer;
-                            }
+                    // -- Baseline --
+                    String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=testvalue");
+
+                    // Anti-FP: skip param if baseline already contains RCE pattern
+                    if (RCE_OUTPUT.matcher(baseline).find()) {
+                        log.accept("[~] CmdInjection: baseline contém padrão RCE -- pulando " + param + " em " + path);
+                        continue;
+                    }
+
+                    // -- Phase 1: Active output-based injection --
+                    for (String payload : activePayloads) {
+                        if (cancel.get()) {
+                            return local;
                         }
-                    } catch (Exception ignored) {
-                        // Connection errors / timeouts are not findings in Phase 1
-                    }
-                }
-
-                // ── Phase 2: Time-based blind injection ─────────────────────────
-                long baselineMs = measureBaselineRtt(ctx, hc, base, path, param);
-
-                for (String sleepPayload : sleepPayloads) {
-                    long elapsed = measureElapsed(ctx, hc, base, path, param, sleepPayload);
-
-                    if (elapsed <= baselineMs + TIMING_THRESHOLD_MS) {
-                        continue; // No significant spike for this payload
-                    }
-
-                    // Proportional verification: eliminates slow-server false positives
-                    boolean confirmed = verifyProportionalDelay(ctx, hc, baselineMs, base, path, param, sleepPayload);
-                    if (confirmed) {
-                        String injected = "testvalue" + sleepPayload;
+                        String injected = "testvalue" + payload;
                         String encoded;
                         try {
                             encoded = URLEncoder.encode(injected, "UTF-8");
                         } catch (Exception e) {
                             continue;
                         }
-                        String endpoint = path + "?" + param + "=" + encoded;
-                        log.accept("[!!!] CmdInjection CRITICAL -- blind injection temporal confirmada: " + endpoint
-                                + " (elapsed: " + elapsed + "ms, baseline: " + baselineMs + "ms)");
-                        findings.add(Finding.of(id(), endpoint,
-                                "OS Command Injection Blind (Time-Based) -- sleep confirmado proporcionalmente",
-                                Severity.CRITICAL,
-                                "Payload: " + injected + " → elapsed: " + elapsed + "ms" + " (baseline: " + baselineMs
-                                        + "ms, delta: " + (elapsed - baselineMs) + "ms)"
-                                        + " | Verificação proporcional: confirmada" + " | URL: " + base + endpoint,
-                                "Command injection cega confirmada via delay temporal proporcional no parâmetro '"
-                                        + param + "' -- execução no SO comprovada mesmo sem saída visível",
-                                "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "=" + injected
-                                        + "'",
-                                "Nunca passe input do usuário a funções de execução de comandos. "
-                                        + "Use APIs seguras, validação allowlist e sandbox. "
-                                        + "Para operações de rede, use bibliotecas que não invocam o shell.",
-                                cweId, cweTitle, cvssVec, score));
-                        break outer;
-                    } else {
-                        log.accept("[~] CmdInjection: spike temporal detectado em " + path + "?" + param + " (delta="
-                                + (elapsed - baselineMs) + "ms) -- verificação proporcional"
-                                + " falhou, LOW confidence -- não reportando");
+                        String probeUrl = base + path + "?" + param + "=" + encoded;
+                        try {
+                            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(probeUrl))
+                                    .timeout(Duration.ofSeconds(8)).GET().build();
+                            HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(),
+                                    id());
+                            String body = resp.body() != null ? resp.body() : "";
+
+                            java.util.regex.Matcher m = RCE_OUTPUT.matcher(body);
+                            if (resp.statusCode() < 500 && m.find()) {
+                                String hit = m.group(1);
+                                // Anti-FP: ensure RCE output was NOT present in baseline
+                                if (!baseline.contains(hit)) {
+                                    String endpoint = path + "?" + param + "=" + encoded;
+                                    log.accept("[!!!] CmdInjection CRITICAL -- injeção ativa" + " confirmada: "
+                                            + endpoint + " (saída: " + hit + ")");
+                                    local.add(Finding.of(id(), endpoint,
+                                            "OS Command Injection -- execução de" + " comandos confirmada",
+                                            Severity.CRITICAL,
+                                            "Payload: " + injected + " → saída detectada: " + hit + " | URL: " + base
+                                                    + endpoint,
+                                            "Execução arbitrária de comandos do SO" + " via injeção no parâmetro '"
+                                                    + param + "' -- acesso total ao" + " servidor comprometido",
+                                            "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
+                                                    + injected + "'",
+                                            "Nunca passe input do usuário" + " diretamente a funções de"
+                                                    + " execução de comandos" + " (exec/system/popen/ProcessBuilder)."
+                                                    + " Use APIs de linguagem" + " seguras, validação allowlist"
+                                                    + " estrita e sandbox isolado.",
+                                            cweId, cweTitle, cvssVec, score));
+                                    cancel.set(true);
+                                    return local;
+                                }
+                            }
+                        } catch (Exception ignored) {
+                            // Connection errors / timeouts are not findings in Phase 1
+                        }
+                    }
+
+                    // -- Phase 2: Time-based blind injection --
+                    if (cancel.get()) {
+                        return local;
+                    }
+                    long baselineMs = measureBaselineRtt(ctx, hc, base, path, param);
+
+                    for (String sleepPayload : sleepPayloads) {
+                        if (cancel.get()) {
+                            return local;
+                        }
+                        long elapsed = measureElapsed(ctx, hc, base, path, param, sleepPayload);
+
+                        if (elapsed <= baselineMs + TIMING_THRESHOLD_MS) {
+                            continue; // No significant spike for this payload
+                        }
+
+                        // Proportional verification: eliminates slow-server false
+                        // positives
+                        boolean confirmed = verifyProportionalDelay(ctx, hc, baselineMs, base, path, param,
+                                sleepPayload);
+                        if (confirmed) {
+                            String injected = "testvalue" + sleepPayload;
+                            String encoded;
+                            try {
+                                encoded = URLEncoder.encode(injected, "UTF-8");
+                            } catch (Exception e) {
+                                continue;
+                            }
+                            String endpoint = path + "?" + param + "=" + encoded;
+                            log.accept("[!!!] CmdInjection CRITICAL -- blind injection" + " temporal confirmada: "
+                                    + endpoint + " (elapsed: " + elapsed + "ms, baseline: " + baselineMs + "ms)");
+                            local.add(Finding.of(id(), endpoint,
+                                    "OS Command Injection Blind (Time-Based) --"
+                                            + " sleep confirmado proporcionalmente",
+                                    Severity.CRITICAL,
+                                    "Payload: " + injected + " → elapsed: " + elapsed + "ms" + " (baseline: "
+                                            + baselineMs + "ms, delta: " + (elapsed - baselineMs) + "ms)"
+                                            + " | Verificação proporcional:" + " confirmada" + " | URL: " + base
+                                            + endpoint,
+                                    "Command injection cega confirmada via delay"
+                                            + " temporal proporcional no parâmetro '" + param
+                                            + "' -- execução no SO comprovada" + " mesmo sem saída visível",
+                                    "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
+                                            + injected + "'",
+                                    "Nunca passe input do usuário a funções de" + " execução de comandos. Use APIs"
+                                            + " seguras, validação allowlist e"
+                                            + " sandbox. Para operações de rede, use"
+                                            + " bibliotecas que não invocam o shell.",
+                                    cweId, cweTitle, cvssVec, score));
+                            cancel.set(true);
+                            return local;
+                        } else {
+                            log.accept("[~] CmdInjection: spike temporal detectado em " + path + "?" + param
+                                    + " (delta=" + (elapsed - baselineMs) + "ms) -- verificação proporcional"
+                                    + " falhou, LOW confidence -- não reportando");
+                        }
                     }
                 }
-            }
+                return local;
+            });
         }
+
+        findings.addAll(ProbeExecutor.run(tasks, ctx.config().probeConcurrency(), cancel));
 
         if (findings.isEmpty()) {
             log.accept("[+] CmdInjection: nenhum command injection detectado");
@@ -206,7 +246,7 @@ public class CommandInjectionModule implements Scanner {
         return findings;
     }
 
-    // ── Private helpers ──────────────────────────────────────────────────────
+    // -- Private helpers --
 
     private static final java.util.regex.Pattern TIME_BASED_CMD = java.util.regex.Pattern
             .compile("(?i)sleep|ping -c|timeout");
@@ -295,6 +335,7 @@ public class CommandInjectionModule implements Scanner {
     /**
      * Proportional verification for time-based blind injection.
      *
+     * <p>
      * Extracts the separator prefix from the confirmed sleep payload and probes
      * with sleep 1 and sleep 3. Both deltas must fall within 30 % of their expected
      * values to confirm that the delay is proportional (i.e., genuinely caused by
@@ -315,7 +356,7 @@ public class CommandInjectionModule implements Scanner {
         }
 
         try {
-            // Probe sleep 1 -- expect delta ≈ 1000 ms (700 - 1700 ms window, 30 %
+            // Probe sleep 1 -- expect delta ~ 1000 ms (700 - 1700 ms window, 30 %
             // tolerance)
             long d1 = measureElapsedRaw(ctx, hc, base, path, param, sep + "sleep 1");
             long delta1 = d1 - baselineMs;
@@ -323,7 +364,7 @@ public class CommandInjectionModule implements Scanner {
                 return false;
             }
 
-            // Probe sleep 3 -- expect delta ≈ 3000 ms (2100 - 3900 ms window, 30 %
+            // Probe sleep 3 -- expect delta ~ 3000 ms (2100 - 3900 ms window, 30 %
             // tolerance)
             long d3 = measureElapsedRaw(ctx, hc, base, path, param, sep + "sleep 3");
             long delta3 = d3 - baselineMs;
@@ -357,8 +398,10 @@ public class CommandInjectionModule implements Scanner {
      * Extracts the command-separator prefix from a sleep payload so that the
      * proportional verification can construct "sep + sleep N" probes.
      *
-     * Examples: "; sleep 5" → "; " "| sleep 5" → "| " "&& sleep 5" → "&& " "$(sleep
-     * 5)" → null (subshell -- skip proportional test) "; ping -c 5 …" → "; "
+     * <p>
+     * Examples: "; sleep 5" -> "; " "| sleep 5" -> "| " "&& sleep 5" -> "&& "
+     * "$(sleep 5)" -> null (subshell -- skip proportional test) "; ping -c 5 ..."
+     * -> "; "
      */
     private String extractSeparatorPrefix(String payload) {
         if (payload.startsWith("; ")) {
