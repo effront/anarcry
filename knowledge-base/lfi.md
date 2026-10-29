@@ -99,6 +99,20 @@ Bypasses de filtros:
 
 Casos reais e mentalidade de ataque (RWBH): Yahoo e Uber (downloads/templates) mostram leitura de arquivos e log poisoning; o atacante testa `../`, wrappers PHP, upload + LFI e caminhos absolutos.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2019-19781 | Citrix ADC/Gateway | 2019 | Path traversal sem autenticacao -- leitura de config e RCE via template injection encadeado | Path traversal + RCE |
+| CVE-2020-5410 | Spring Cloud Config | 2020 | Path traversal via symlink permite leitura de arquivos arbitrarios do servidor | Path traversal |
+| CVE-2021-21972 | VMware vCenter | 2021 | Path traversal + upload no plugin vSphere Client -- RCE pre-auth | Upload + path traversal |
+| CVE-2021-41773 | Apache HTTP Server 2.4.49 | 2021 | Normalizacao de path quebrada permite directory traversal com %2e -- leitura de arquivo e CGI RCE | Path traversal |
+| CVE-2021-42013 | Apache HTTP Server 2.4.50 | 2021 | Bypass do fix de CVE-2021-41773 com double-encoding (%%32%65) -- mesma exploracao | Double-encoding bypass |
+| CVE-2023-25690 | Apache HTTP Server | 2023 | Request smuggling via mod_proxy com RewriteRule -- manipulacao de path interno | Smuggling + path traversal |
+| CVE-2024-4577 | PHP (Windows CGI) | 2024 | Arg injection em PHP-CGI via Best-Fit encoding no Windows -- leitura de arquivo e RCE | Arg injection + file read |
+| CVE-2024-21887 | Ivanti Connect Secure | 2024 | Command injection em componente web -- encadeado com auth bypass para RCE pre-auth | Command injection |
+| CVE-2024-23897 | Jenkins CLI | 2024 | Leitura arbitraria de arquivo via parser de argumentos com '@' -- expandsAtFiles | File read via CLI |
+
 ## Target Context (Crawler Hints)
 - **Parâmetros comuns:** `file`, `path`, `page`, `template`, `lang`, `locale`, `include`, `require`, `view`, `doc`, `folder`, `download`, `filename`, `image`, `attachment`, `module`, `theme`, `layout`.
 - **Paths comuns:** `/download`, `/file`, `/view`, `/include`, `/template`, `/locale`, `/lang`, `/export`, `/attachment`, `/image`, `/api/files`, `/render`.
