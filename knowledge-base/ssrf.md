@@ -111,6 +111,23 @@ Casos reais e mentalidade de ataque (RWBH): Uber (fetch de imagens/avatares), Fa
 - **Paths comuns:** `/api/fetch`, `/api/proxy`, `/api/image`, `/upload`, `/avatar`, `/webhook`, `/import`, `/preview`, `/screenshot`, `/render`, `/pdf`, `/integrations`, `/graphql`.
 - **Sinais:** URL completa aceita; parâmetro `url` refletido em requisição server-side; funcionalidades de importação, preview, avatar, webhook, geração de PDF/screenshot; SSRF cego via DNS/HTTP OOB.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2021-26855 | Microsoft Exchange Server | 2021 | ProxyLogon -- SSRF pre-auth via endpoint /owa/auth/x.js permite acessar mailboxes arbitrarias e pivotar para RCE | Pre-auth SSRF |
+| CVE-2021-21975 | VMware vRealize Operations | 2021 | SSRF na API permite ator com acesso de rede ler dados internos sem autenticacao | Pre-auth SSRF |
+| CVE-2021-21973 | VMware vCenter Server | 2021 | SSRF via validacao impr. de URLs em plugin do vSphere Client (porta 443) -- permite scan de rede interna | Pre-auth SSRF |
+| CVE-2021-40438 | Apache HTTP Server (mod_proxy) | 2021 | URI crafted faz mod_proxy encaminhar request para origin server escolhido pelo atacante -- afeta <= 2.4.48 | Proxy SSRF |
+| CVE-2022-22947 | Spring Cloud Gateway | 2022 | Code injection via Gateway Actuator endpoint exposto permite RCE e SSRF em versoes < 3.1.1+ e < 3.0.7+ | Actuator SSRF |
+| CVE-2022-41040 | Microsoft Exchange Server | 2022 | ProxyNotShell -- SSRF autenticada combinada com CVE-2022-41082 para RCE; bypass do patch do ProxyLogon | Auth SSRF + RCE |
+| CVE-2024-21893 | Ivanti Connect Secure / Policy Secure | 2024 | SSRF no componente SAML permite acessar recursos restritos sem autenticacao | SAML SSRF |
+| CVE-2020-13379 | Grafana 3.0.1 -- 7.0.1 | 2020 | SSRF na feature de avatar permite qualquer usuario nao autenticado forcar Grafana a enviar HTTP requests para URLs arbitrarias | Avatar SSRF |
+| CVE-2020-26258 | XStream < 1.4.15 | 2020 | SSRF ativada durante unmarshalling de XML -- permite leitura de recursos internos via desserializacao | Deserialization SSRF |
+| CVE-2020-28168 | Axios NPM 0.21.0 | 2020 | Bypass de proxy via URL que responde com redirect para host restrito -- permite SSRF client-side | Redirect SSRF |
+
+**Fontes**: CVE List v5 (cvelistV5), NVD, advisories dos vendors.
+
 ## Recommendation
 1. Preferir allowlist de hosts, portas e esquemas necessários; nunca aceitar URL arbitrária.
 2. Resolver o DNS no servidor, validar todos os IPs retornados e bloquear faixas privadas, loopback, link-local, multicast e metadata. Repetir a validação após cada redirect.
