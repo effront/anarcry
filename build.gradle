@@ -157,9 +157,12 @@ tasks.register('jpackageDeb', Exec) {
         '--main-jar', "anarcry-${version}.jar",
         '--main-class', 'gg.effront.anarcry.Main',
         '--dest', 'build/dist',
+        '--icon', 'public/logoAnarChy.png',
         '--java-options', '--enable-native-access=ALL-UNNAMED',
         '--linux-deb-maintainer', 'noreply@effront.gg',
         '--linux-app-category', 'utils',
+        '--linux-shortcut',
+        '--resource-dir', 'packaging/linux',
         '--description', 'AnarCry Security Scanner'
 }
 
@@ -175,7 +178,10 @@ tasks.register('jpackageRpm', Exec) {
         '--main-jar', "anarcry-${version}.jar",
         '--main-class', 'gg.effront.anarcry.Main',
         '--dest', 'build/dist',
+        '--icon', 'public/logoAnarChy.png',
         '--java-options', '--enable-native-access=ALL-UNNAMED',
         '--linux-rpm-license-type', 'Proprietary',
+        '--linux-shortcut',
+        '--resource-dir', 'packaging/linux',
         '--description', 'AnarCry Security Scanner'
 }

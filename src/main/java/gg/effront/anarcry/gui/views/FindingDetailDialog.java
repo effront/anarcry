@@ -260,6 +260,9 @@ public class FindingDetailDialog extends JDialog {
     }
 
     private static String injectBearer(String cmd, String jwt) {
+        if (cmd.contains("<jwt>")) {
+            return cmd.replace("<jwt>", jwt);
+        }
         if (cmd.contains("Authorization:") || cmd.contains("Bearer")) {
             return cmd;
         }
