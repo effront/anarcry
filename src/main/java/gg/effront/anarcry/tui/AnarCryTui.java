@@ -1,5 +1,7 @@
 package gg.effront.anarcry.tui;
 
+import gg.effront.anarcry.Version;
+
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.TextColor;
 import com.googlecode.lanterna.gui2.BasicWindow;
@@ -145,7 +147,7 @@ public class AnarCryTui {
             }
         }));
 
-        logHistory.add("[*] AnarCry v1.3 -- pronto");
+        logHistory.add("[*] " + Version.label() + " -- pronto");
         logHistory.add("[*] Configure o alvo e pressione Iniciar para começar");
 
         buildPanels(screen.getTerminalSize());
