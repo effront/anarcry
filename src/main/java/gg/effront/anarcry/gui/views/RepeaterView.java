@@ -7,7 +7,7 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
-import java.io.IOException;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -169,16 +169,12 @@ public class RepeaterView extends JPanel {
                 long elapsedMs = (System.nanoTime() - start) / 1_000_000;
 
                 SwingUtilities.invokeLater(() -> displayResponse(resp, elapsedMs));
-            } catch (IOException | InterruptedException ex) {
-                SwingUtilities.invokeLater(() -> {
-                    statusLabel.setText("  Error: " + ex.getMessage());
-                    sendButton.setEnabled(true);
-                });
             } catch (IllegalArgumentException ex) {
-                SwingUtilities.invokeLater(() -> {
-                    statusLabel.setText("  Invalid URL: " + ex.getMessage());
-                    sendButton.setEnabled(true);
-                });
+                SwingUtilities.invokeLater(() -> statusLabel.setText("  Invalid URL: " + ex.getMessage()));
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> statusLabel.setText("  Error: " + ex.getMessage()));
+            } finally {
+                SwingUtilities.invokeLater(() -> sendButton.setEnabled(true));
             }
         });
     }

@@ -128,7 +128,7 @@ public class CrawlerModule implements Scanner {
                 var resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
                 if (resp.statusCode() == 200) {
                     log.accept("[!!] Crawler: OpenAPI/Swagger exposto em " + p);
-                    findings.add(new Finding("Crawler", p, "OpenAPI/Swagger spec exposta sem autenticação",
+                    findings.add(Finding.of("Crawler", p, "OpenAPI/Swagger spec exposta sem autenticação",
                             Severity.MEDIUM, "GET " + base + p + " → HTTP 200 | Size: " + resp.body().length(),
                             "Especificação API exposta publicamente -- revela todos os endpoints, parâmetros e schemas",
                             "curl '" + base + p + "'", "Proteger /api-docs com autenticação ou remover de produção",
@@ -163,7 +163,7 @@ public class CrawlerModule implements Scanner {
                     if (p.contains("backup") || p.contains(".sql") || p.contains(".env") || p.contains("/.git")
                             || p.contains("phpinfo")) {
                         log.accept("[!!] Crawler: endpoint sensível acessível: " + p + " → " + sc);
-                        findings.add(new Finding("Crawler", p, "Endpoint sensível acessível: " + p, Severity.HIGH,
+                        findings.add(Finding.of("Crawler", p, "Endpoint sensível acessível: " + p, Severity.HIGH,
                                 "GET " + base + p + " → HTTP " + sc,
                                 "Endpoint potencialmente sensível acessível sem autenticação",
                                 "curl '" + base + p + "'", "Remover ou proteger com autenticação", "CWE-200",

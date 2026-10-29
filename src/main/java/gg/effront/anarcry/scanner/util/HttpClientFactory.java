@@ -46,12 +46,21 @@ public final class HttpClientFactory {
         return noRedirectInstance;
     }
 
+    private static volatile HttpClient followOneInstance;
+
     // Follows up to 1 redirect -- used by SSRF redirect-bypass probing
     public static HttpClient followOne() throws Exception {
-        SSLParameters params = new SSLParameters();
-        params.setEndpointIdentificationAlgorithm("");
-        return HttpClient.newBuilder().sslContext(TlsUtil.sslContext(TlsUtil.trustAll())).sslParameters(params)
-                .followRedirects(HttpClient.Redirect.NORMAL).version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofSeconds(5)).build();
+        if (followOneInstance == null) {
+            synchronized (HttpClientFactory.class) {
+                if (followOneInstance == null) {
+                    SSLParameters params = new SSLParameters();
+                    params.setEndpointIdentificationAlgorithm("");
+                    followOneInstance = HttpClient.newBuilder().sslContext(TlsUtil.sslContext(TlsUtil.trustAll()))
+                            .sslParameters(params).followRedirects(HttpClient.Redirect.NORMAL)
+                            .version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(5)).build();
+                }
+            }
+        }
+        return followOneInstance;
     }
 }

@@ -16,7 +16,6 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import gg.effront.anarcry.model.CweRegistry;
-import gg.effront.anarcry.model.CvssCalculator;
 
 public class SignatureDisclosureProbe {
 
@@ -49,19 +48,16 @@ public class SignatureDisclosureProbe {
                     log.accept("[~] JWT: sig disclosure " + path + " → HTTP " + resp.statusCode());
                     String body = resp.body();
                     if (body != null && DISCLOSURE.matcher(body).find()) {
-                        String _cweId = CweRegistry.cweId("JWT");
-                        String _cweTitle = CweRegistry.cweTitle("JWT");
-                        String _cvssVector = CweRegistry.cvssVector("JWT");
-                        double _score = CvssCalculator.calculate(_cvssVector);
                         return Optional.of(Finding.of("JWT", base + path,
                                 "Signature correta exposta em mensagem de erro (CVE-2019-7644)", Severity.MEDIUM,
                                 "Response body em " + base + path + ": " + truncate(body, 300),
                                 "Servidor revela a assinatura válida em respostas de erro -- facilita forgery de tokens"
-                                        + "sem brute-force",
+                                        + " sem brute-force",
                                 "curl -H 'Authorization: Bearer " + badToken + "' " + base + path,
                                 "Nunca incluir detalhes de signature em erros; usar mensagens genéricas"
                                         + " como '401 Unauthorized'",
-                                _cweId, _cweTitle, _cvssVector, _score));
+                                CweRegistry.cweId("JWT"), CweRegistry.cweTitle("JWT"),
+                                "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N", 6.5));
                     }
                 } catch (Exception e) {
                     log.accept("[~] JWT: sig disclosure " + path + " -- " + e.getMessage());

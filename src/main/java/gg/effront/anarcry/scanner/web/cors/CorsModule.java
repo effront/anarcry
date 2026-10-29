@@ -1,6 +1,5 @@
 package gg.effront.anarcry.scanner.web.cors;
 
-import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.Severity;
@@ -36,8 +35,6 @@ public class CorsModule implements Scanner {
 
         String _cweId = CweRegistry.cweId(id());
         String _cweTitle = CweRegistry.cweTitle(id());
-        String _cveVector = CweRegistry.cvssVector(id());
-        double _score = CvssCalculator.calculate(_cveVector);
 
         String scheme = ctx.isHttps() ? "https" : "http";
         int defPort = ctx.isHttps() ? 443 : 80;
@@ -98,7 +95,7 @@ public class CorsModule implements Scanner {
                                             + "exfiltrate(d))",
                                     "Whitelist explícita de origens; nunca refletir a Origin; validar antes de definir"
                                             + "ACAO",
-                                    _cweId, _cweTitle, _cveVector, _score));
+                                    _cweId, _cweTitle, "AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:H/A:N", 9.3));
                             break outer;
                         }
 
@@ -112,7 +109,7 @@ public class CorsModule implements Scanner {
                                     "fetch('" + url + "').then(r => r.text()).then(console.log)",
                                     "Restringir ACAO a origens confiáveis; usar wildcard apenas para recursos"
                                             + "genuinamente públicos",
-                                    _cweId, _cweTitle, _cveVector, _score));
+                                    _cweId, _cweTitle, "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N", 7.5));
                         }
 
                         // MEDIUM: null origin accepted
@@ -126,7 +123,7 @@ public class CorsModule implements Scanner {
                                             + "',{credentials:'include'})"
                                             + ".then(r=>r.text()).then(d=>parent.postMessage(d,'*'))" + "</script>\">",
                                     "Nunca aceitar null origin em endpoints com dados sensíveis ou autenticados",
-                                    _cweId, _cweTitle, _cveVector, _score));
+                                    _cweId, _cweTitle, "AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N", 5.4));
                         }
 
                         // MEDIUM: suffix or prefix bypass without creds
@@ -144,7 +141,7 @@ public class CorsModule implements Scanner {
                                     "curl -H 'Origin: " + origin + "' '" + url + "'",
                                     "Validar origin com comparação exata de string contra whitelist; "
                                             + "não usar regex parcial como endsWith ou startsWith",
-                                    _cweId, _cweTitle, _cveVector, _score));
+                                    _cweId, _cweTitle, "AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N", 5.4));
                         }
 
                     } catch (Exception e) {

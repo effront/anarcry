@@ -1,11 +1,14 @@
 package gg.effront.anarcry.scanner.web.ssti;
 
+import gg.effront.anarcry.model.CvssCalculator;
+import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
+import gg.effront.anarcry.scanner.util.ProbeExecutor;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -15,9 +18,9 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import gg.effront.anarcry.model.CweRegistry;
-import gg.effront.anarcry.model.CvssCalculator;
 
 public class SstiModule implements Scanner {
 
@@ -87,54 +90,75 @@ public class SstiModule implements Scanner {
         int defPort = ctx.isHttps() ? 443 : 80;
         String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
-        log.accept("[~] SSTI: injetando payloads matemáticos em " + base + " (" + PROBE_PATHS.size() + " paths × "
-                + PARAMS.size() + " params × " + DETECTION_PROBES.size() + " engines)");
+        log.accept("[~] SSTI: injetando payloads matemáticos em " + base + " (" + PROBE_PATHS.size() + " paths x "
+                + PARAMS.size() + " params x " + DETECTION_PROBES.size() + " engines)");
 
-        outer : for (int pi = 0; pi < PROBE_PATHS.size(); pi++) {
-            String path = PROBE_PATHS.get(pi);
-            log.accept("[~] SSTI: [" + (pi + 1) + "/" + PROBE_PATHS.size() + "] " + path);
-            for (String param : PARAMS) {
-                String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=test");
-                for (SstiProbe probe : DETECTION_PROBES) {
-                    String engine = tryMathProbe(ctx, hc, base, path, param, probe, baseline, log);
-                    if (engine == null) {
-                        continue;
+        int concurrency = ctx.config().probeConcurrency();
+        AtomicBoolean cancel = new AtomicBoolean(false);
+        List<Callable<List<Finding>>> tasks = new ArrayList<>();
+
+        for (int pi = 0; pi < PROBE_PATHS.size(); pi++) {
+            final String path = PROBE_PATHS.get(pi);
+            final int pathIdx = pi;
+            tasks.add(() -> {
+                List<Finding> local = new ArrayList<>();
+                log.accept("[~] SSTI: [" + (pathIdx + 1) + "/" + PROBE_PATHS.size() + "] " + path);
+                for (String param : PARAMS) {
+                    if (cancel.get()) {
+                        return local;
                     }
+                    String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=test");
+                    for (SstiProbe probe : DETECTION_PROBES) {
+                        if (cancel.get()) {
+                            return local;
+                        }
+                        String engine = tryMathProbe(ctx, hc, base, path, param, probe, baseline, log);
+                        if (engine == null) {
+                            continue;
+                        }
 
-                    String endpoint = path + "?" + param + "=" + URLEncoder.encode(probe.payload(), "UTF-8");
-                    log.accept("[!!] SSTI: " + engine + " detectado em " + endpoint);
+                        String endpoint = path + "?" + param + "=" + URLEncoder.encode(probe.payload(), "UTF-8");
+                        log.accept("[!!] SSTI: " + engine + " detectado em " + endpoint);
 
-                    // Phase 2: try RCE probes for the matched engine
-                    String rceEvidence = tryRceProbes(ctx, hc, base, path, param, engine, baseline, log);
+                        // Phase 2: try RCE probes for the matched engine
+                        String rceEvidence = tryRceProbes(ctx, hc, base, path, param, engine, baseline, log);
 
-                    if (rceEvidence != null) {
-                        log.accept("[!!!] SSTI RCE: CONFIRMADO -- " + engine + " em " + endpoint);
-                        findings.add(Finding.of("SSTI", endpoint, "SSTI RCE CONFIRMADO -- " + engine, Severity.CRITICAL,
-                                "Engine: " + engine + " | RCE evidence: " + rceEvidence + " | URL: " + base + endpoint,
-                                "RCE confirmado via SSTI (" + engine + ") -- execução de código arbitrário no servidor",
-                                "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
-                                        + probe.payload() + "'",
-                                "Nunca renderize input do usuário em templates; use sandbox isolado; "
-                                        + "migrar para renderização de templates estáticos com variáveis seguras",
-                                _cweId, _cweTitle, _cveVector, _score));
-                    } else {
-                        findings.add(Finding.of("SSTI", endpoint,
-                                "SSTI -- Template Injection detectado (" + engine + ")", Severity.CRITICAL,
-                                "Payload: " + probe.payload() + " → resposta contém '2401' | Engine: " + engine
-                                        + " | URL: " + base + endpoint,
-                                "Server-Side Template Injection -- equivale a RCE na engine " + engine
-                                        + ". Payloads RCE conhecidos incluem: FreeMarker Execute?new(), "
-                                        + "Spring T(Runtime).exec(), Jinja2 subclasses gadget",
-                                "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
-                                        + probe.payload() + "'",
-                                "Nunca renderize input do usuário diretamente em templates. "
-                                        + "Use sandboxing (Jinja2 SandboxedEnvironment) ou variáveis com allowlist.",
-                                _cweId, _cweTitle, _cveVector, _score));
+                        if (rceEvidence != null) {
+                            log.accept("[!!!] SSTI RCE: CONFIRMADO -- " + engine + " em " + endpoint);
+                            local.add(Finding.of("SSTI", endpoint, "SSTI RCE CONFIRMADO -- " + engine,
+                                    Severity.CRITICAL,
+                                    "Engine: " + engine + " | RCE evidence: " + rceEvidence + " | URL: " + base
+                                            + endpoint,
+                                    "RCE confirmado via SSTI (" + engine
+                                            + ") -- execução de código arbitrário no servidor",
+                                    "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
+                                            + probe.payload() + "'",
+                                    "Nunca renderize input do usuário em templates; use sandbox isolado; "
+                                            + "migrar para renderização de templates estáticos com variáveis seguras",
+                                    _cweId, _cweTitle, _cveVector, _score));
+                        } else {
+                            local.add(Finding.of("SSTI", endpoint,
+                                    "SSTI -- Template Injection detectado (" + engine + ")", Severity.CRITICAL,
+                                    "Payload: " + probe.payload() + " -> resposta contém '2401' | Engine: " + engine
+                                            + " | URL: " + base + endpoint,
+                                    "Server-Side Template Injection -- equivale a RCE na engine " + engine
+                                            + ". Payloads RCE conhecidos incluem: FreeMarker Execute?new(), "
+                                            + "Spring T(Runtime).exec(), Jinja2 subclasses gadget",
+                                    "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
+                                            + probe.payload() + "'",
+                                    "Nunca renderize input do usuário diretamente em templates. "
+                                            + "Use sandboxing (Jinja2 SandboxedEnvironment) "
+                                            + "ou variáveis com allowlist.",
+                                    _cweId, _cweTitle, _cveVector, _score));
+                        }
+                        cancel.set(true);
+                        return local;
                     }
-                    break outer;
                 }
-            }
+                return local;
+            });
         }
+        findings.addAll(ProbeExecutor.run(tasks, concurrency, cancel));
 
         if (findings.isEmpty()) {
             log.accept("[+] SSTI: nenhum template injection detectado");

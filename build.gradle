@@ -8,7 +8,7 @@ plugins {
 }
 
 group = 'gg.effront'
-version = '1.3'
+version = '1.4'
 
 java {
     toolchain {
@@ -54,7 +54,7 @@ test {
             excludeTags 'integration'
         }
     }
-    maxHeapSize = '512m'
+    maxHeapSize = '1g'
     jvmArgs '-XX:+UseG1GC', '-XX:MaxGCPauseMillis=200'
 }
 
