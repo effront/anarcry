@@ -103,13 +103,13 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.3.jar
+java -jar build/libs/anarcry-1.4.1.jar
 ```
 
 With `.env.local` for pre-configured targets:
 
 ```bash
-java -jar build/libs/anarcry-1.3.jar --env .env.local
+java -jar build/libs/anarcry-1.4.1.jar --env .env.local
 ```
 
 ---
@@ -243,7 +243,7 @@ Two operational modes: **Target** (main scan interface) and **Repeater** (HTTP r
 ## 06 - Testing
 
 ```bash
-./gradlew test              # unit + harness (no network) -- 113 tests
+./gradlew test              # unit + harness (no network) -- 125 tests
 ./gradlew integrationTest   # tests with external hosts (badssl.com, etc.)
 ```
 
@@ -333,6 +333,19 @@ ScanRunner.run(ScanContext)
 ---
 
 ## 09 - Changelog
+
+### v1.4.1
+
+- **Knowledge base CVE enrichment**: 71 real-world CVEs added across 7 vulnerability classes (JWT, SQLi, SSRF, XSS, XXE, SSTI, LFI) sourced from MITRE CVE List v5
+
+### v1.4
+
+- **Intra-module parallelism**: ProbeExecutor with virtual threads (bounded concurrency, default 12) -- SQLi, XSS, LFI, CmdInjection, SSRF, SSTI, OpenRedirect, Crawler refactored for parallel payload dispatch
+- **Severity from CVSS**: `Severity.fromScore()` using NIST NVD ranges -- severity is now always derived from the CVSS score, not hardcoded per module
+- **Per-finding CVSS vectors**: JWT (6 finding types, LOW to CRITICAL) and CORS (4 finding types, MEDIUM to CRITICAL) carry per-finding vectors instead of flat module-level severity
+- **WAF/403 detection**: HeadersModule detects known WAFs (Cloudflare, Akamai, etc) on HTTP 403, emits single INFO finding instead of false positive header findings
+- **Register orphaned modules**: SQLi, XSS, LFI, CmdInjection wired into ScanRunner + both UIs
+- **GUI fixes**: RepeaterView catch-all error handling + button re-enable; SiteMapView selection with full URL + click-to-copy; FindingDetailDialog multi-step repro split
 
 ### v1.3
 
