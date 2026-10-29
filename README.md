@@ -103,13 +103,13 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.4.1.jar
+java -jar build/libs/anarcry-1.4.2.jar
 ```
 
 With `.env.local` for pre-configured targets:
 
 ```bash
-java -jar build/libs/anarcry-1.4.1.jar --env .env.local
+java -jar build/libs/anarcry-1.4.2.jar --env .env.local
 ```
 
 ---
@@ -333,6 +333,11 @@ ScanRunner.run(ScanContext)
 ---
 
 ## 09 - Changelog
+
+### v1.4.2
+
+- **CVE-enriched reports**: scan reports (MD, HackerOne, Bugcrowd) now include Known CVEs table per vulnerability class, sourced from the knowledge base
+- **KnowledgeEntry.CveEntry**: new record type for structured CVE data in the KB JSON
 
 ### v1.4.1
 
