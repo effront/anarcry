@@ -117,6 +117,25 @@ Casos reais e mentalidade de ataque (RWBH): Yahoo (busca/filtros) e Uber (APIs i
 - **Paths comuns:** `/api/*`, `/login`, `/search`, `/products`, `/reports`, `/admin`, `/graphql`, `/export`, `/filter`.
 - **Sinais:** erros SQL; diferença de resposta entre `1=1` e `1=2`; atraso com `SLEEP`; `ORDER BY` com erro; parâmetros numéricos sem validação.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2023-34362 | MOVEit Transfer | 2023 | SQLi em endpoint de transferencia -- explorado em massa pelo grupo Cl0p, comprometeu centenas de organizacoes | Blind SQLi (pre-auth) |
+| CVE-2023-48788 | Fortinet FortiClientEMS | 2023 | SQLi no servico de gerenciamento de endpoints -- permite execucao remota via DBA | SQLi to RCE (pre-auth) |
+| CVE-2020-12271 | Sophos XG Firewall | 2020 | SQLi em SFOS explorado in-the-wild (Asnarok campaign) -- atacantes injetaram trojan via interface de gerenciamento | In-band SQLi (pre-auth) |
+| CVE-2024-50330 | Ivanti Endpoint Manager | 2024 | SQLi remoto sem autenticacao no EPM -- permite comprometimento total do servidor de gerenciamento | Unauth SQLi |
+| CVE-2024-1597 | PostgreSQL JDBC (pgjdbc) | 2024 | SQLi no driver JDBC quando PreferQueryMode=SIMPLE -- afeta qualquer app Java usando pgjdbc com essa config | Driver-level SQLi |
+| CVE-2023-34991 | Fortinet FortiWLM | 2023 | SQLi no gerenciador wireless -- permite acesso nao autenticado a dados da rede | Unauth SQLi |
+| CVE-2024-45387 | Apache Traffic Control | 2024 | SQLi no Traffic Ops -- usuario privilegiado executa queries arbitrarias (CVSS 9.9) | Auth SQLi |
+| CVE-2023-0016 | SAP BPC MS 10.0 | 2023 | SQLi no Business Planning and Consolidation -- execucao de queries arbitrarias por atacante nao autenticado | Unauth SQLi |
+| CVE-2023-0620 | HashiCorp Vault | 2023 | SQLi no backend de storage MSSQL do Vault -- permite manipulacao de secrets armazenados | Config-dependent SQLi |
+| CVE-2024-27304 | pgx (Go PostgreSQL driver) | 2024 | SQLi no driver pgx para Go -- single query ou bind message permite injecao (CVSS 9.8) | Driver-level SQLi |
+| CVE-2024-8275 | The Events Calendar (WordPress) | 2024 | SQLi via parametro 'order' -- plugin com 800k+ instalacoes ativas | Unauth SQLi |
+| CVE-2024-12727 | Sophos Firewall | 2024 | SQLi pre-auth no email protection feature -- permite code execution remoto | SQLi to RCE (pre-auth) |
+
+Fonte: cvelistV5 (MITRE CVE List v5 dataset)
+
 ## Recommendation
 1. Usar queries parametrizadas/prepared statements em todas as consultas, incluindo `IN`, `ORDER BY`, `LIMIT` e relatórios.
 ```java

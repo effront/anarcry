@@ -110,6 +110,23 @@ Casos reais e mentalidade de ataque (RWBH): Twitter (stored XSS em perfis/tweets
 - **Paths comuns:** `/search`, `/login`, `/profile`, `/comments`, `/messages`, `/upload`, `/error`, `/redirect`, `/api/*`, `/admin`, `/support`.
 - **Sinais:** entrada refletida sem escape; `innerHTML`/`document.write`; `eval`; `postMessage` sem validação; CSP ausente ou permissiva; resposta com `text/html` para entrada do usuário.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2020-11022 | jQuery 1.12.0 -- 3.5.0 | 2020 | HTML de fontes nao confiaveis passado para .html()/.append() pode executar XSS mesmo apos sanitizacao | DOM XSS |
+| CVE-2020-11023 | jQuery 1.0.3 -- 3.5.0 | 2020 | Elementos option em HTML nao confiavel passado para metodos de manipulacao DOM causam XSS | DOM XSS |
+| CVE-2021-41184 | jQuery UI < 1.13.0 | 2021 | Opcao `of` do .position() aceita input nao confiavel que executa codigo arbitrario | DOM XSS |
+| CVE-2023-29489 | cPanel < 11.109.9999.116 | 2023 | XSS refletido na pagina de erro do cpsrvd via webcall ID invalido -- pre-auth, afeta milhoes de servidores | Reflected XSS |
+| CVE-2024-4367 | Mozilla PDF.js (Firefox < 126) | 2024 | Type check ausente no handling de fontes em PDF.js permite execucao de JavaScript arbitrario no contexto do viewer | DOM XSS |
+| CVE-2023-44389 | Zope | 2023 | Propriedade title de objetos Zope aceita script code que executa ao visualizar o objeto no Zope Management Interface | Stored XSS |
+| CVE-2024-25600 | WordPress Bricks Builder <= 1.9.6 | 2024 | Code injection via builder permite RCE sem autenticacao -- vetor inicial via XSS em templates | Stored XSS / RCE |
+| CVE-2022-29078 | EJS 3.1.6 (Node.js) | 2022 | Server-side template injection via settings[view options][outputFunctionName] permite execucao de codigo arbitrario | SSTI / XSS |
+| CVE-2023-6553 | WordPress Backup Migration <= 1.3.7 | 2023 | RCE via /includes/backup-heart.php sem autenticacao -- frequentemente encadeado com XSS para persistence | RCE via injection |
+| CVE-2022-35914 | GLPI <= 10.0.2 (htmlawed) | 2022 | PHP code injection via htmLawedTest.php exposto -- modulo de sanitizacao HTML exploitavel | Stored XSS / RCE |
+
+**Fontes**: CVE List v5 (cvelistV5), NVD, advisories dos vendors.
+
 ## Recommendation
 1. Codificar a saída conforme o contexto (HTML entity, attribute, JavaScript, URL, CSS) usando funções nativas do framework.
 2. Nunca inserir entrada do usuário em `innerHTML`, `document.write`, `eval`, `Function`, `setTimeout(string)`; usar `textContent` e APIs seguras.
