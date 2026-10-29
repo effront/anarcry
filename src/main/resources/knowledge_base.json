@@ -80,7 +80,8 @@
         "/static/*"
       ]
     },
-    "recommendation": "1. Include all headers that influence the response in the cache key (`Vary: X-Forwarded-Host, X-Forwarded-Proto`), or better yet, do not use client-supplied forwarding headers to generate content.\n2. Normalize and validate forwarding headers at the edge; discard client-supplied values.\n3. Never cache authenticated responses or responses containing `Set-Cookie`; use `Cache-Control: private, no-store` for user-specific data.\n4. Canonicalize URLs and query strings and reject unknown parameters; ensure the proxy and application use the same query parser.\n5. Disable fat GET or include the request body in the cache key; restrict cacheable methods to GET and HEAD.\n6. Apply cache deception protection: do not cache based on file extension alone; validate `Content-Type` and authentication state before caching.\n7. Configure the CDN to strip hop-by-hop headers and never trust `X-Original-URL` or `X-Rewrite-URL`.\n8. Example Nginx configuration:\n```nginx\nproxy_cache_key \"$scheme$request_method$host$request_uri\";\nproxy_ignore_headers X-Accel-Expires;\nproxy_hide_header X-Forwarded-Host;\nadd_header Vary \"X-Forwarded-Host, X-Forwarded-Proto\" always;\nproxy_cache_bypass $http_authorization $cookie_session;\n```\n9. Monitor for cache poisoning using canary tokens and alert on responses containing external hostnames."
+    "recommendation": "1. Include all headers that influence the response in the cache key (`Vary: X-Forwarded-Host, X-Forwarded-Proto`), or better yet, do not use client-supplied forwarding headers to generate content.\n2. Normalize and validate forwarding headers at the edge; discard client-supplied values.\n3. Never cache authenticated responses or responses containing `Set-Cookie`; use `Cache-Control: private, no-store` for user-specific data.\n4. Canonicalize URLs and query strings and reject unknown parameters; ensure the proxy and application use the same query parser.\n5. Disable fat GET or include the request body in the cache key; restrict cacheable methods to GET and HEAD.\n6. Apply cache deception protection: do not cache based on file extension alone; validate `Content-Type` and authentication state before caching.\n7. Configure the CDN to strip hop-by-hop headers and never trust `X-Original-URL` or `X-Rewrite-URL`.\n8. Example Nginx configuration:\n```nginx\nproxy_cache_key \"$scheme$request_method$host$request_uri\";\nproxy_ignore_headers X-Accel-Expires;\nproxy_hide_header X-Forwarded-Host;\nadd_header Vary \"X-Forwarded-Host, X-Forwarded-Proto\" always;\nproxy_cache_bypass $http_authorization $cookie_session;\n```\n9. Monitor for cache poisoning using canary tokens and alert on responses containing external hostnames.",
+    "notableCves": []
   },
   "command_injection": {
     "title": "OS Command Injection",
@@ -188,7 +189,8 @@
         "/webhook"
       ]
     },
-    "recommendation": "1. Avoid the shell entirely: use native APIs (`InetAddress`, DNS libraries, image-processing libraries) instead of OS commands.\n2. If a command is unavoidable, use `ProcessBuilder` with an argument list and **never** `shell=True` / `Runtime.exec(String)`; validate each argument individually.\n```java\nProcessBuilder pb = new ProcessBuilder(\"ping\", \"-c\", \"1\", validatedHost);\npb.redirectErrorStream(true);\nProcess p = pb.start();\n```\n3. Validate input with a strict allowlist (IP addresses, RFC-compliant hostnames, known paths); reject metacharacters and whitespace.\n4. Never pass user input to `sh -c`, `bash -c`, `cmd /c`, `eval`, backticks, or `system`.\n5. Apply least privilege to the process: dedicated user, read-only filesystem, seccomp/AppArmor profiles, and no network access when possible.\n6. Use queues and isolated workers for dangerous operations; enforce time, memory, and output limits.\n7. Monitor command executions, anomalous commands, and OOB callbacks; alert on deviations.\n8. Python example:\n```python\nimport subprocess, shlex\nsubprocess.run([\"ping\", \"-c\", \"1\", validated_host], shell=False, timeout=5, check=True)\n```\n9. Test with separator and OOB payloads in an authorized environment."
+    "recommendation": "1. Avoid the shell entirely: use native APIs (`InetAddress`, DNS libraries, image-processing libraries) instead of OS commands.\n2. If a command is unavoidable, use `ProcessBuilder` with an argument list and **never** `shell=True` / `Runtime.exec(String)`; validate each argument individually.\n```java\nProcessBuilder pb = new ProcessBuilder(\"ping\", \"-c\", \"1\", validatedHost);\npb.redirectErrorStream(true);\nProcess p = pb.start();\n```\n3. Validate input with a strict allowlist (IP addresses, RFC-compliant hostnames, known paths); reject metacharacters and whitespace.\n4. Never pass user input to `sh -c`, `bash -c`, `cmd /c`, `eval`, backticks, or `system`.\n5. Apply least privilege to the process: dedicated user, read-only filesystem, seccomp/AppArmor profiles, and no network access when possible.\n6. Use queues and isolated workers for dangerous operations; enforce time, memory, and output limits.\n7. Monitor command executions, anomalous commands, and OOB callbacks; alert on deviations.\n8. Python example:\n```python\nimport subprocess, shlex\nsubprocess.run([\"ping\", \"-c\", \"1\", validated_host], shell=False, timeout=5, check=True)\n```\n9. Test with separator and OOB payloads in an authorized environment.",
+    "notableCves": []
   },
   "cors_misconfiguration": {
     "title": "CORS Misconfiguration",
@@ -256,7 +258,8 @@
         "/admin/api/*"
       ]
     },
-    "recommendation": "1. Use an explicit allowlist of exact origins (scheme + host + port); never use raw reflection or permissive regex.\n2. Do not combine `Access-Control-Allow-Origin: *` with credentials; for public APIs without credentials, `*` is acceptable.\n3. Reject `Origin: null` and unknown origins by responding without any CORS headers.\n4. Validate the origin on the server after full URL parsing, comparing the exact host; do not use `startsWith`/`endsWith`.\n5. Send `Vary: Origin` to prevent cache poisoning of CORS responses.\n6. Limit methods and headers to the minimum required; do not expose `Authorization` to untrusted origins.\n7. Prefer tokens in the `Authorization` header over cookies for cross-origin APIs; if cookies are used, require `SameSite=Lax/Strict` and a CSRF token.\n8. Spring example:\n```java\n@Bean\nCorsConfigurationSource corsConfigurationSource() {\n    CorsConfiguration c = new CorsConfiguration();\n    c.setAllowedOrigins(List.of(\"https://app.alvo.com\", \"https://admin.alvo.com\"));\n    c.setAllowedMethods(List.of(\"GET\", \"POST\"));\n    c.setAllowedHeaders(List.of(\"Content-Type\", \"Authorization\"));\n    c.setAllowCredentials(true);\n    UrlBasedCorsConfigurationSource s = new UrlBasedCorsConfigurationSource();\n    s.registerCorsConfiguration(\"/api/**\", c);\n    return s;\n}\n```\n9. Monitor subdomains and remove orphaned DNS records to prevent bypass via subdomain takeover."
+    "recommendation": "1. Use an explicit allowlist of exact origins (scheme + host + port); never use raw reflection or permissive regex.\n2. Do not combine `Access-Control-Allow-Origin: *` with credentials; for public APIs without credentials, `*` is acceptable.\n3. Reject `Origin: null` and unknown origins by responding without any CORS headers.\n4. Validate the origin on the server after full URL parsing, comparing the exact host; do not use `startsWith`/`endsWith`.\n5. Send `Vary: Origin` to prevent cache poisoning of CORS responses.\n6. Limit methods and headers to the minimum required; do not expose `Authorization` to untrusted origins.\n7. Prefer tokens in the `Authorization` header over cookies for cross-origin APIs; if cookies are used, require `SameSite=Lax/Strict` and a CSRF token.\n8. Spring example:\n```java\n@Bean\nCorsConfigurationSource corsConfigurationSource() {\n    CorsConfiguration c = new CorsConfiguration();\n    c.setAllowedOrigins(List.of(\"https://app.alvo.com\", \"https://admin.alvo.com\"));\n    c.setAllowedMethods(List.of(\"GET\", \"POST\"));\n    c.setAllowedHeaders(List.of(\"Content-Type\", \"Authorization\"));\n    c.setAllowCredentials(true);\n    UrlBasedCorsConfigurationSource s = new UrlBasedCorsConfigurationSource();\n    s.registerCorsConfiguration(\"/api/**\", c);\n    return s;\n}\n```\n9. Monitor subdomains and remove orphaned DNS records to prevent bypass via subdomain takeover.",
+    "notableCves": []
   },
   "crlf_injection": {
     "title": "CRLF Injection / HTTP Response Splitting",
@@ -334,7 +337,8 @@
         "/search"
       ]
     },
-    "recommendation": "1. Reject any input containing `\\r`, `\\n`, or control characters before inserting it into headers; use allowlist validation.\n2. Use framework APIs that automatically encode header values; never concatenate raw strings into `Location`/`Set-Cookie`.\n3. In Java, use `HttpServletResponse.setHeader()` with sanitized values and validate with regex; avoid `addHeader` with raw input.\n4. In Nginx, use the normalized `$uri` variable and `return 302` with a validated destination; do not forward untrusted headers.\n5. Normalize and reject encoded sequences (`%0d`, `%0a`, `%250d`) after URL decoding.\n6. Configure proxies and WAFs to block CR/LF in headers and parameters, but do not rely on them as the sole defense.\n7. Sanitize log output (escape newlines) and never use user input as a header name.\n8. Java example:\n```java\nprivate static final Pattern CRLF = Pattern.compile(\"[\\\\r\\\\n\\\\u0000]\");\n\npublic void redirect(HttpServletResponse res, String target) throws IOException {\n    if (CRLF.matcher(target).find()) throw new IllegalArgumentException(\"invalid target\");\n    res.setStatus(302);\n    res.setHeader(\"Location\", target);\n}\n```\n9. Test responses with `curl -i` and inspect headers and body after each input."
+    "recommendation": "1. Reject any input containing `\\r`, `\\n`, or control characters before inserting it into headers; use allowlist validation.\n2. Use framework APIs that automatically encode header values; never concatenate raw strings into `Location`/`Set-Cookie`.\n3. In Java, use `HttpServletResponse.setHeader()` with sanitized values and validate with regex; avoid `addHeader` with raw input.\n4. In Nginx, use the normalized `$uri` variable and `return 302` with a validated destination; do not forward untrusted headers.\n5. Normalize and reject encoded sequences (`%0d`, `%0a`, `%250d`) after URL decoding.\n6. Configure proxies and WAFs to block CR/LF in headers and parameters, but do not rely on them as the sole defense.\n7. Sanitize log output (escape newlines) and never use user input as a header name.\n8. Java example:\n```java\nprivate static final Pattern CRLF = Pattern.compile(\"[\\\\r\\\\n\\\\u0000]\");\n\npublic void redirect(HttpServletResponse res, String target) throws IOException {\n    if (CRLF.matcher(target).find()) throw new IllegalArgumentException(\"invalid target\");\n    res.setStatus(302);\n    res.setHeader(\"Location\", target);\n}\n```\n9. Test responses with `curl -i` and inspect headers and body after each input.",
+    "notableCves": []
   },
   "csrf": {
     "title": "Cross-Site Request Forgery",
@@ -403,7 +407,8 @@
         "/checkout"
       ]
     },
-    "recommendation": "1. Require an anti-CSRF token on all state-changing requests (POST/PUT/PATCH/DELETE), bound to the session and single-use when possible.\n2. Validate `Origin` and `Referer` headers against an allowlist in addition to the token; reject requests missing `Origin` in sensitive contexts.\n3. Set session cookies with `SameSite=Lax` or `Strict` and `Secure`; use `None` only when necessary and always with a CSRF token.\n4. Never perform state changes via GET; use POST/PUT/PATCH/DELETE and return 405 for invalid methods.\n5. For JSON APIs, require `Content-Type: application/json` and reject `text/plain` or form-encoded submissions; use a custom header (`X-Requested-With`) as an additional defense, not the sole one.\n6. Implement double-submit with a signed token (HMAC) or a server-side synchronizer pattern; do not rely solely on cookie/body equality.\n7. Require re-authentication (password/MFA) for critical actions (email/password change, financial transactions).\n8. Spring Security example:\n```java\nhttp.csrf(csrf -> csrf\n    .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())\n    .ignoringRequestMatchers(\"/webhooks/**\"));\n```\n9. In Rails, keep `protect_from_forgery with: :exception`; in Django, use `{% csrf_token %}` and `CsrfViewMiddleware`.\n10. Add tests that submit requests without a token, with another user's token, and with an external `Origin` header."
+    "recommendation": "1. Require an anti-CSRF token on all state-changing requests (POST/PUT/PATCH/DELETE), bound to the session and single-use when possible.\n2. Validate `Origin` and `Referer` headers against an allowlist in addition to the token; reject requests missing `Origin` in sensitive contexts.\n3. Set session cookies with `SameSite=Lax` or `Strict` and `Secure`; use `None` only when necessary and always with a CSRF token.\n4. Never perform state changes via GET; use POST/PUT/PATCH/DELETE and return 405 for invalid methods.\n5. For JSON APIs, require `Content-Type: application/json` and reject `text/plain` or form-encoded submissions; use a custom header (`X-Requested-With`) as an additional defense, not the sole one.\n6. Implement double-submit with a signed token (HMAC) or a server-side synchronizer pattern; do not rely solely on cookie/body equality.\n7. Require re-authentication (password/MFA) for critical actions (email/password change, financial transactions).\n8. Spring Security example:\n```java\nhttp.csrf(csrf -> csrf\n    .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())\n    .ignoringRequestMatchers(\"/webhooks/**\"));\n```\n9. In Rails, keep `protect_from_forgery with: :exception`; in Django, use `{% csrf_token %}` and `CsrfViewMiddleware`.\n10. Add tests that submit requests without a token, with another user's token, and with an external `Origin` header.",
+    "notableCves": []
   },
   "graphql_misconfiguration": {
     "title": "GraphQL Misconfiguration",
@@ -480,7 +485,8 @@
         "/query"
       ]
     },
-    "recommendation": "1. Disable introspection and GraphiQL/playground in production; if required, restrict to internal users.\n2. Disable field suggestions and verbose error messages in production.\n3. Enforce authorization at each resolver/field, with ownership and tenant verification; do not rely solely on the token.\n4. Implement a persisted query allowlist or depth/complexity limits; reject queries exceeding the maximum cost.\n5. Limit batching, aliases, and body size; apply per-user/IP and per-operation rate limits.\n6. Do not expose internal IDs; use opaque IDs and verify authorization when resolving `node(id:)`.\n7. Disable administrative mutations for non-privileged roles and audit changes.\n8. Protection example (Apollo Server):\n```js\nconst server = new ApolloServer({\n  typeDefs, resolvers,\n  introspection: false,\n  validationRules: [depthLimit(7), createComplexityLimitRule(1000)],\n  plugins: [ApolloServerPluginLandingPageDisabled()],\n});\n```\n9. Monitor anomalous queries, complexity spikes, and ID enumeration patterns."
+    "recommendation": "1. Disable introspection and GraphiQL/playground in production; if required, restrict to internal users.\n2. Disable field suggestions and verbose error messages in production.\n3. Enforce authorization at each resolver/field, with ownership and tenant verification; do not rely solely on the token.\n4. Implement a persisted query allowlist or depth/complexity limits; reject queries exceeding the maximum cost.\n5. Limit batching, aliases, and body size; apply per-user/IP and per-operation rate limits.\n6. Do not expose internal IDs; use opaque IDs and verify authorization when resolving `node(id:)`.\n7. Disable administrative mutations for non-privileged roles and audit changes.\n8. Protection example (Apollo Server):\n```js\nconst server = new ApolloServer({\n  typeDefs, resolvers,\n  introspection: false,\n  validationRules: [depthLimit(7), createComplexityLimitRule(1000)],\n  plugins: [ApolloServerPluginLandingPageDisabled()],\n});\n```\n9. Monitor anomalous queries, complexity spikes, and ID enumeration patterns.",
+    "notableCves": []
   },
   "host_header_injection": {
     "title": "Host Header Injection",
@@ -557,7 +563,8 @@
         "/admin"
       ]
     },
-    "recommendation": "1. Validate the `Host` header against an allowlist of canonical domains; reject unknown hosts with HTTP 400.\n2. Do not trust `X-Forwarded-Host`/`X-Forwarded-Server` for URL construction; use static configuration (`app.base-url`) or the validated host.\n3. Configure the reverse proxy to overwrite forwarding headers and not pass client-supplied values.\n4. Generate absolute URLs from trusted configuration, not from the request.\n5. For password resets, use single-use, short-lived tokens bound to the user; validate the host in the reset link.\n6. Apply `Vary` and cache keys that include the canonical host; do not cache responses with a reflected Host.\n7. Disable routing by `X-Original-URL`/`X-Rewrite-URL` at the edge.\n8. Nginx example:\n```nginx\nserver {\n    listen 443 ssl;\n    server_name alvo.com www.alvo.com;\n    if ($host !~ ^(alvo\\.com|www\\.alvo\\.com)$) { return 444; }\n    proxy_set_header Host $host;\n    proxy_set_header X-Forwarded-Host \"\";\n}\n```\n9. Java/Spring example:\n```java\nprivate static final Set<String> ALLOWED = Set.of(\"alvo.com\", \"www.alvo.com\");\n\n@Component\npublic class HostFilter extends OncePerRequestFilter {\n    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)\n            throws IOException, ServletException {\n        String host = req.getServerName();\n        if (!ALLOWED.contains(host)) { res.sendError(400); return; }\n        chain.doFilter(req, res);\n    }\n}\n```\n10. Monitor anomalous hosts, reset attempts with external Host values, and spikes in invalid tokens."
+    "recommendation": "1. Validate the `Host` header against an allowlist of canonical domains; reject unknown hosts with HTTP 400.\n2. Do not trust `X-Forwarded-Host`/`X-Forwarded-Server` for URL construction; use static configuration (`app.base-url`) or the validated host.\n3. Configure the reverse proxy to overwrite forwarding headers and not pass client-supplied values.\n4. Generate absolute URLs from trusted configuration, not from the request.\n5. For password resets, use single-use, short-lived tokens bound to the user; validate the host in the reset link.\n6. Apply `Vary` and cache keys that include the canonical host; do not cache responses with a reflected Host.\n7. Disable routing by `X-Original-URL`/`X-Rewrite-URL` at the edge.\n8. Nginx example:\n```nginx\nserver {\n    listen 443 ssl;\n    server_name alvo.com www.alvo.com;\n    if ($host !~ ^(alvo\\.com|www\\.alvo\\.com)$) { return 444; }\n    proxy_set_header Host $host;\n    proxy_set_header X-Forwarded-Host \"\";\n}\n```\n9. Java/Spring example:\n```java\nprivate static final Set<String> ALLOWED = Set.of(\"alvo.com\", \"www.alvo.com\");\n\n@Component\npublic class HostFilter extends OncePerRequestFilter {\n    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)\n            throws IOException, ServletException {\n        String host = req.getServerName();\n        if (!ALLOWED.contains(host)) { res.sendError(400); return; }\n        chain.doFilter(req, res);\n    }\n}\n```\n10. Monitor anomalous hosts, reset attempts with external Host values, and spikes in invalid tokens.",
+    "notableCves": []
   },
   "hsts_missing": {
     "title": "Missing HTTP Strict Transport Security",
@@ -604,7 +611,8 @@
         "/checkout"
       ]
     },
-    "recommendation": "1. Send HSTS on all HTTPS responses:\n```http\nStrict-Transport-Security: max-age=31536000; includeSubDomains; preload\n```\n2. Redirect all HTTP traffic to HTTPS with a 301 before serving any content:\n```nginx\nserver {\n    listen 80;\n    server_name alvo.com www.alvo.com;\n    return 301 https://$host$request_uri;\n}\n```\n3. Ensure all subdomains support HTTPS before enabling `includeSubDomains`.\n4. Mark session cookies as `Secure`, `HttpOnly`, and `SameSite=Lax` or `Strict`.\n5. Remove mixed content (HTTP resources loaded within HTTPS pages) and only enable HSTS after validating the full certificate chain.\n6. Submit the domain to the HSTS Preload List after meeting all requirements; maintain the header long-term.\n7. Do not trust client-supplied `X-Forwarded-Proto` to decide whether to emit HSTS; configure the proxy to normalize the value.\n8. Monitor for HSTS header regression and cookie flag compliance in CI."
+    "recommendation": "1. Send HSTS on all HTTPS responses:\n```http\nStrict-Transport-Security: max-age=31536000; includeSubDomains; preload\n```\n2. Redirect all HTTP traffic to HTTPS with a 301 before serving any content:\n```nginx\nserver {\n    listen 80;\n    server_name alvo.com www.alvo.com;\n    return 301 https://$host$request_uri;\n}\n```\n3. Ensure all subdomains support HTTPS before enabling `includeSubDomains`.\n4. Mark session cookies as `Secure`, `HttpOnly`, and `SameSite=Lax` or `Strict`.\n5. Remove mixed content (HTTP resources loaded within HTTPS pages) and only enable HSTS after validating the full certificate chain.\n6. Submit the domain to the HSTS Preload List after meeting all requirements; maintain the header long-term.\n7. Do not trust client-supplied `X-Forwarded-Proto` to decide whether to emit HSTS; configure the proxy to normalize the value.\n8. Monitor for HSTS header regression and cookie flag compliance in CI.",
+    "notableCves": []
   },
   "idor": {
     "title": "Insecure Direct Object Reference",
@@ -692,7 +700,8 @@
         "/graphql"
       ]
     },
-    "recommendation": "1. Enforce authorization on every object access on the server side, verifying `owner_id` / `tenant_id` against the authenticated user. Do not rely on opaque IDs or frontend checks.\n2. Apply deny-by-default: if the user does not have explicit permission, return 404 or 403.\n3. Centralize authorization checks in a policy engine and cover all methods and formats (REST, GraphQL, mobile).\n4. Use opaque, random identifiers (UUIDv4/ULID) to reduce enumeration; still validate ownership regardless.\n5. In GraphQL, enforce authorization in every resolver and on `node(id:)` queries; do not expose administrative fields.\n6. Protect export and download endpoints with ownership checks and short-lived signed URLs.\n7. Audit access patterns and alert on enumeration indicators (high 403/404 rates, sequential ID scanning).\n8. Spring example:\n```java\n@GetMapping(\"/api/invoices/{id}\")\npublic Invoice getInvoice(@PathVariable Long id, @AuthenticationPrincipal User user) {\n    Invoice invoice = repo.findById(id).orElseThrow(NotFoundException::new);\n    if (!invoice.getOwnerId().equals(user.getId()) && !user.hasRole(\"ADMIN\")) {\n        throw new AccessDeniedException(\"forbidden\");\n    }\n    return invoice;\n}\n```\n9. Write automated tests that attempt to access resources belonging to another user across all HTTP methods."
+    "recommendation": "1. Enforce authorization on every object access on the server side, verifying `owner_id` / `tenant_id` against the authenticated user. Do not rely on opaque IDs or frontend checks.\n2. Apply deny-by-default: if the user does not have explicit permission, return 404 or 403.\n3. Centralize authorization checks in a policy engine and cover all methods and formats (REST, GraphQL, mobile).\n4. Use opaque, random identifiers (UUIDv4/ULID) to reduce enumeration; still validate ownership regardless.\n5. In GraphQL, enforce authorization in every resolver and on `node(id:)` queries; do not expose administrative fields.\n6. Protect export and download endpoints with ownership checks and short-lived signed URLs.\n7. Audit access patterns and alert on enumeration indicators (high 403/404 rates, sequential ID scanning).\n8. Spring example:\n```java\n@GetMapping(\"/api/invoices/{id}\")\npublic Invoice getInvoice(@PathVariable Long id, @AuthenticationPrincipal User user) {\n    Invoice invoice = repo.findById(id).orElseThrow(NotFoundException::new);\n    if (!invoice.getOwnerId().equals(user.getId()) && !user.hasRole(\"ADMIN\")) {\n        throw new AccessDeniedException(\"forbidden\");\n    }\n    return invoice;\n}\n```\n9. Write automated tests that attempt to access resources belonging to another user across all HTTP methods.",
+    "notableCves": []
   },
   "infrastructure_exposure": {
     "title": "Exposed Infrastructure Service",
@@ -748,7 +757,8 @@
       "parameters": [],
       "paths": []
     },
-    "recommendation": "1. Close infrastructure ports to the internet; use VPN, bastion hosts, or private link for access.\n2. Bind services to `127.0.0.1` or the internal network and enforce security groups and firewall rules with least-privilege access.\n3. Require strong authentication and TLS on all management services; disable default credentials.\n4. Redis: set a strong `requirepass`, enable `protected-mode yes`, bind to internal interfaces, and rename or disable dangerous commands (`CONFIG`, `FLUSHALL`, `EVAL`).\n5. Docker API: use mutual TLS, never expose port 2375; restrict access to the local socket.\n6. Elasticsearch/Kibana: enable Security features, RBAC, and TLS; do not expose indices publicly.\n7. Databases: enforce strong authentication, TLS, no remote `root` user, audit logging, and secure backups.\n8. Update all services and remove legacy panels; use SSO/MFA on Portainer, Grafana, Prometheus, and Coolify.\n9. Monitor for port scans, authentication attempts, and dangerous commands; alert and block.\n10. If exposure has occurred, rotate all credentials, review logs, and assume compromise."
+    "recommendation": "1. Close infrastructure ports to the internet; use VPN, bastion hosts, or private link for access.\n2. Bind services to `127.0.0.1` or the internal network and enforce security groups and firewall rules with least-privilege access.\n3. Require strong authentication and TLS on all management services; disable default credentials.\n4. Redis: set a strong `requirepass`, enable `protected-mode yes`, bind to internal interfaces, and rename or disable dangerous commands (`CONFIG`, `FLUSHALL`, `EVAL`).\n5. Docker API: use mutual TLS, never expose port 2375; restrict access to the local socket.\n6. Elasticsearch/Kibana: enable Security features, RBAC, and TLS; do not expose indices publicly.\n7. Databases: enforce strong authentication, TLS, no remote `root` user, audit logging, and secure backups.\n8. Update all services and remove legacy panels; use SSO/MFA on Portainer, Grafana, Prometheus, and Coolify.\n9. Monitor for port scans, authentication attempts, and dangerous commands; alert and block.\n10. If exposure has occurred, rotate all credentials, review logs, and assume compromise.",
+    "notableCves": []
   },
   "jwt_signature_bypass": {
     "title": "JWT Signature and Algorithm Bypass",
@@ -824,7 +834,100 @@
         "/graphql"
       ]
     },
-    "recommendation": "1. Pin the expected algorithm per endpoint; never trust the token's `alg` claim. Explicitly reject `none`.\n2. Use mature, up-to-date libraries (jjwt, Nimbus JOSE+JWT, Spring Security OAuth2 Resource Server) and validate `iss`, `aud`, `exp`, `nbf`, `iat`, `sub`.\n3. For RS256/ES256, validate the signature with a fixed public key or a trusted JWKS by issuer; block client-controlled `jwk`, `jku`, `x5u`.\n4. Sanitize `kid` with an allowlist of known key IDs; never use `kid` in SQL, shell commands, or file paths without validation.\n5. Use HMAC secrets of at least 256 bits, stored in a KMS or Secret Manager, with regular rotation.\n6. Prefer asymmetric algorithms (ES256/EdDSA) for inter-service tokens and validate `typ`/`cty`.\n7. Implement revocation (denylist/`jti`), key rotation with `kid`, and short lifetimes for access tokens.\n8. Spring Security example:\n```java\n@Bean\nJwtDecoder jwtDecoder() {\n    NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(publicKey).build();\n    OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(\"https://issuer\");\n    decoder.setJwtValidator(withIssuer);\n    return decoder;\n}\n```\n9. Add regression tests that reject `alg:none`, HS256 with a public key, external `jku`, and invalid `kid`."
+    "recommendation": "1. Pin the expected algorithm per endpoint; never trust the token's `alg` claim. Explicitly reject `none`.\n2. Use mature, up-to-date libraries (jjwt, Nimbus JOSE+JWT, Spring Security OAuth2 Resource Server) and validate `iss`, `aud`, `exp`, `nbf`, `iat`, `sub`.\n3. For RS256/ES256, validate the signature with a fixed public key or a trusted JWKS by issuer; block client-controlled `jwk`, `jku`, `x5u`.\n4. Sanitize `kid` with an allowlist of known key IDs; never use `kid` in SQL, shell commands, or file paths without validation.\n5. Use HMAC secrets of at least 256 bits, stored in a KMS or Secret Manager, with regular rotation.\n6. Prefer asymmetric algorithms (ES256/EdDSA) for inter-service tokens and validate `typ`/`cty`.\n7. Implement revocation (denylist/`jti`), key rotation with `kid`, and short lifetimes for access tokens.\n8. Spring Security example:\n```java\n@Bean\nJwtDecoder jwtDecoder() {\n    NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(publicKey).build();\n    OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(\"https://issuer\");\n    decoder.setJwtValidator(withIssuer);\n    return decoder;\n}\n```\n9. Add regression tests that reject `alg:none`, HS256 with a public key, external `jku`, and invalid `kid`.",
+    "notableCves": [
+      {
+        "cve": "CVE-2018-0114",
+        "product": "Cisco node-jose",
+        "year": 2018,
+        "description": "Atacante re-assina tokens usando chave embarcada no proprio token",
+        "type": "JWK Injection"
+      },
+      {
+        "cve": "CVE-2018-1000539",
+        "product": "Nov json-jwt (Ruby)",
+        "year": 2018,
+        "description": "Verificacao incorreta de assinatura em AES-GCM JWE",
+        "type": "Signature Bypass"
+      },
+      {
+        "cve": "CVE-2019-7644",
+        "product": "Auth0 WCF-Service-JWT",
+        "year": 2019,
+        "description": "Assinatura esperada vazada em mensagem de erro",
+        "type": "Signature Disclosure"
+      },
+      {
+        "cve": "CVE-2019-20933",
+        "product": "InfluxDB",
+        "year": 2020,
+        "description": "Bypass de autenticacao via SharedSecret vazio no JWT",
+        "type": "Empty Secret"
+      },
+      {
+        "cve": "CVE-2020-15084",
+        "product": "Auth0 express-jwt",
+        "year": 2020,
+        "description": "Campo algorithms nao enforced -- fallback para none",
+        "type": "alg:none Bypass"
+      },
+      {
+        "cve": "CVE-2020-28042",
+        "product": "ServiceStack",
+        "year": 2020,
+        "description": "Verificacao de assinatura aceita tokens com signature de tamanho zero",
+        "type": "Null Signature"
+      },
+      {
+        "cve": "CVE-2021-46743",
+        "product": "Firebase PHP-JWT",
+        "year": 2022,
+        "description": "Confusao de algoritmo RS256/HS256 via kid em key ring misto",
+        "type": "Algorithm Confusion"
+      },
+      {
+        "cve": "CVE-2022-21449",
+        "product": "Oracle Java SE 17/18",
+        "year": 2022,
+        "description": "\"Psychic Signatures\" -- ECDSA aceita assinatura (0,0) como valida",
+        "type": "ECDSA Bypass"
+      },
+      {
+        "cve": "CVE-2022-23540",
+        "product": "Auth0 jsonwebtoken",
+        "year": 2022,
+        "description": "jwt.verify() sem algoritmo definido faz fallback para none",
+        "type": "alg:none Bypass"
+      },
+      {
+        "cve": "CVE-2022-39227",
+        "product": "python-jwt",
+        "year": 2022,
+        "description": "Spoofing de identidade por manipulacao de claims verificados",
+        "type": "Token Forgery"
+      },
+      {
+        "cve": "CVE-2024-21664",
+        "product": "lestrrat-go/jwx",
+        "year": 2024,
+        "description": "Campo signature presente em payload JSON causa parsing incorreto",
+        "type": "Signature Bypass"
+      },
+      {
+        "cve": "CVE-2024-37568",
+        "product": "Authlib (Python)",
+        "year": 2024,
+        "description": "Confusao de algoritmo -- HMAC verificado com chave publica assimetrica",
+        "type": "Algorithm Confusion"
+      },
+      {
+        "cve": "CVE-2024-54150",
+        "product": "xmidt-org cjwt (C)",
+        "year": 2024,
+        "description": "Confusao de tipo de assinatura permite bypass completo",
+        "type": "Algorithm Confusion"
+      }
+    ]
   },
   "lfi": {
     "title": "Local File Inclusion / Path Traversal",
@@ -923,7 +1026,72 @@
         "/render"
       ]
     },
-    "recommendation": "1. Do not use user input directly in file paths. Map IDs or keys to files using a server-side allowlist.\n2. Canonicalize the path (`realpath`, `Path.toRealPath`) and verify it remains within the base directory.\n3. Reject `..`, alternative path separators, null bytes, and control characters after decoding.\n4. Use an allowlist of permitted extensions and filenames; never allow absolute paths.\n5. Disable dangerous wrappers (`allow_url_include=Off`, `expect` disabled) and restrict `open_basedir` in PHP.\n6. Run the file-serving process in a sandbox or chroot with a read-only filesystem and no access to secrets.\n7. Serve downloads via signed URLs and object storage rather than direct path access.\n8. Java example:\n```java\nPath base = Path.of(\"/srv/app/files\").toRealPath();\nPath requested = base.resolve(userInput).normalize().toRealPath();\nif (!requested.startsWith(base)) throw new SecurityException(\"path traversal\");\nif (!Files.isRegularFile(requested)) throw new NotFoundException();\n```\n9. Monitor for `../`, `%2e%2e`, wrapper schemes, and access attempts to `/etc/passwd`; alert on detection."
+    "recommendation": "1. Do not use user input directly in file paths. Map IDs or keys to files using a server-side allowlist.\n2. Canonicalize the path (`realpath`, `Path.toRealPath`) and verify it remains within the base directory.\n3. Reject `..`, alternative path separators, null bytes, and control characters after decoding.\n4. Use an allowlist of permitted extensions and filenames; never allow absolute paths.\n5. Disable dangerous wrappers (`allow_url_include=Off`, `expect` disabled) and restrict `open_basedir` in PHP.\n6. Run the file-serving process in a sandbox or chroot with a read-only filesystem and no access to secrets.\n7. Serve downloads via signed URLs and object storage rather than direct path access.\n8. Java example:\n```java\nPath base = Path.of(\"/srv/app/files\").toRealPath();\nPath requested = base.resolve(userInput).normalize().toRealPath();\nif (!requested.startsWith(base)) throw new SecurityException(\"path traversal\");\nif (!Files.isRegularFile(requested)) throw new NotFoundException();\n```\n9. Monitor for `../`, `%2e%2e`, wrapper schemes, and access attempts to `/etc/passwd`; alert on detection.",
+    "notableCves": [
+      {
+        "cve": "CVE-2019-19781",
+        "product": "Citrix ADC/Gateway",
+        "year": 2019,
+        "description": "Path traversal sem autenticacao -- leitura de config e RCE via template injection encadeado",
+        "type": "Path traversal + RCE"
+      },
+      {
+        "cve": "CVE-2020-5410",
+        "product": "Spring Cloud Config",
+        "year": 2020,
+        "description": "Path traversal via symlink permite leitura de arquivos arbitrarios do servidor",
+        "type": "Path traversal"
+      },
+      {
+        "cve": "CVE-2021-21972",
+        "product": "VMware vCenter",
+        "year": 2021,
+        "description": "Path traversal + upload no plugin vSphere Client -- RCE pre-auth",
+        "type": "Upload + path traversal"
+      },
+      {
+        "cve": "CVE-2021-41773",
+        "product": "Apache HTTP Server 2.4.49",
+        "year": 2021,
+        "description": "Normalizacao de path quebrada permite directory traversal com %2e -- leitura de arquivo e CGI RCE",
+        "type": "Path traversal"
+      },
+      {
+        "cve": "CVE-2021-42013",
+        "product": "Apache HTTP Server 2.4.50",
+        "year": 2021,
+        "description": "Bypass do fix de CVE-2021-41773 com double-encoding (%%32%65) -- mesma exploracao",
+        "type": "Double-encoding bypass"
+      },
+      {
+        "cve": "CVE-2023-25690",
+        "product": "Apache HTTP Server",
+        "year": 2023,
+        "description": "Request smuggling via mod_proxy com RewriteRule -- manipulacao de path interno",
+        "type": "Smuggling + path traversal"
+      },
+      {
+        "cve": "CVE-2024-4577",
+        "product": "PHP (Windows CGI)",
+        "year": 2024,
+        "description": "Arg injection em PHP-CGI via Best-Fit encoding no Windows -- leitura de arquivo e RCE",
+        "type": "Arg injection + file read"
+      },
+      {
+        "cve": "CVE-2024-21887",
+        "product": "Ivanti Connect Secure",
+        "year": 2024,
+        "description": "Command injection em componente web -- encadeado com auth bypass para RCE pre-auth",
+        "type": "Command injection"
+      },
+      {
+        "cve": "CVE-2024-23897",
+        "product": "Jenkins CLI",
+        "year": 2024,
+        "description": "Leitura arbitraria de arquivo via parser de argumentos com '@' -- expandsAtFiles",
+        "type": "File read via CLI"
+      }
+    ]
   },
   "mass_assignment": {
     "title": "Mass Assignment",
@@ -1007,7 +1175,8 @@
         "/graphql"
       ]
     },
-    "recommendation": "1. Use operation-specific DTOs (Create/Update) with an explicit field allowlist; never bind the domain entity directly to the request body.\n2. In Spring, use `@JsonIgnoreProperties(ignoreUnknown = false)` or `FAIL_ON_UNKNOWN_PROPERTIES` to reject unknown fields; avoid `@ModelAttribute` on entities.\n```java\npublic record UpdateUserRequest(\n    @NotBlank String name,\n    @Email String email\n) {}\n```\n3. In Rails, use strong parameters (`params.require(:user).permit(:name, :email)`); in Node, validate with Zod/Joi and build the object field by field; in Laravel, use a restrictive `$fillable`.\n4. Never allow the client to set `role`, `isAdmin`, `permissions`, `ownerId`, `tenantId`, `balance`, or `status`; these fields must be derived server-side.\n5. Apply authorization and business rules on the server, regardless of what the client sends.\n6. Reject unknown properties and return HTTP 400; do not silently ignore them.\n7. Audit sensitive changes and alert on role/owner modifications outside the administrative workflow.\n8. Cover all creation/update endpoints with tests that submit extra fields."
+    "recommendation": "1. Use operation-specific DTOs (Create/Update) with an explicit field allowlist; never bind the domain entity directly to the request body.\n2. In Spring, use `@JsonIgnoreProperties(ignoreUnknown = false)` or `FAIL_ON_UNKNOWN_PROPERTIES` to reject unknown fields; avoid `@ModelAttribute` on entities.\n```java\npublic record UpdateUserRequest(\n    @NotBlank String name,\n    @Email String email\n) {}\n```\n3. In Rails, use strong parameters (`params.require(:user).permit(:name, :email)`); in Node, validate with Zod/Joi and build the object field by field; in Laravel, use a restrictive `$fillable`.\n4. Never allow the client to set `role`, `isAdmin`, `permissions`, `ownerId`, `tenantId`, `balance`, or `status`; these fields must be derived server-side.\n5. Apply authorization and business rules on the server, regardless of what the client sends.\n6. Reject unknown properties and return HTTP 400; do not silently ignore them.\n7. Audit sensitive changes and alert on role/owner modifications outside the administrative workflow.\n8. Cover all creation/update endpoints with tests that submit extra fields.",
+    "notableCves": []
   },
   "oauth_misconfiguration": {
     "title": "OAuth 2.0 / OIDC Misconfiguration",
@@ -1082,7 +1251,8 @@
         "/callback"
       ]
     },
-    "recommendation": "1. Require a cryptographically random `state` parameter, bound to the session and single-use; reject requests without `state`.\n2. Validate `redirect_uri` by exact match against a registered allowlist; do not use prefix, regex, or wildcard matching. Normalize and reject userinfo, fragments, and path traversal.\n3. Require PKCE (`S256`) for public clients and, ideally, for all clients; bind the authorization code to the `client_id` and `code_verifier`.\n4. Disable the implicit flow and client credentials in browsers; use authorization code + PKCE.\n5. Validate `iss`, `aud`, `azp`, `nonce`, `exp`, `iat`, and the ID token signature with the correct issuer's JWKS.\n6. Do not place tokens in query strings; use fragments only in legacy flows and never log tokens.\n7. Apply minimal scopes and explicit consent; validate scopes at the resource server, not only in the token.\n8. Require a verified email before linking social accounts; implement confirmation to prevent pre-account takeover.\n9. Rotate refresh tokens, enable revocation, and detect token reuse.\n10. Redirect validation example:\n```java\nSet<String> allowed = Set.of(\"https://app.alvo.com/callback\", \"https://admin.alvo.com/callback\");\nURI uri = URI.create(redirectUri);\nif (!allowed.contains(uri.toString()) || uri.getUserInfo() != null || uri.getFragment() != null) {\n    throw new OAuth2AuthenticationException(\"invalid_redirect_uri\");\n}\n```"
+    "recommendation": "1. Require a cryptographically random `state` parameter, bound to the session and single-use; reject requests without `state`.\n2. Validate `redirect_uri` by exact match against a registered allowlist; do not use prefix, regex, or wildcard matching. Normalize and reject userinfo, fragments, and path traversal.\n3. Require PKCE (`S256`) for public clients and, ideally, for all clients; bind the authorization code to the `client_id` and `code_verifier`.\n4. Disable the implicit flow and client credentials in browsers; use authorization code + PKCE.\n5. Validate `iss`, `aud`, `azp`, `nonce`, `exp`, `iat`, and the ID token signature with the correct issuer's JWKS.\n6. Do not place tokens in query strings; use fragments only in legacy flows and never log tokens.\n7. Apply minimal scopes and explicit consent; validate scopes at the resource server, not only in the token.\n8. Require a verified email before linking social accounts; implement confirmation to prevent pre-account takeover.\n9. Rotate refresh tokens, enable revocation, and detect token reuse.\n10. Redirect validation example:\n```java\nSet<String> allowed = Set.of(\"https://app.alvo.com/callback\", \"https://admin.alvo.com/callback\");\nURI uri = URI.create(redirectUri);\nif (!allowed.contains(uri.toString()) || uri.getUserInfo() != null || uri.getFragment() != null) {\n    throw new OAuth2AuthenticationException(\"invalid_redirect_uri\");\n}\n```",
+    "notableCves": []
   },
   "open_redirect": {
     "title": "Open Redirect",
@@ -1185,7 +1355,8 @@
         "/payment/return"
       ]
     },
-    "recommendation": "1. Do not accept arbitrary URLs. Use an allowlist of exact destinations or a server-side key map (`?next=dashboard`, `?next=billing`).\n2. If accepting a URL is unavoidable, parse it with a URL library, require the `https` scheme, validate the host against an exact allowlist, and reject userinfo, fragments, and unexpected ports.\n3. Prefer internal relative paths and validate that they start with `/` and not with `//` or `/\\`.\n4. Block `javascript:`, `data:`, `vbscript:`, and non-HTTP(S) schemes.\n5. Do not rely on `Referer` for destination decisions; validate the parameter explicitly.\n6. In OAuth flows, validate `redirect_uri` by exact match and do not allow an internal open redirect on the callback endpoint.\n7. Add an interstitial warning page (\"You are leaving example.com\") for legitimate external destinations.\n8. Java example:\n```java\nprivate static final Set<String> ALLOWED_HOSTS = Set.of(\"app.alvo.com\", \"www.alvo.com\");\n\npublic String safeRedirect(String raw) {\n    URI uri = URI.create(raw);\n    if (uri.getUserInfo() != null || uri.getFragment() != null) throw new IllegalArgumentException();\n    if (!\"https\".equalsIgnoreCase(uri.getScheme())) throw new IllegalArgumentException();\n    if (!ALLOWED_HOSTS.contains(uri.getHost())) throw new IllegalArgumentException();\n    return uri.toString();\n}\n```\n9. Cover the flow with tests that attempt `//evil.com`, `%2f%2f`, `@`, backslash, and double encoding bypasses."
+    "recommendation": "1. Do not accept arbitrary URLs. Use an allowlist of exact destinations or a server-side key map (`?next=dashboard`, `?next=billing`).\n2. If accepting a URL is unavoidable, parse it with a URL library, require the `https` scheme, validate the host against an exact allowlist, and reject userinfo, fragments, and unexpected ports.\n3. Prefer internal relative paths and validate that they start with `/` and not with `//` or `/\\`.\n4. Block `javascript:`, `data:`, `vbscript:`, and non-HTTP(S) schemes.\n5. Do not rely on `Referer` for destination decisions; validate the parameter explicitly.\n6. In OAuth flows, validate `redirect_uri` by exact match and do not allow an internal open redirect on the callback endpoint.\n7. Add an interstitial warning page (\"You are leaving example.com\") for legitimate external destinations.\n8. Java example:\n```java\nprivate static final Set<String> ALLOWED_HOSTS = Set.of(\"app.alvo.com\", \"www.alvo.com\");\n\npublic String safeRedirect(String raw) {\n    URI uri = URI.create(raw);\n    if (uri.getUserInfo() != null || uri.getFragment() != null) throw new IllegalArgumentException();\n    if (!\"https\".equalsIgnoreCase(uri.getScheme())) throw new IllegalArgumentException();\n    if (!ALLOWED_HOSTS.contains(uri.getHost())) throw new IllegalArgumentException();\n    return uri.toString();\n}\n```\n9. Cover the flow with tests that attempt `//evil.com`, `%2f%2f`, `@`, backslash, and double encoding bypasses.",
+    "notableCves": []
   },
   "post_quantum_readiness": {
     "title": "Post-Quantum Cryptography Readiness Gap",
@@ -1224,7 +1395,8 @@
         "/metrics"
       ]
     },
-    "recommendation": "1. Enable TLS 1.3 and the hybrid group `X25519MLKEM768` (or `SecP256r1MLKEM768`) on TLS terminators, load balancers, CDN, and API gateways.\n2. Update OpenSSL/BoringSSL/AWS-LC and the Java runtime; validate interoperability with clients before making the hybrid group preferred.\n3. Create a cryptographic inventory (algorithms, libraries, certificates, protocols) and a cryptographic agility plan.\n4. Prioritize long-lived data: backups, archives, healthcare, financial, and infrastructure secrets.\n5. Plan migration of signatures to ML-DSA (FIPS 204) and SLH-DSA (FIPS 205) for certificates, firmware, and code signing.\n6. Do not remove classical algorithms prematurely: use hybrid mode during the transition.\n7. Monitor client support and fallback behavior; measure the hybrid negotiation rate before enforcing the group.\n\nExample Nginx/OpenSSL (when supported):\n```nginx\nssl_protocols TLSv1.3 TLSv1.2;\nssl_conf_command Groups X25519MLKEM768:X25519:P-256;\n```\n\nExample Java 27 (JEP 496/497, subject to build availability):\n```java\nKeyPairGenerator kpg = KeyPairGenerator.getInstance(\"ML-KEM\");\nkpg.initialize(MLKEMParameterSpec.ML_KEM_768);\nKeyPair kp = kpg.generateKeyPair();\n```"
+    "recommendation": "1. Enable TLS 1.3 and the hybrid group `X25519MLKEM768` (or `SecP256r1MLKEM768`) on TLS terminators, load balancers, CDN, and API gateways.\n2. Update OpenSSL/BoringSSL/AWS-LC and the Java runtime; validate interoperability with clients before making the hybrid group preferred.\n3. Create a cryptographic inventory (algorithms, libraries, certificates, protocols) and a cryptographic agility plan.\n4. Prioritize long-lived data: backups, archives, healthcare, financial, and infrastructure secrets.\n5. Plan migration of signatures to ML-DSA (FIPS 204) and SLH-DSA (FIPS 205) for certificates, firmware, and code signing.\n6. Do not remove classical algorithms prematurely: use hybrid mode during the transition.\n7. Monitor client support and fallback behavior; measure the hybrid negotiation rate before enforcing the group.\n\nExample Nginx/OpenSSL (when supported):\n```nginx\nssl_protocols TLSv1.3 TLSv1.2;\nssl_conf_command Groups X25519MLKEM768:X25519:P-256;\n```\n\nExample Java 27 (JEP 496/497, subject to build availability):\n```java\nKeyPairGenerator kpg = KeyPairGenerator.getInstance(\"ML-KEM\");\nkpg.initialize(MLKEMParameterSpec.ML_KEM_768);\nKeyPair kp = kpg.generateKeyPair();\n```",
+    "notableCves": []
   },
   "request_smuggling": {
     "title": "HTTP Request Smuggling",
@@ -1315,7 +1487,8 @@
         "/admin"
       ]
     },
-    "recommendation": "1. Use HTTP/2 end-to-end and reject ambiguous downgrades; if H2-to-H1 translation is necessary, normalize headers strictly.\n2. Reject requests that contain both `Content-Length` and `Transfer-Encoding`, or that include duplicate or obfuscated TE headers.\n3. Configure the front-end proxy and back-end server to use the same HTTP parser and version; never rely on divergent libraries.\n4. Disable connection reuse between different users when in doubt; use isolated per-request connections.\n5. Apply size limits, timeouts, and chunk count limits; reject unknown chunk extensions.\n6. Update CDN, reverse proxy, web server, and framework — many smuggling variants are patched in recent releases.\n7. Block anomalous methods and headers at the WAF as a defense-in-depth measure, without depending on it.\n8. Monitor for 400/501 responses, abnormal queues, and requests with obfuscated TE; alert on spikes.\n9. Example Nginx configuration:\n```nginx\n# Reject TE + CL and duplicate TE\nif ($http_transfer_encoding ~* \"chunked\") { set $te 1; }\nif ($http_content_length != \"\") { set $cl 1; }\nif ($te$cl = \"11\") { return 400; }\n```\n10. Validate the fix with regression tests using Burp Smuggler and queue monitoring."
+    "recommendation": "1. Use HTTP/2 end-to-end and reject ambiguous downgrades; if H2-to-H1 translation is necessary, normalize headers strictly.\n2. Reject requests that contain both `Content-Length` and `Transfer-Encoding`, or that include duplicate or obfuscated TE headers.\n3. Configure the front-end proxy and back-end server to use the same HTTP parser and version; never rely on divergent libraries.\n4. Disable connection reuse between different users when in doubt; use isolated per-request connections.\n5. Apply size limits, timeouts, and chunk count limits; reject unknown chunk extensions.\n6. Update CDN, reverse proxy, web server, and framework — many smuggling variants are patched in recent releases.\n7. Block anomalous methods and headers at the WAF as a defense-in-depth measure, without depending on it.\n8. Monitor for 400/501 responses, abnormal queues, and requests with obfuscated TE; alert on spikes.\n9. Example Nginx configuration:\n```nginx\n# Reject TE + CL and duplicate TE\nif ($http_transfer_encoding ~* \"chunked\") { set $te 1; }\nif ($http_content_length != \"\") { set $cl 1; }\nif ($te$cl = \"11\") { return 400; }\n```\n10. Validate the fix with regression tests using Burp Smuggler and queue monitoring.",
+    "notableCves": []
   },
   "security_headers_missing": {
     "title": "Missing Security Headers",
@@ -1366,7 +1539,8 @@
         "/graphql"
       ]
     },
-    "recommendation": "1. Define a restrictive CSP based on nonces or hashes, without `unsafe-inline` or `unsafe-eval` in production. Example:\n```nginx\nadd_header Content-Security-Policy \"default-src 'self'; script-src 'self' 'nonce-$request_id'; style-src 'self' 'nonce-$request_id'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'\" always;\n```\n2. Apply HSTS on all HTTPS responses: `max-age=31536000; includeSubDomains; preload`.\n3. Send `X-Content-Type-Options: nosniff` and a correct `Content-Type` on all uploads; force `Content-Disposition: attachment` for untrusted files.\n4. Use `frame-ancestors 'none'` (CSP) and `X-Frame-Options: DENY` as a fallback.\n5. Set `Referrer-Policy: strict-origin-when-cross-origin` or `no-referrer` on flows that include tokens in the URL.\n6. Restrict sensitive browser APIs with `Permissions-Policy` and isolate origins with COOP/CORP/COEP where applicable.\n7. Apply headers framework-wide, not just on individual routes. In Spring Security:\n```java\nhttp.headers(headers -> headers\n    .contentSecurityPolicy(csp -> csp.policyDirectives(\n        \"default-src 'self'; script-src 'self' 'nonce-{nonce}'; frame-ancestors 'none'; object-src 'none'\"))\n    .httpStrictTransportSecurity(hsts -> hsts\n        .includeSubDomains(true).maxAgeInSeconds(31536000).preload(true))\n    .contentTypeOptions(Customizer.withDefaults())\n    .frameOptions(frame -> frame.deny())\n    .referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)));\n```\n8. Validate header policies in CI with automated header tests and review allowlists periodically."
+    "recommendation": "1. Define a restrictive CSP based on nonces or hashes, without `unsafe-inline` or `unsafe-eval` in production. Example:\n```nginx\nadd_header Content-Security-Policy \"default-src 'self'; script-src 'self' 'nonce-$request_id'; style-src 'self' 'nonce-$request_id'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'\" always;\n```\n2. Apply HSTS on all HTTPS responses: `max-age=31536000; includeSubDomains; preload`.\n3. Send `X-Content-Type-Options: nosniff` and a correct `Content-Type` on all uploads; force `Content-Disposition: attachment` for untrusted files.\n4. Use `frame-ancestors 'none'` (CSP) and `X-Frame-Options: DENY` as a fallback.\n5. Set `Referrer-Policy: strict-origin-when-cross-origin` or `no-referrer` on flows that include tokens in the URL.\n6. Restrict sensitive browser APIs with `Permissions-Policy` and isolate origins with COOP/CORP/COEP where applicable.\n7. Apply headers framework-wide, not just on individual routes. In Spring Security:\n```java\nhttp.headers(headers -> headers\n    .contentSecurityPolicy(csp -> csp.policyDirectives(\n        \"default-src 'self'; script-src 'self' 'nonce-{nonce}'; frame-ancestors 'none'; object-src 'none'\"))\n    .httpStrictTransportSecurity(hsts -> hsts\n        .includeSubDomains(true).maxAgeInSeconds(31536000).preload(true))\n    .contentTypeOptions(Customizer.withDefaults())\n    .frameOptions(frame -> frame.deny())\n    .referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)));\n```\n8. Validate header policies in CI with automated header tests and review allowlists periodically.",
+    "notableCves": []
   },
   "spring_actuator_exposure": {
     "title": "Spring Boot Actuator Exposure",
@@ -1444,7 +1618,8 @@
         "/trace"
       ]
     },
-    "recommendation": "1. Expose only the necessary endpoints (`health`, `info`) and disable everything else:\n```yaml\nmanagement:\n  endpoints:\n    web:\n      exposure:\n        include: health,info\n      base-path: /internal/actuator\n  endpoint:\n    env:\n      show-values: never\n    heapdump:\n      enabled: false\n    jolokia:\n      enabled: false\n    shutdown:\n      enabled: false\n```\n2. Place the Actuator on a separate management port bound to localhost or the internal network, with authentication and mTLS.\n3. Protect all endpoints with Spring Security and administrative roles; never leave them publicly accessible.\n4. Do not expose `env`, `heapdump`, `jolokia`, `threaddump`, `mappings`, `beans`, or `httptrace` in production.\n5. Mask secrets (`show-values: never`) and use a Secret Manager instead of cleartext environment variables.\n6. Block `/actuator` paths at the reverse proxy or WAF as a defense-in-depth measure.\n7. Update Spring Boot and all dependencies; older versions contain known Actuator CVEs.\n8. Monitor access to `/actuator/*` and heap dump downloads; trigger immediate alerts.\n9. If exposure has occurred, rotate all secrets that may have been present in the heap or environment."
+    "recommendation": "1. Expose only the necessary endpoints (`health`, `info`) and disable everything else:\n```yaml\nmanagement:\n  endpoints:\n    web:\n      exposure:\n        include: health,info\n      base-path: /internal/actuator\n  endpoint:\n    env:\n      show-values: never\n    heapdump:\n      enabled: false\n    jolokia:\n      enabled: false\n    shutdown:\n      enabled: false\n```\n2. Place the Actuator on a separate management port bound to localhost or the internal network, with authentication and mTLS.\n3. Protect all endpoints with Spring Security and administrative roles; never leave them publicly accessible.\n4. Do not expose `env`, `heapdump`, `jolokia`, `threaddump`, `mappings`, `beans`, or `httptrace` in production.\n5. Mask secrets (`show-values: never`) and use a Secret Manager instead of cleartext environment variables.\n6. Block `/actuator` paths at the reverse proxy or WAF as a defense-in-depth measure.\n7. Update Spring Boot and all dependencies; older versions contain known Actuator CVEs.\n8. Monitor access to `/actuator/*` and heap dump downloads; trigger immediate alerts.\n9. If exposure has occurred, rotate all secrets that may have been present in the heap or environment.",
+    "notableCves": []
   },
   "sql_injection": {
     "title": "SQL Injection",
@@ -1553,7 +1728,93 @@
         "/filter"
       ]
     },
-    "recommendation": "1. Use parameterized queries / prepared statements for all database operations, including `IN` clauses, `ORDER BY`, `LIMIT`, and reporting queries.\n```java\nPreparedStatement ps = conn.prepareStatement(\"SELECT * FROM users WHERE email = ?\");\nps.setString(1, email);\n```\n2. Never concatenate user input into SQL; avoid `createNativeQuery`, `whereRaw`, `$queryRawUnsafe`, `exec`, and ORM calls without parameter binding.\n3. For identifiers (column/table names), use a server-side allowlist of permitted values — identifiers cannot be parameterized.\n4. Apply least privilege to the database user; revoke `FILE`, `xp_cmdshell`, `COPY ... PROGRAM`, `LOAD_FILE`, and unnecessary DDL permissions.\n5. Use ORM with parameter binding and type validation; never disable escaping.\n6. Deploy a WAF as defense-in-depth, but not as the primary fix.\n7. Suppress database error details and never return stack traces to the client.\n8. Audit queries and alert on suspicious patterns (`UNION`, `SLEEP`, inline comments) and error rate spikes.\n9. Test with sqlmap in an authorized environment and add regression tests that attempt classic injection payloads."
+    "recommendation": "1. Use parameterized queries / prepared statements for all database operations, including `IN` clauses, `ORDER BY`, `LIMIT`, and reporting queries.\n```java\nPreparedStatement ps = conn.prepareStatement(\"SELECT * FROM users WHERE email = ?\");\nps.setString(1, email);\n```\n2. Never concatenate user input into SQL; avoid `createNativeQuery`, `whereRaw`, `$queryRawUnsafe`, `exec`, and ORM calls without parameter binding.\n3. For identifiers (column/table names), use a server-side allowlist of permitted values — identifiers cannot be parameterized.\n4. Apply least privilege to the database user; revoke `FILE`, `xp_cmdshell`, `COPY ... PROGRAM`, `LOAD_FILE`, and unnecessary DDL permissions.\n5. Use ORM with parameter binding and type validation; never disable escaping.\n6. Deploy a WAF as defense-in-depth, but not as the primary fix.\n7. Suppress database error details and never return stack traces to the client.\n8. Audit queries and alert on suspicious patterns (`UNION`, `SLEEP`, inline comments) and error rate spikes.\n9. Test with sqlmap in an authorized environment and add regression tests that attempt classic injection payloads.",
+    "notableCves": [
+      {
+        "cve": "CVE-2023-34362",
+        "product": "MOVEit Transfer",
+        "year": 2023,
+        "description": "SQLi em endpoint de transferencia -- explorado em massa pelo grupo Cl0p, comprometeu centenas de organizacoes",
+        "type": "Blind SQLi (pre-auth)"
+      },
+      {
+        "cve": "CVE-2023-48788",
+        "product": "Fortinet FortiClientEMS",
+        "year": 2023,
+        "description": "SQLi no servico de gerenciamento de endpoints -- permite execucao remota via DBA",
+        "type": "SQLi to RCE (pre-auth)"
+      },
+      {
+        "cve": "CVE-2020-12271",
+        "product": "Sophos XG Firewall",
+        "year": 2020,
+        "description": "SQLi em SFOS explorado in-the-wild (Asnarok campaign) -- atacantes injetaram trojan via interface de gerenciamento",
+        "type": "In-band SQLi (pre-auth)"
+      },
+      {
+        "cve": "CVE-2024-50330",
+        "product": "Ivanti Endpoint Manager",
+        "year": 2024,
+        "description": "SQLi remoto sem autenticacao no EPM -- permite comprometimento total do servidor de gerenciamento",
+        "type": "Unauth SQLi"
+      },
+      {
+        "cve": "CVE-2024-1597",
+        "product": "PostgreSQL JDBC (pgjdbc)",
+        "year": 2024,
+        "description": "SQLi no driver JDBC quando PreferQueryMode=SIMPLE -- afeta qualquer app Java usando pgjdbc com essa config",
+        "type": "Driver-level SQLi"
+      },
+      {
+        "cve": "CVE-2023-34991",
+        "product": "Fortinet FortiWLM",
+        "year": 2023,
+        "description": "SQLi no gerenciador wireless -- permite acesso nao autenticado a dados da rede",
+        "type": "Unauth SQLi"
+      },
+      {
+        "cve": "CVE-2024-45387",
+        "product": "Apache Traffic Control",
+        "year": 2024,
+        "description": "SQLi no Traffic Ops -- usuario privilegiado executa queries arbitrarias (CVSS 9.9)",
+        "type": "Auth SQLi"
+      },
+      {
+        "cve": "CVE-2023-0016",
+        "product": "SAP BPC MS 10.0",
+        "year": 2023,
+        "description": "SQLi no Business Planning and Consolidation -- execucao de queries arbitrarias por atacante nao autenticado",
+        "type": "Unauth SQLi"
+      },
+      {
+        "cve": "CVE-2023-0620",
+        "product": "HashiCorp Vault",
+        "year": 2023,
+        "description": "SQLi no backend de storage MSSQL do Vault -- permite manipulacao de secrets armazenados",
+        "type": "Config-dependent SQLi"
+      },
+      {
+        "cve": "CVE-2024-27304",
+        "product": "pgx (Go PostgreSQL driver)",
+        "year": 2024,
+        "description": "SQLi no driver pgx para Go -- single query ou bind message permite injecao (CVSS 9.8)",
+        "type": "Driver-level SQLi"
+      },
+      {
+        "cve": "CVE-2024-8275",
+        "product": "The Events Calendar (WordPress)",
+        "year": 2024,
+        "description": "SQLi via parametro 'order' -- plugin com 800k+ instalacoes ativas",
+        "type": "Unauth SQLi"
+      },
+      {
+        "cve": "CVE-2024-12727",
+        "product": "Sophos Firewall",
+        "year": 2024,
+        "description": "SQLi pre-auth no email protection feature -- permite code execution remoto",
+        "type": "SQLi to RCE (pre-auth)"
+      }
+    ]
   },
   "ssrf": {
     "title": "Server-Side Request Forgery",
@@ -1671,7 +1932,79 @@
         "/graphql"
       ]
     },
-    "recommendation": "1. Use a strict allowlist of permitted hosts, ports, and schemes; never accept arbitrary URLs.\n2. Resolve DNS on the server, validate all returned IP addresses, and block private ranges, loopback, link-local, multicast, and metadata addresses. Re-validate after every redirect.\n3. Disable automatic redirects or restrict them to the same origin/allowlist; validate each hop.\n4. Pin the resolved IP (DNS pinning) and use the validated IP for the actual connection to prevent DNS rebinding.\n5. Block non-HTTP(S) schemes (`file`, `gopher`, `dict`, `ftp`, `ldap`, `jar`) and unnecessary ports.\n6. In cloud environments, enforce IMDSv2 (token required), restrict hop limit, and apply least privilege to IAM roles.\n7. Segment the network: the service performing fetches should not be able to reach the control plane, databases, or metadata endpoints.\n8. Use an egress proxy with allowlist, authentication, and logging; inspect responses and enforce size/timeout limits.\n9. Java example:\n```java\nprivate static final Set<String> ALLOWED_HOSTS = Set.of(\"images.alvo.com\", \"cdn.alvo.com\");\n\nURI uri = URI.create(userUrl);\nif (!\"https\".equalsIgnoreCase(uri.getScheme())) throw new IllegalArgumentException();\nif (!ALLOWED_HOSTS.contains(uri.getHost())) throw new IllegalArgumentException();\nInetAddress[] addrs = InetAddress.getAllByName(uri.getHost());\nfor (InetAddress a : addrs) {\n    if (a.isLoopbackAddress() || a.isSiteLocalAddress() || a.isLinkLocalAddress()\n        || a.isAnyLocalAddress() || a.isMulticastAddress()) {\n        throw new IllegalArgumentException();\n    }\n}\nHttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();\n```\n10. Monitor outbound requests targeting metadata endpoints and private IP ranges; alert on attempts."
+    "recommendation": "1. Use a strict allowlist of permitted hosts, ports, and schemes; never accept arbitrary URLs.\n2. Resolve DNS on the server, validate all returned IP addresses, and block private ranges, loopback, link-local, multicast, and metadata addresses. Re-validate after every redirect.\n3. Disable automatic redirects or restrict them to the same origin/allowlist; validate each hop.\n4. Pin the resolved IP (DNS pinning) and use the validated IP for the actual connection to prevent DNS rebinding.\n5. Block non-HTTP(S) schemes (`file`, `gopher`, `dict`, `ftp`, `ldap`, `jar`) and unnecessary ports.\n6. In cloud environments, enforce IMDSv2 (token required), restrict hop limit, and apply least privilege to IAM roles.\n7. Segment the network: the service performing fetches should not be able to reach the control plane, databases, or metadata endpoints.\n8. Use an egress proxy with allowlist, authentication, and logging; inspect responses and enforce size/timeout limits.\n9. Java example:\n```java\nprivate static final Set<String> ALLOWED_HOSTS = Set.of(\"images.alvo.com\", \"cdn.alvo.com\");\n\nURI uri = URI.create(userUrl);\nif (!\"https\".equalsIgnoreCase(uri.getScheme())) throw new IllegalArgumentException();\nif (!ALLOWED_HOSTS.contains(uri.getHost())) throw new IllegalArgumentException();\nInetAddress[] addrs = InetAddress.getAllByName(uri.getHost());\nfor (InetAddress a : addrs) {\n    if (a.isLoopbackAddress() || a.isSiteLocalAddress() || a.isLinkLocalAddress()\n        || a.isAnyLocalAddress() || a.isMulticastAddress()) {\n        throw new IllegalArgumentException();\n    }\n}\nHttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();\n```\n10. Monitor outbound requests targeting metadata endpoints and private IP ranges; alert on attempts.",
+    "notableCves": [
+      {
+        "cve": "CVE-2021-26855",
+        "product": "Microsoft Exchange Server",
+        "year": 2021,
+        "description": "ProxyLogon -- SSRF pre-auth via endpoint /owa/auth/x.js permite acessar mailboxes arbitrarias e pivotar para RCE",
+        "type": "Pre-auth SSRF"
+      },
+      {
+        "cve": "CVE-2021-21975",
+        "product": "VMware vRealize Operations",
+        "year": 2021,
+        "description": "SSRF na API permite ator com acesso de rede ler dados internos sem autenticacao",
+        "type": "Pre-auth SSRF"
+      },
+      {
+        "cve": "CVE-2021-21973",
+        "product": "VMware vCenter Server",
+        "year": 2021,
+        "description": "SSRF via validacao impr. de URLs em plugin do vSphere Client (porta 443) -- permite scan de rede interna",
+        "type": "Pre-auth SSRF"
+      },
+      {
+        "cve": "CVE-2021-40438",
+        "product": "Apache HTTP Server (mod_proxy)",
+        "year": 2021,
+        "description": "URI crafted faz mod_proxy encaminhar request para origin server escolhido pelo atacante -- afeta <= 2.4.48",
+        "type": "Proxy SSRF"
+      },
+      {
+        "cve": "CVE-2022-22947",
+        "product": "Spring Cloud Gateway",
+        "year": 2022,
+        "description": "Code injection via Gateway Actuator endpoint exposto permite RCE e SSRF em versoes < 3.1.1+ e < 3.0.7+",
+        "type": "Actuator SSRF"
+      },
+      {
+        "cve": "CVE-2022-41040",
+        "product": "Microsoft Exchange Server",
+        "year": 2022,
+        "description": "ProxyNotShell -- SSRF autenticada combinada com CVE-2022-41082 para RCE; bypass do patch do ProxyLogon",
+        "type": "Auth SSRF + RCE"
+      },
+      {
+        "cve": "CVE-2024-21893",
+        "product": "Ivanti Connect Secure / Policy Secure",
+        "year": 2024,
+        "description": "SSRF no componente SAML permite acessar recursos restritos sem autenticacao",
+        "type": "SAML SSRF"
+      },
+      {
+        "cve": "CVE-2020-13379",
+        "product": "Grafana 3.0.1 -- 7.0.1",
+        "year": 2020,
+        "description": "SSRF na feature de avatar permite qualquer usuario nao autenticado forcar Grafana a enviar HTTP requests para URLs arbitrarias",
+        "type": "Avatar SSRF"
+      },
+      {
+        "cve": "CVE-2020-26258",
+        "product": "XStream < 1.4.15",
+        "year": 2020,
+        "description": "SSRF ativada durante unmarshalling de XML -- permite leitura de recursos internos via desserializacao",
+        "type": "Deserialization SSRF"
+      },
+      {
+        "cve": "CVE-2020-28168",
+        "product": "Axios NPM 0.21.0",
+        "year": 2020,
+        "description": "Bypass de proxy via URL que responde com redirect para host restrito -- permite SSRF client-side",
+        "type": "Redirect SSRF"
+      }
+    ]
   },
   "ssti": {
     "title": "Server-Side Template Injection",
@@ -1764,7 +2097,72 @@
         "/api/render"
       ]
     },
-    "recommendation": "1. Never concatenate user input into the template string. Pass data as template variables and enable auto-escaping.\n2. Prefer logic-less templates (Mustache) when possible; avoid engines that allow method calls and reflection.\n3. Enable the engine's sandbox mode (Jinja2 `SandboxedEnvironment`, FreeMarker `TemplateClassResolver.SAFER_RESOLVER`, Velocity `SecureUberspector`).\n4. Restrict accessible classes and methods; disable `Runtime`, `ProcessBuilder`, reflection, and dynamic class loading.\n5. Validate and constrain input; do not allow users to edit templates without administrative privilege.\n6. Execute rendering in an isolated process or container without network or filesystem access, enforced with seccomp/AppArmor.\n7. Keep template engines and libraries up to date; many exploit chains depend on known gadgets.\n8. Secure Jinja2 example:\n```python\nfrom jinja2.sandbox import SandboxedEnvironment\nenv = SandboxedEnvironment(autoescape=True)\ntemplate = env.from_string(\"Hello {{ name }}\")\nreturn template.render(name=user_input)\n```\n9. Monitor for payloads containing `{{`, `${`, `<#`, `#set`, `T(`, `Runtime`, `__class__`, `__globals__`."
+    "recommendation": "1. Never concatenate user input into the template string. Pass data as template variables and enable auto-escaping.\n2. Prefer logic-less templates (Mustache) when possible; avoid engines that allow method calls and reflection.\n3. Enable the engine's sandbox mode (Jinja2 `SandboxedEnvironment`, FreeMarker `TemplateClassResolver.SAFER_RESOLVER`, Velocity `SecureUberspector`).\n4. Restrict accessible classes and methods; disable `Runtime`, `ProcessBuilder`, reflection, and dynamic class loading.\n5. Validate and constrain input; do not allow users to edit templates without administrative privilege.\n6. Execute rendering in an isolated process or container without network or filesystem access, enforced with seccomp/AppArmor.\n7. Keep template engines and libraries up to date; many exploit chains depend on known gadgets.\n8. Secure Jinja2 example:\n```python\nfrom jinja2.sandbox import SandboxedEnvironment\nenv = SandboxedEnvironment(autoescape=True)\ntemplate = env.from_string(\"Hello {{ name }}\")\nreturn template.render(name=user_input)\n```\n9. Monitor for payloads containing `{{`, `${`, `<#`, `#set`, `T(`, `Runtime`, `__class__`, `__globals__`.",
+    "notableCves": [
+      {
+        "cve": "CVE-2019-3396",
+        "product": "Confluence Server",
+        "year": 2019,
+        "description": "SSTI via Widget Connector macro -- path traversal + RCE sem autenticacao",
+        "type": "Velocity (RCE)"
+      },
+      {
+        "cve": "CVE-2019-11581",
+        "product": "Jira Server",
+        "year": 2019,
+        "description": "SSTI em ContactAdministrators e SendBulkMail -- RCE via template Velocity",
+        "type": "Velocity (RCE)"
+      },
+      {
+        "cve": "CVE-2019-8341",
+        "product": "Jinja2",
+        "year": 2019,
+        "description": "SSTI em from_string() quando source vem de input do usuario -- RCE em Python",
+        "type": "Jinja2 (RCE)"
+      },
+      {
+        "cve": "CVE-2019-10074",
+        "product": "Apache OFBiz",
+        "year": 2019,
+        "description": "RCE via Freemarker markup em campo textarea de Form Widget",
+        "type": "Freemarker (RCE)"
+      },
+      {
+        "cve": "CVE-2020-11994",
+        "product": "Apache Camel",
+        "year": 2020,
+        "description": "SSTI nos componentes de templating -- file disclosure e RCE",
+        "type": "Multi-engine (RCE)"
+      },
+      {
+        "cve": "CVE-2020-1961",
+        "product": "Apache Syncope",
+        "year": 2020,
+        "description": "SSTI em mail templates -- injeccao de template em notificacoes",
+        "type": "Multi-engine (RCE)"
+      },
+      {
+        "cve": "CVE-2021-39115",
+        "product": "Jira Service Management",
+        "year": 2021,
+        "description": "RCE via template injection para usuarios Jira Administrators",
+        "type": "Velocity (RCE)"
+      },
+      {
+        "cve": "CVE-2022-22954",
+        "product": "VMware Workspace ONE",
+        "year": 2022,
+        "description": "RCE pre-auth via server-side template injection -- explorado in-the-wild",
+        "type": "Server-side (RCE)"
+      },
+      {
+        "cve": "CVE-2023-22527",
+        "product": "Confluence Data Center",
+        "year": 2024,
+        "description": "Template injection pre-auth em versoes antigas -- RCE sem credenciais",
+        "type": "OGNL (RCE)"
+      }
+    ]
   },
   "tls_weak_configuration": {
     "title": "Weak TLS Configuration",
@@ -1813,7 +2211,8 @@
         "/graphql"
       ]
     },
-    "recommendation": "1. Disable SSLv3, TLS 1.0, and TLS 1.1. Accept only TLS 1.2 and TLS 1.3.\n2. Restrict cipher suites to AEAD with forward secrecy: `ECDHE-ECDSA-AES128-GCM-SHA256`, `ECDHE-RSA-AES128-GCM-SHA256`, `ECDHE-ECDSA-AES256-GCM-SHA384`, `ECDHE-RSA-AES256-GCM-SHA384`, `TLS_AES_128_GCM_SHA256`, `TLS_AES_256_GCM_SHA384`, `TLS_CHACHA20_POLY1305_SHA256`.\n3. Disable RC4, 3DES, NULL, EXPORT, non-AEAD CBC, and static RSA key exchange.\n4. Use certificates with RSA >= 2048 bits or ECDSA P-256/P-384, with automated renewal (ACME), OCSP stapling, and a complete chain.\n5. Apply HSTS with a long `max-age` after validating all subdomains.\n6. Monitor for certificate expiration and configuration regressions with continuous testing (`testssl.sh`, `sslyze`) in CI/CD.\n\nExample Nginx configuration:\n```nginx\nssl_protocols TLSv1.2 TLSv1.3;\nssl_prefer_server_ciphers off;\nssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';\nssl_session_tickets off;\nssl_stapling on;\nssl_stapling_verify on;\nadd_header Strict-Transport-Security \"max-age=31536000; includeSubDomains; preload\" always;\n```\n\nExample Java/Spring Boot configuration:\n```yaml\nserver:\n  ssl:\n    enabled: true\n    enabled-protocols: TLSv1.3,TLSv1.2\n    ciphers:\n      - TLS_AES_256_GCM_SHA384\n      - TLS_CHACHA20_POLY1305_SHA256\n      - TLS_AES_128_GCM_SHA256\n      - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384\n      - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256\n```\n\nFor internal APIs, use mTLS and certificate rotation. For databases and message brokers, apply the same policy and disable legacy protocol listeners."
+    "recommendation": "1. Disable SSLv3, TLS 1.0, and TLS 1.1. Accept only TLS 1.2 and TLS 1.3.\n2. Restrict cipher suites to AEAD with forward secrecy: `ECDHE-ECDSA-AES128-GCM-SHA256`, `ECDHE-RSA-AES128-GCM-SHA256`, `ECDHE-ECDSA-AES256-GCM-SHA384`, `ECDHE-RSA-AES256-GCM-SHA384`, `TLS_AES_128_GCM_SHA256`, `TLS_AES_256_GCM_SHA384`, `TLS_CHACHA20_POLY1305_SHA256`.\n3. Disable RC4, 3DES, NULL, EXPORT, non-AEAD CBC, and static RSA key exchange.\n4. Use certificates with RSA >= 2048 bits or ECDSA P-256/P-384, with automated renewal (ACME), OCSP stapling, and a complete chain.\n5. Apply HSTS with a long `max-age` after validating all subdomains.\n6. Monitor for certificate expiration and configuration regressions with continuous testing (`testssl.sh`, `sslyze`) in CI/CD.\n\nExample Nginx configuration:\n```nginx\nssl_protocols TLSv1.2 TLSv1.3;\nssl_prefer_server_ciphers off;\nssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';\nssl_session_tickets off;\nssl_stapling on;\nssl_stapling_verify on;\nadd_header Strict-Transport-Security \"max-age=31536000; includeSubDomains; preload\" always;\n```\n\nExample Java/Spring Boot configuration:\n```yaml\nserver:\n  ssl:\n    enabled: true\n    enabled-protocols: TLSv1.3,TLSv1.2\n    ciphers:\n      - TLS_AES_256_GCM_SHA384\n      - TLS_CHACHA20_POLY1305_SHA256\n      - TLS_AES_128_GCM_SHA256\n      - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384\n      - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256\n```\n\nFor internal APIs, use mTLS and certificate rotation. For databases and message brokers, apply the same policy and disable legacy protocol listeners.",
+    "notableCves": []
   },
   "xss": {
     "title": "Cross-Site Scripting",
@@ -1917,7 +2316,79 @@
         "/support"
       ]
     },
-    "recommendation": "1. Encode all output according to context (HTML entity, attribute, JavaScript, URL, CSS) using the framework's built-in escaping functions.\n2. Never insert user input into `innerHTML`, `document.write`, `eval`, `Function`, or `setTimeout(string)`; use `textContent` and safe DOM APIs instead.\n3. Deploy a strict Content Security Policy with nonce or hash directives; avoid `unsafe-inline` and `unsafe-eval`.\n4. Set session cookies with `HttpOnly`, `Secure`, and `SameSite=Lax` or `Strict`.\n5. Sanitize rich HTML input with an allowlist-based library (DOMPurify, OWASP Java HTML Sanitizer); never rely on regex-based filtering.\n6. Use frameworks with auto-escaping enabled (React, Angular, Vue, Thymeleaf) and audit uses of `dangerouslySetInnerHTML` / `v-html`.\n7. Sanitize `postMessage` handlers (validate `origin` and data schema) and avoid DOM sinks.\n8. Java/Spring example:\n```java\n// Thymeleaf escapes by default\n<p th:text=\"${comment}\">...</p>\n// Never use th:utext with user input\n```\n9. Node.js example:\n```js\nconst DOMPurify = require('dompurify');\nconst clean = DOMPurify.sanitize(userHtml, {ALLOWED_TAGS: ['b', 'i', 'p']});\n```\n10. Test with payloads across all contexts and maintain regression tests in CI."
+    "recommendation": "1. Encode all output according to context (HTML entity, attribute, JavaScript, URL, CSS) using the framework's built-in escaping functions.\n2. Never insert user input into `innerHTML`, `document.write`, `eval`, `Function`, or `setTimeout(string)`; use `textContent` and safe DOM APIs instead.\n3. Deploy a strict Content Security Policy with nonce or hash directives; avoid `unsafe-inline` and `unsafe-eval`.\n4. Set session cookies with `HttpOnly`, `Secure`, and `SameSite=Lax` or `Strict`.\n5. Sanitize rich HTML input with an allowlist-based library (DOMPurify, OWASP Java HTML Sanitizer); never rely on regex-based filtering.\n6. Use frameworks with auto-escaping enabled (React, Angular, Vue, Thymeleaf) and audit uses of `dangerouslySetInnerHTML` / `v-html`.\n7. Sanitize `postMessage` handlers (validate `origin` and data schema) and avoid DOM sinks.\n8. Java/Spring example:\n```java\n// Thymeleaf escapes by default\n<p th:text=\"${comment}\">...</p>\n// Never use th:utext with user input\n```\n9. Node.js example:\n```js\nconst DOMPurify = require('dompurify');\nconst clean = DOMPurify.sanitize(userHtml, {ALLOWED_TAGS: ['b', 'i', 'p']});\n```\n10. Test with payloads across all contexts and maintain regression tests in CI.",
+    "notableCves": [
+      {
+        "cve": "CVE-2020-11022",
+        "product": "jQuery 1.12.0 -- 3.5.0",
+        "year": 2020,
+        "description": "HTML de fontes nao confiaveis passado para .html()/.append() pode executar XSS mesmo apos sanitizacao",
+        "type": "DOM XSS"
+      },
+      {
+        "cve": "CVE-2020-11023",
+        "product": "jQuery 1.0.3 -- 3.5.0",
+        "year": 2020,
+        "description": "Elementos option em HTML nao confiavel passado para metodos de manipulacao DOM causam XSS",
+        "type": "DOM XSS"
+      },
+      {
+        "cve": "CVE-2021-41184",
+        "product": "jQuery UI < 1.13.0",
+        "year": 2021,
+        "description": "Opcao `of` do .position() aceita input nao confiavel que executa codigo arbitrario",
+        "type": "DOM XSS"
+      },
+      {
+        "cve": "CVE-2023-29489",
+        "product": "cPanel < 11.109.9999.116",
+        "year": 2023,
+        "description": "XSS refletido na pagina de erro do cpsrvd via webcall ID invalido -- pre-auth, afeta milhoes de servidores",
+        "type": "Reflected XSS"
+      },
+      {
+        "cve": "CVE-2024-4367",
+        "product": "Mozilla PDF.js (Firefox < 126)",
+        "year": 2024,
+        "description": "Type check ausente no handling de fontes em PDF.js permite execucao de JavaScript arbitrario no contexto do viewer",
+        "type": "DOM XSS"
+      },
+      {
+        "cve": "CVE-2023-44389",
+        "product": "Zope",
+        "year": 2023,
+        "description": "Propriedade title de objetos Zope aceita script code que executa ao visualizar o objeto no Zope Management Interface",
+        "type": "Stored XSS"
+      },
+      {
+        "cve": "CVE-2024-25600",
+        "product": "WordPress Bricks Builder <= 1.9.6",
+        "year": 2024,
+        "description": "Code injection via builder permite RCE sem autenticacao -- vetor inicial via XSS em templates",
+        "type": "Stored XSS / RCE"
+      },
+      {
+        "cve": "CVE-2022-29078",
+        "product": "EJS 3.1.6 (Node.js)",
+        "year": 2022,
+        "description": "Server-side template injection via settings[view options][outputFunctionName] permite execucao de codigo arbitrario",
+        "type": "SSTI / XSS"
+      },
+      {
+        "cve": "CVE-2023-6553",
+        "product": "WordPress Backup Migration <= 1.3.7",
+        "year": 2023,
+        "description": "RCE via /includes/backup-heart.php sem autenticacao -- frequentemente encadeado com XSS para persistence",
+        "type": "RCE via injection"
+      },
+      {
+        "cve": "CVE-2022-35914",
+        "product": "GLPI <= 10.0.2 (htmlawed)",
+        "year": 2022,
+        "description": "PHP code injection via htmLawedTest.php exposto -- modulo de sanitizacao HTML exploitavel",
+        "type": "Stored XSS / RCE"
+      }
+    ]
   },
   "xxe": {
     "title": "XML External Entity Injection",
@@ -2008,6 +2479,64 @@
         "/export"
       ]
     },
-    "recommendation": "1. Disable DTDs and external entities in the parser. In Java:\n```java\nDocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();\ndbf.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true);\ndbf.setFeature(\"http://xml.org/sax/features/external-general-entities\", false);\ndbf.setFeature(\"http://xml.org/sax/features/external-parameter-entities\", false);\ndbf.setFeature(\"http://apache.org/xml/features/nonvalidating/load-external-dtd\", false);\ndbf.setXIncludeAware(false);\ndbf.setExpandEntityReferences(false);\n```\n2. For StAX/SAX, disable `external-general-entities`, `external-parameter-entities`, and `load-external-dtd`; set `XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES = false`.\n3. For Python, use `defusedxml`; for .NET, set `XmlReaderSettings.DtdProcessing = Prohibit` and `XmlResolver = null`.\n4. Prefer JSON when possible; if XML is required, validate against an XSD and reject any `DOCTYPE` declaration.\n5. Limit payload size, nesting depth, and entity expansion count; configure parser timeout and memory limits.\n6. For file uploads, validate the actual content type, disable XML processing in SVG/DOCX, and use a sandboxed converter.\n7. Isolate the XML parser in a separate service without filesystem or network access when processing untrusted input.\n8. Monitor for payloads containing `DOCTYPE`, `SYSTEM`, `PUBLIC`, `file://`, and out-of-band callbacks."
+    "recommendation": "1. Disable DTDs and external entities in the parser. In Java:\n```java\nDocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();\ndbf.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true);\ndbf.setFeature(\"http://xml.org/sax/features/external-general-entities\", false);\ndbf.setFeature(\"http://xml.org/sax/features/external-parameter-entities\", false);\ndbf.setFeature(\"http://apache.org/xml/features/nonvalidating/load-external-dtd\", false);\ndbf.setXIncludeAware(false);\ndbf.setExpandEntityReferences(false);\n```\n2. For StAX/SAX, disable `external-general-entities`, `external-parameter-entities`, and `load-external-dtd`; set `XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES = false`.\n3. For Python, use `defusedxml`; for .NET, set `XmlReaderSettings.DtdProcessing = Prohibit` and `XmlResolver = null`.\n4. Prefer JSON when possible; if XML is required, validate against an XSD and reject any `DOCTYPE` declaration.\n5. Limit payload size, nesting depth, and entity expansion count; configure parser timeout and memory limits.\n6. For file uploads, validate the actual content type, disable XML processing in SVG/DOCX, and use a sandboxed converter.\n7. Isolate the XML parser in a separate service without filesystem or network access when processing untrusted input.\n8. Monitor for payloads containing `DOCTYPE`, `SYSTEM`, `PUBLIC`, `file://`, and out-of-band callbacks.",
+    "notableCves": [
+      {
+        "cve": "CVE-2018-17247",
+        "product": "Elasticsearch",
+        "year": 2018,
+        "description": "XXE no find_file_structure API do ML -- leitura de arquivo e SSRF se policy de rede permitir",
+        "type": "File disclosure"
+      },
+      {
+        "cve": "CVE-2018-20843",
+        "product": "libexpat",
+        "year": 2019,
+        "description": "Billion Laughs via nomes XML com muitos colons -- DoS exponencial no parser",
+        "type": "DoS (entity expansion)"
+      },
+      {
+        "cve": "CVE-2019-12415",
+        "product": "Apache POI",
+        "year": 2019,
+        "description": "XXE ao converter documentos Excel via XSSFExportToXml -- leitura de arquivo local",
+        "type": "File disclosure"
+      },
+      {
+        "cve": "CVE-2018-11788",
+        "product": "Apache Karaf",
+        "year": 2019,
+        "description": "XXE via features deployer no hot deploy -- permite resolver entidades externas",
+        "type": "File disclosure"
+      },
+      {
+        "cve": "CVE-2020-26258",
+        "product": "XStream",
+        "year": 2020,
+        "description": "SSRF via XXE em deserializacao XML -- atacante controla URL de entidade externa",
+        "type": "SSRF via XXE"
+      },
+      {
+        "cve": "CVE-2020-26259",
+        "product": "XStream",
+        "year": 2020,
+        "description": "Delecao arbitraria de arquivo via deserializacao XML maliciosa",
+        "type": "File manipulation"
+      },
+      {
+        "cve": "CVE-2021-23926",
+        "product": "Apache XMLBeans",
+        "year": 2021,
+        "description": "Parser XML sem properties de seguranca -- Billion Laughs e XXE out-of-band",
+        "type": "OOB + DoS"
+      },
+      {
+        "cve": "CVE-2021-29505",
+        "product": "XStream",
+        "year": 2021,
+        "description": "RCE via desserializacao de objeto embarcado em XML",
+        "type": "RCE via XML"
+      }
+    ]
   }
 }
