@@ -136,7 +136,7 @@ class ScanHarnessTest {
         assertTrue(
                 findings.stream()
                         .anyMatch(f -> f.severity() == Severity.LOW && f.title().toLowerCase().contains("exp")),
-                "Deve detectar ausência de claim exp como LOW");
+                "Deve detectar ausência de claim exp (per-finding CVSS 3.1 → LOW)");
     }
 
     @Test
@@ -154,7 +154,7 @@ class ScanHarnessTest {
         assertTrue(
                 findings.stream()
                         .anyMatch(f -> f.severity() == Severity.LOW && f.title().toLowerCase().contains("kid")),
-                "Deve detectar parâmetro kid como LOW");
+                "Deve detectar parâmetro kid (severity from CVSS 3.1)");
     }
 
     @Test
@@ -437,7 +437,7 @@ class ScanHarnessTest {
         assertTrue(
                 findings.stream()
                         .anyMatch(f -> f.title().toLowerCase().contains("jku") && f.severity() == Severity.HIGH),
-                "jku com http:// deve ser HIGH");
+                "jku com http:// (severity from CVSS 7.5)");
     }
 
     @Test
@@ -529,7 +529,7 @@ class ScanHarnessTest {
             assertTrue(
                     findings.stream().anyMatch(
                             f -> f.severity() == Severity.MEDIUM && f.title().toLowerCase().contains("signature")),
-                    "Response body com 'Expected X got Y' deve gerar finding MEDIUM");
+                    "Response body com 'Expected X got Y' (severity from CVSS 6.5)");
         } finally {
             server.stop(0);
         }
@@ -587,7 +587,7 @@ class ScanHarnessTest {
             assertTrue(
                     findings.stream().anyMatch(
                             f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("cors")),
-                    "Origin reflection + credentials deve gerar CRITICAL");
+                    "Origin reflection + credentials (severity from CVSS 9.3)");
         } finally {
             server.stop(0);
         }
@@ -642,7 +642,7 @@ class ScanHarnessTest {
             assertTrue(
                     findings.stream()
                             .anyMatch(f -> f.severity() == Severity.MEDIUM && f.title().toLowerCase().contains("null")),
-                    "ACAO: null deve gerar MEDIUM");
+                    "ACAO: null (severity from CVSS 5.4)");
         } finally {
             server.stop(0);
         }
@@ -820,8 +820,8 @@ class ScanHarnessTest {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("OpenRedirect"));
             List<Finding> findings = new OpenRedirectModule().scan(ctx, msg -> {
             });
-            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.HIGH),
-                    "Servidor que reflete redirect param deve gerar HIGH");
+            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.MEDIUM),
+                    "Servidor que reflete redirect param (severity from CVSS 6.1)");
         } finally {
             server.stop(0);
         }
@@ -990,9 +990,9 @@ class ScanHarnessTest {
             List<Finding> findings = new CrlfModule().scan(ctx, msg -> {
             });
             assertTrue(
-                    findings.stream().anyMatch(
-                            f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("crlf")),
-                    "Servidor vulnerável a CRLF deve gerar CRITICAL");
+                    findings.stream()
+                            .anyMatch(f -> f.severity() == Severity.MEDIUM && f.title().toLowerCase().contains("crlf")),
+                    "Servidor vulnerável a CRLF (severity from CVSS 6.1)");
         } finally {
             server.stop(0);
         }
@@ -1386,7 +1386,7 @@ class ScanHarnessTest {
 
             assertFalse(collected.isEmpty(), "Pipeline deve gerar findings para exportar");
             assertTrue(collected.stream().anyMatch(f -> f.severity() == Severity.CRITICAL),
-                    "CORS deve gerar CRITICAL na pipeline E2E");
+                    "CORS deve gerar CRITICAL na pipeline E2E (CVSS 9.3)");
 
             String mdFile = new ReportEngine().export(new java.util.ArrayList<>(collected), "http://127.0.0.1:" + port);
             Path md = Path.of(System.getProperty("user.dir")).resolve(mdFile);
@@ -1437,9 +1437,9 @@ class ScanHarnessTest {
             List<Finding> findings = new CachePoisoningModule().scan(ctx, msg -> {
             });
             assertTrue(
-                    findings.stream().anyMatch(
-                            f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("cache")),
-                    "X-Forwarded-Host refletido + X-Cache:HIT deve gerar CRITICAL");
+                    findings.stream()
+                            .anyMatch(f -> f.severity() == Severity.HIGH && f.title().toLowerCase().contains("cache")),
+                    "X-Forwarded-Host refletido + X-Cache:HIT (severity from CVSS 8.7)");
         } finally {
             server.stop(0);
         }
@@ -1618,8 +1618,8 @@ class ScanHarnessTest {
             List<Finding> findings = new CrlfModule().scan(ctx, msg -> System.out.println("[CRLF] " + msg));
             assertTrue(
                     findings.stream().anyMatch(
-                            f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("user-agent")),
-                    "Servidor que reflete User-Agent com CRLF deve gerar CRITICAL");
+                            f -> f.severity() == Severity.MEDIUM && f.title().toLowerCase().contains("user-agent")),
+                    "Servidor que reflete User-Agent com CRLF (severity from CVSS 6.1)");
         } finally {
             rawServer.close();
         }
@@ -1798,8 +1798,8 @@ class ScanHarnessTest {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("XXE"));
             List<Finding> findings = new XxeModule().scan(ctx, msg -> {
             });
-            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.CRITICAL && f.module().equals("XXE")),
-                    "Servidor vulnerável a XXE deve gerar CRITICAL");
+            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.HIGH && f.module().equals("XXE")),
+                    "Servidor vulnerável a XXE (severity from CVSS 7.5)");
         } finally {
             server.stop(0);
         }
@@ -1904,8 +1904,8 @@ class ScanHarnessTest {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "token1", Set.of("IDOR"), "token2");
             List<Finding> findings = new IdorModule().scan(ctx, msg -> {
             });
-            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.HIGH && f.module().equals("IDOR")),
-                    "Servidor que retorna o mesmo recurso para tokens diferentes deve gerar IDOR HIGH");
+            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.MEDIUM && f.module().equals("IDOR")),
+                    "Servidor que retorna o mesmo recurso para tokens diferentes (severity from CVSS 6.5)");
         } finally {
             server.stop(0);
         }
@@ -2119,9 +2119,8 @@ class ScanHarnessTest {
             List<Finding> findings = new XssModule().scan(ctx, msg -> {
             });
             assertFalse(findings.isEmpty(), "XSS refletido deve gerar pelo menos um finding");
-            assertTrue(
-                    findings.stream().anyMatch(f -> f.severity() == Severity.HIGH || f.severity() == Severity.MEDIUM),
-                    "XSS refletido deve gerar HIGH ou MEDIUM");
+            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.CRITICAL),
+                    "XSS refletido (severity from CVSS 9.3)");
         } finally {
             server.stop(0);
         }
@@ -2534,9 +2533,8 @@ class ScanHarnessTest {
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "token1", "token2", Set.of("IDOR"));
             List<Finding> findings = new IdorModule().scan(ctx, msg -> {
             });
-            assertTrue(
-                    findings.stream().anyMatch(f -> f.severity() == Severity.HIGH || f.severity() == Severity.CRITICAL),
-                    "IDOR deve ser detectado quando token2 acessa recurso de token1 (respostas idênticas)");
+            assertTrue(findings.stream().anyMatch(f -> f.severity() == Severity.MEDIUM),
+                    "IDOR cross-user (severity from CVSS 6.5)");
         } finally {
             server.stop(0);
         }

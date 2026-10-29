@@ -54,7 +54,7 @@ test {
             excludeTags 'integration'
         }
     }
-    maxHeapSize = '512m'
+    maxHeapSize = '1g'
     jvmArgs '-XX:+UseG1GC', '-XX:MaxGCPauseMillis=200'
 }
 
