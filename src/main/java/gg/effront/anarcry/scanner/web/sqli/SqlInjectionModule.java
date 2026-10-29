@@ -9,6 +9,7 @@ import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
+import gg.effront.anarcry.scanner.util.ProbeExecutor;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -19,6 +20,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -71,124 +74,154 @@ public class SqlInjectionModule implements Scanner {
         String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
         List<String> errorPayloads = mergeKbErrorPayloads();
-        log.accept("[~] SQLi: iniciando error-based e time-based em " + base + " (" + PATHS.size() + " paths × "
+        log.accept("[~] SQLi: iniciando error-based e time-based em " + base + " (" + PATHS.size() + " paths x "
                 + PARAMS.size() + " params, " + errorPayloads.size() + " error payloads)");
 
-        outer : for (int pi = 0; pi < PATHS.size(); pi++) {
-            String path = PATHS.get(pi);
-            log.accept("[~] SQLi: [" + (pi + 1) + "/" + PATHS.size() + "] " + path);
-            for (String param : PARAMS) {
+        AtomicBoolean cancel = new AtomicBoolean(false);
+        List<Callable<List<Finding>>> tasks = new ArrayList<>();
 
-                // ─── Phase 1: Error-Based ───────────────────────────────────────
-                String baselineBody = fetchBody(ctx, hc, base + path + "?" + param + "=test", log);
-                // Anti-FP: skip if baseline itself already contains SQL error tokens
-                if (SQL_ERROR.matcher(baselineBody).find()) {
-                    log.accept("[~] SQLi: baseline já contém SQL error em " + path + " -- pulando param " + param);
-                    continue;
-                }
+        for (int pi = 0; pi < PATHS.size(); pi++) {
+            final String path = PATHS.get(pi);
+            final int pathIdx = pi;
+            tasks.add(() -> {
+                List<Finding> local = new ArrayList<>();
+                log.accept("[~] SQLi: [" + (pathIdx + 1) + "/" + PATHS.size() + "] " + path);
+                for (String param : PARAMS) {
+                    if (cancel.get()) {
+                        return local;
+                    }
 
-                for (String payload : errorPayloads) {
-                    String encoded = URLEncoder.encode(payload, "UTF-8");
-                    String url = base + path + "?" + param + "=" + encoded;
-                    try {
-                        HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6))
-                                .GET().build();
-                        HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
-                        String body = resp.body() != null ? resp.body() : "";
+                    // -- Phase 1: Error-Based --
+                    String baselineBody = fetchBody(ctx, hc, base + path + "?" + param + "=test", log);
+                    // Anti-FP: skip if baseline itself already contains SQL error tokens
+                    if (SQL_ERROR.matcher(baselineBody).find()) {
+                        log.accept("[~] SQLi: baseline ja contem SQL error em " + path + " -- pulando param " + param);
+                        continue;
+                    }
 
-                        Matcher m = SQL_ERROR.matcher(body);
-                        if (m.find() && resp.statusCode() != 400) {
-                            String match = m.group();
-                            String endpoint = path + "?" + param + "=" + encoded;
-                            log.accept("[!!] SQLi error-based CRITICAL em " + endpoint + " -- match: " + match);
-
-                            findings.add(Finding.of(id(), endpoint, "SQL Injection -- Error-Based confirmado",
-                                    Severity.CRITICAL,
-                                    "Payload: " + payload + " | Match: " + match + " | Status: " + resp.statusCode()
-                                            + " | URL: " + base + endpoint,
-                                    "SQL Injection error-based expõe mensagem de erro interno do banco de dados, "
-                                            + "permitindo enumeração de estrutura e extração de dados.",
-                                    "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
-                                            + payload + "'",
-                                    "Use prepared statements / parameterized queries em todos os pontos de entrada. "
-                                            + "Nunca concatene input do usuário em queries SQL. "
-                                            + "Desabilite mensagens de erro detalhadas do banco em produção.",
-                                    cweId, cweTitle, cvssVec, cvssScore));
-                            break outer;
+                    for (String payload : errorPayloads) {
+                        if (cancel.get()) {
+                            return local;
                         }
-                    } catch (Exception ignored) {
+                        String encoded = URLEncoder.encode(payload, "UTF-8");
+                        String url = base + path + "?" + param + "=" + encoded;
+                        try {
+                            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
+                                    .timeout(Duration.ofSeconds(6)).GET().build();
+                            HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(),
+                                    id());
+                            String body = resp.body() != null ? resp.body() : "";
+
+                            Matcher m = SQL_ERROR.matcher(body);
+                            if (m.find() && resp.statusCode() != 400) {
+                                String match = m.group();
+                                String endpoint = path + "?" + param + "=" + encoded;
+                                log.accept("[!!] SQLi error-based CRITICAL em " + endpoint + " -- match: " + match);
+
+                                local.add(Finding.of(id(), endpoint, "SQL Injection -- Error-Based confirmado",
+                                        Severity.CRITICAL,
+                                        "Payload: " + payload + " | Match: " + match + " | Status: " + resp.statusCode()
+                                                + " | URL: " + base + endpoint,
+                                        "SQL Injection error-based expoe mensagem de erro interno do banco de "
+                                                + "dados, permitindo enumeracao de estrutura e extracao de dados.",
+                                        "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
+                                                + payload + "'",
+                                        "Use prepared statements / parameterized queries em todos os pontos de "
+                                                + "entrada. Nunca concatene input do usuario em queries SQL. "
+                                                + "Desabilite mensagens de erro detalhadas do banco em producao.",
+                                        cweId, cweTitle, cvssVec, cvssScore));
+                                cancel.set(true);
+                                return local;
+                            }
+                        } catch (Exception ignored) {
+                        }
+                    }
+
+                    if (cancel.get()) {
+                        return local;
+                    }
+
+                    // -- Phase 2: Time-Based Blind --
+                    // Measure baseline RTT using 2 samples (median of small set)
+                    long b1 = measureRtt(ctx, hc, base + path + "?" + param + "=1", log);
+                    long b2 = measureRtt(ctx, hc, base + path + "?" + param + "=2", log);
+                    if (b1 < 0 || b2 < 0) {
+                        // Target unreachable on this path -- skip to next
+                        continue;
+                    }
+                    long baselineAvg = (b1 + b2) / 2;
+
+                    for (TimePayload tp : TIME_PAYLOADS) {
+                        if (cancel.get()) {
+                            return local;
+                        }
+                        String encoded = URLEncoder.encode(tp.payload(), "UTF-8");
+                        String url = base + path + "?" + param + "=" + encoded;
+                        try {
+                            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
+                                    // Allow up to 10s to accommodate SLEEP(5) + normal RTT
+                                    .timeout(Duration.ofSeconds(10)).GET().build();
+                            long start = System.currentTimeMillis();
+                            Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
+                            long elapsed = System.currentTimeMillis() - start;
+
+                            if (elapsed > baselineAvg + 4000) {
+                                String endpoint = path + "?" + param + "=" + encoded;
+                                log.accept("[!!] SQLi time-based CRITICAL -- " + tp.dbHint() + " em " + endpoint
+                                        + " baseline=" + baselineAvg + "ms attack=" + elapsed + "ms");
+
+                                local.add(Finding.of(id(), endpoint,
+                                        "SQL Injection -- Time-Based Blind confirmado (" + tp.dbHint() + ")",
+                                        Severity.CRITICAL,
+                                        "baseline=" + baselineAvg + "ms attack=" + elapsed + "ms" + " delta="
+                                                + (elapsed - baselineAvg) + "ms" + " | DB hint: " + tp.dbHint()
+                                                + " | Payload: " + tp.payload(),
+                                        "Blind SQL Injection confirmado por delay de " + (elapsed - baselineAvg)
+                                                + "ms acima do baseline. Permite extracao de dados via inferencia"
+                                                + " booleana / temporal mesmo sem mensagens de erro visiveis.",
+                                        "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
+                                                + tp.payload() + "'",
+                                        "Use prepared statements / parameterized queries. Implemente WAF com "
+                                                + "deteccao de time-based blind SQLi. Limite o timeout de queries"
+                                                + " no banco.",
+                                        cweId, cweTitle, cvssVec, cvssScore));
+                                cancel.set(true);
+                                return local;
+                            }
+                        } catch (java.net.http.HttpTimeoutException toe) {
+                            // Timeout on the attack request itself can be a positive signal only
+                            // when baseline was fast -- treat as a candidate but require delta >
+                            // 4s.
+                            long elapsed = 10_000L; // timeout = full window consumed
+                            if (elapsed > baselineAvg + 4000) {
+                                String endpoint = path + "?" + param + "=" + encoded;
+                                log.accept("[!!] SQLi time-based (timeout) CRITICAL -- " + tp.dbHint() + " em "
+                                        + endpoint);
+                                local.add(Finding.of(id(), endpoint,
+                                        "SQL Injection -- Time-Based Blind (timeout) confirmado (" + tp.dbHint() + ")",
+                                        Severity.CRITICAL,
+                                        "baseline=" + baselineAvg + "ms attack=timeout(10000ms)" + " | DB hint: "
+                                                + tp.dbHint() + " | Payload: " + tp.payload(),
+                                        "Request timeout sob payload de sleep sugere Blind SQLi temporal.",
+                                        "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
+                                                + tp.payload() + "'",
+                                        "Use prepared statements / parameterized queries.", cweId, cweTitle, cvssVec,
+                                        cvssScore));
+                                cancel.set(true);
+                                return local;
+                            }
+                        } catch (Exception ignored) {
+                        }
                     }
                 }
-
-                // ─── Phase 2: Time-Based Blind ─────────────────────────────────
-                // Measure baseline RTT using 2 samples (median of small set)
-                long b1 = measureRtt(ctx, hc, base + path + "?" + param + "=1", log);
-                long b2 = measureRtt(ctx, hc, base + path + "?" + param + "=2", log);
-                if (b1 < 0 || b2 < 0) {
-                    // Target unreachable on this path -- skip to next
-                    continue;
-                }
-                long baselineAvg = (b1 + b2) / 2;
-
-                for (TimePayload tp : TIME_PAYLOADS) {
-                    String encoded = URLEncoder.encode(tp.payload(), "UTF-8");
-                    String url = base + path + "?" + param + "=" + encoded;
-                    try {
-                        HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
-                                // Allow up to 10s to accommodate SLEEP(5) + normal RTT
-                                .timeout(Duration.ofSeconds(10)).GET().build();
-                        long start = System.currentTimeMillis();
-                        Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
-                        long elapsed = System.currentTimeMillis() - start;
-
-                        if (elapsed > baselineAvg + 4000) {
-                            String endpoint = path + "?" + param + "=" + encoded;
-                            log.accept("[!!] SQLi time-based CRITICAL -- " + tp.dbHint() + " em " + endpoint
-                                    + " baseline=" + baselineAvg + "ms attack=" + elapsed + "ms");
-
-                            findings.add(Finding.of(id(), endpoint,
-                                    "SQL Injection -- Time-Based Blind confirmado (" + tp.dbHint() + ")",
-                                    Severity.CRITICAL,
-                                    "baseline=" + baselineAvg + "ms attack=" + elapsed + "ms" + " delta="
-                                            + (elapsed - baselineAvg) + "ms" + " | DB hint: " + tp.dbHint()
-                                            + " | Payload: " + tp.payload(),
-                                    "Blind SQL Injection confirmado por delay de " + (elapsed - baselineAvg)
-                                            + "ms acima do baseline. Permite extração de dados via inferência booleana"
-                                            + " / temporal mesmo sem mensagens de erro visíveis.",
-                                    "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
-                                            + tp.payload() + "'",
-                                    "Use prepared statements / parameterized queries. Implemente WAF com detecção"
-                                            + " de time-based blind SQLi. Limite o timeout de queries no banco.",
-                                    cweId, cweTitle, cvssVec, cvssScore));
-                            break outer;
-                        }
-                    } catch (java.net.http.HttpTimeoutException toe) {
-                        // Timeout on the attack request itself can be a positive signal only when
-                        // baseline was fast -- treat as a candidate but require delta > 4s.
-                        long elapsed = 10_000L; // timeout = full window consumed
-                        if (elapsed > baselineAvg + 4000) {
-                            String endpoint = path + "?" + param + "=" + encoded;
-                            log.accept("[!!] SQLi time-based (timeout) CRITICAL -- " + tp.dbHint() + " em " + endpoint);
-                            findings.add(Finding.of(id(), endpoint,
-                                    "SQL Injection -- Time-Based Blind (timeout) confirmado (" + tp.dbHint() + ")",
-                                    Severity.CRITICAL,
-                                    "baseline=" + baselineAvg + "ms attack=timeout(10000ms)" + " | DB hint: "
-                                            + tp.dbHint() + " | Payload: " + tp.payload(),
-                                    "Request timeout sob payload de sleep sugere Blind SQLi temporal.",
-                                    "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
-                                            + tp.payload() + "'",
-                                    "Use prepared statements / parameterized queries.", cweId, cweTitle, cvssVec,
-                                    cvssScore));
-                            break outer;
-                        }
-                    } catch (Exception ignored) {
-                    }
-                }
-            }
+                return local;
+            });
         }
 
+        findings.addAll(ProbeExecutor.run(tasks, ctx.config().probeConcurrency(), cancel));
+
         if (findings.isEmpty()) {
-            log.accept("[+] SQLi: nenhuma injeção SQL detectada");
+            log.accept("[+] SQLi: nenhuma injecao SQL detectada");
         }
         return findings;
     }

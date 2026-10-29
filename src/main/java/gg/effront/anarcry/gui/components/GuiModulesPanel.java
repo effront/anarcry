@@ -95,6 +95,10 @@ public class GuiModulesPanel extends JPanel {
         checksPanel.add(moduleCheck("MassAssign", true));
         checksPanel.add(moduleCheck("CachePoisoning", true));
         checksPanel.add(moduleCheck("ReqSmuggling", true));
+        checksPanel.add(moduleCheck("SQLi", true));
+        checksPanel.add(moduleCheck("XSS", true));
+        checksPanel.add(moduleCheck("LFI", true));
+        checksPanel.add(moduleCheck("CmdInjection", true));
         checksPanel.add(moduleCheck("IDOR", false));
 
         JScrollPane checksScroll = new JScrollPane(checksPanel);

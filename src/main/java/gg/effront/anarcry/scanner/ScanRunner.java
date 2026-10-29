@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.RequestRecord;
 import gg.effront.anarcry.scanner.web.cors.CorsModule;
 import gg.effront.anarcry.scanner.web.crlf.CrlfModule;
 import gg.effront.anarcry.scanner.web.graphql.GraphQLModule;
@@ -20,8 +21,12 @@ import gg.effront.anarcry.scanner.web.actuator.SpringActuatorModule;
 import gg.effront.anarcry.scanner.web.massassign.MassAssignmentModule;
 import gg.effront.anarcry.scanner.web.cachepoisoning.CachePoisoningModule;
 import gg.effront.anarcry.scanner.web.smuggling.RequestSmugglingModule;
+import gg.effront.anarcry.scanner.web.cmdinject.CommandInjectionModule;
 import gg.effront.anarcry.scanner.web.crawler.CrawlerModule;
 import gg.effront.anarcry.scanner.web.infra.InfraModule;
+import gg.effront.anarcry.scanner.web.lfi.LfiModule;
+import gg.effront.anarcry.scanner.web.sqli.SqlInjectionModule;
+import gg.effront.anarcry.scanner.web.xss.XssModule;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -94,12 +99,26 @@ public class ScanRunner {
         });
     }
 
-    private void runScan(ScanContext ctx) {
+    private void runScan(ScanContext origCtx) {
         onScanStart.run();
-        if (!ctx.config().isInScope(ctx.host())) {
-            logCb.accept("[!] Host " + ctx.host() + " fora do scope -- scan cancelado");
+        if (!origCtx.config().isInScope(origCtx.host())) {
+            logCb.accept("[!] Host " + origCtx.host() + " fora do scope -- scan cancelado");
             return;
         }
+
+        Object logLock = new Object();
+        Consumer<String> safeLog = msg -> {
+            synchronized (logLock) {
+                logCb.accept(msg);
+            }
+        };
+        Consumer<RequestRecord> safeReqLog = rec -> {
+            synchronized (logLock) {
+                origCtx.requestLog().accept(rec);
+            }
+        };
+        ScanContext ctx = new ScanContext(origCtx.targetUrl(), origCtx.jwtToken(), origCtx.jwtToken2(),
+                origCtx.enabledModules(), origCtx.config(), safeReqLog, origCtx.discoveredPaths());
         List<Scanner> modules = new ArrayList<>();
         if (ctx.has("TLS")) {
             modules.add(new TlsModule());
@@ -158,6 +177,18 @@ public class ScanRunner {
         if (ctx.has("ReqSmuggling")) {
             modules.add(new RequestSmugglingModule());
         }
+        if (ctx.has("SQLi")) {
+            modules.add(new SqlInjectionModule());
+        }
+        if (ctx.has("XSS")) {
+            modules.add(new XssModule());
+        }
+        if (ctx.has("LFI")) {
+            modules.add(new LfiModule());
+        }
+        if (ctx.has("CmdInjection")) {
+            modules.add(new CommandInjectionModule());
+        }
         if (ctx.has("Crawler")) {
             modules.add(new CrawlerModule());
         }
@@ -186,27 +217,27 @@ public class ScanRunner {
             final Scanner enricher = enrichers.get(i);
             final int moduleIndex = i + 1;
             eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_START, enricher.id(), moduleIndex, moduleCount));
-            logCb.accept("[*] Phase 1: Reconnaissance -- " + enricher.id());
+            safeLog.accept("[*] Phase 1: Reconnaissance -- " + enricher.id());
             try {
-                List<Finding> findings = enricher.scan(ctx, logCb);
+                List<Finding> findings = enricher.scan(ctx, safeLog);
                 for (Finding f : findings) {
                     String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
                     if (seenFindings.add(dedupKey)) {
                         if (ctx.config().isSuppressed(f.module(), f.title(), ctx.host())) {
-                            logCb.accept("[~] suppressed: " + f.module() + " -- " + f.title());
+                            safeLog.accept("[~] suppressed: " + f.module() + " -- " + f.title());
                         } else {
                             findingCb.accept(f);
                             total[0]++;
                         }
                     } else {
-                        logCb.accept("[~] dedup: ignorado finding duplicado -- " + f.module() + " " + f.title());
+                        safeLog.accept("[~] dedup: ignorado finding duplicado -- " + f.module() + " " + f.title());
                     }
                 }
-                logCb.accept("[+] " + enricher.id() + ": " + findings.size() + " finding(s), "
+                safeLog.accept("[+] " + enricher.id() + ": " + findings.size() + " finding(s), "
                         + ctx.discoveredPaths().pathCount() + " paths, " + ctx.discoveredPaths().parameterCount()
                         + " params discovered");
             } catch (Exception e) {
-                logCb.accept("[!] " + enricher.id() + " erro: " + e.getMessage());
+                safeLog.accept("[!] " + enricher.id() + " erro: " + e.getMessage());
             }
             eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, enricher.id(), moduleIndex, moduleCount));
         }
@@ -216,17 +247,17 @@ public class ScanRunner {
         List<CompletableFuture<?>> futures = new ArrayList<>();
 
         if (!scanners.isEmpty()) {
-            logCb.accept("[*] Phase 2: " + scanners.size() + " scanner modules (parallel)");
+            safeLog.accept("[*] Phase 2: " + scanners.size() + " scanner modules (parallel)");
 
             for (int i = 0; i < scanners.size(); i++) {
                 final Scanner module = scanners.get(i);
                 final int moduleIndex = enricherCount + i + 1;
                 eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_START, module.id(), moduleIndex, moduleCount));
-                logCb.accept("[*] Modulo " + module.id() + " iniciado");
+                safeLog.accept("[*] Modulo " + module.id() + " iniciado");
 
                 CompletableFuture<List<Finding>> future = CompletableFuture.supplyAsync(() -> {
                     try {
-                        return module.scan(ctx, logCb);
+                        return module.scan(ctx, safeLog);
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
@@ -234,13 +265,13 @@ public class ScanRunner {
 
                 futures.add(future.whenComplete((findings, ex) -> {
                     if (ex != null) {
-                        logCb.accept("[!] " + module.id() + " erro: " + ex.getMessage());
+                        safeLog.accept("[!] " + module.id() + " erro: " + ex.getMessage());
                     } else {
                         for (Finding f : findings) {
                             String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
                             if (seenFindings.add(dedupKey)) {
                                 if (ctx.config().isSuppressed(f.module(), f.title(), ctx.host())) {
-                                    logCb.accept("[~] suppressed: " + f.module() + " -- " + f.title());
+                                    safeLog.accept("[~] suppressed: " + f.module() + " -- " + f.title());
                                 } else {
                                     findingCb.accept(f);
                                     synchronized (total) {
@@ -248,11 +279,11 @@ public class ScanRunner {
                                     }
                                 }
                             } else {
-                                logCb.accept(
+                                safeLog.accept(
                                         "[~] dedup: ignorado finding duplicado -- " + f.module() + " " + f.title());
                             }
                         }
-                        logCb.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
+                        safeLog.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
                     }
                     eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, module.id(), moduleIndex, moduleCount));
                 }));
@@ -262,7 +293,7 @@ public class ScanRunner {
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
         eventCb.accept(new ScanEvent(ScanEvent.Type.SCAN_DONE, null, moduleCount, moduleCount));
-        logCb.accept("[*] Scan concluído -- " + total[0] + " finding(s) no total");
+        safeLog.accept("[*] Scan concluído -- " + total[0] + " finding(s) no total");
     }
 
     public void shutdown() {

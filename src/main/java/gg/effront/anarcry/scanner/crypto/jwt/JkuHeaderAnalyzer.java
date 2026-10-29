@@ -24,15 +24,13 @@ public class JkuHeaderAnalyzer {
                 : "jku presente (" + jku
                         + ") -- servidor busca JWKS remotamente; atacante pode hospedar chave maliciosa";
 
-        String _cweId = CweRegistry.cweId("JWT");
-        String _cweTitle = CweRegistry.cweTitle("JWT");
-        String _cvssVector = CweRegistry.cvssVector("JWT");
-        double _score = CvssCalculator.calculate(_cvssVector);
+        String vec = insecure ? "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N" : "AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N";
+        double score = CvssCalculator.calculate(vec);
         return Optional.of(Finding.of("JWT", "(token)", "jku header presente -- risco de JWKS hijacking", sev,
                 "jku=" + jku + " | " + evidence, detail,
                 "Hospedar JWKS em URL controlada pelo atacante com par de chaves RSA gerado localmente:\n"
                         + "python3 jwt_tool.py <token> -X s -ju https://evil.com/jwks.json",
-                "Ignorar o campo jku do header; validar apenas com chave pré-configurada no servidor", _cweId,
-                _cweTitle, _cvssVector, _score));
+                "Ignorar o campo jku do header; validar apenas com chave pré-configurada no servidor",
+                CweRegistry.cweId("JWT"), CweRegistry.cweTitle("JWT"), vec, score));
     }
 }
