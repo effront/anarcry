@@ -4,9 +4,14 @@ import gg.effront.anarcry.gui.PrivacyFilter;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Font;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.net.URI;
 import java.util.Enumeration;
 
+import javax.swing.BorderFactory;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTree;
@@ -25,6 +30,8 @@ public class SiteMapView extends JPanel {
     private final DefaultMutableTreeNode rootNode;
     private final DefaultTreeModel treeModel;
     private final JTree tree;
+    private final JLabel pathLabel;
+    private String rootUrl = "";
 
     public SiteMapView() {
         super(new BorderLayout());
@@ -36,14 +43,47 @@ public class SiteMapView extends JPanel {
         tree.setCellRenderer(new SiteMapCellRenderer());
         add(new JScrollPane(tree), BorderLayout.CENTER);
 
+        pathLabel = new JLabel("  Select a path");
+        pathLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        pathLabel.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+        pathLabel.setToolTipText("Click to copy full URL");
+        pathLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                String text = pathLabel.getText().trim();
+                if (!text.isEmpty() && !text.equals("Select a path")) {
+                    Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+                    pathLabel.setText("  Copied!");
+                    javax.swing.Timer t = new javax.swing.Timer(1200, ev -> pathLabel.setText("  " + text));
+                    t.setRepeats(false);
+                    t.start();
+                }
+            }
+        });
+        add(pathLabel, BorderLayout.SOUTH);
+
+        tree.addTreeSelectionListener(e -> {
+            TreePath sel = tree.getSelectionPath();
+            if (sel == null) {
+                pathLabel.setText("  Select a path");
+                return;
+            }
+            pathLabel.setText("  " + PrivacyFilter.apply(buildFullPath(sel)));
+        });
+
         PrivacyFilter.addListener(() -> SwingUtilities.invokeLater(() -> {
             treeModel.reload();
             tree.expandPath(new TreePath(rootNode.getPath()));
+            TreePath sel = tree.getSelectionPath();
+            if (sel != null) {
+                pathLabel.setText("  " + PrivacyFilter.apply(buildFullPath(sel)));
+            }
         }));
     }
 
     /** Set the root node label to the target URL. */
     public void setRootUrl(String url) {
+        rootUrl = url != null ? url.replaceAll("/+$", "") : "";
         SwingUtilities.invokeLater(() -> {
             rootNode.setUserObject(url != null ? url : "(no target)");
             treeModel.nodeChanged(rootNode);
@@ -91,7 +131,21 @@ public class SiteMapView extends JPanel {
         SwingUtilities.invokeLater(() -> {
             rootNode.removeAllChildren();
             treeModel.reload();
+            pathLabel.setText("  Select a path");
         });
+    }
+
+    private String buildFullPath(TreePath treePath) {
+        Object[] nodes = treePath.getPath();
+        if (nodes.length <= 1) {
+            return rootUrl.isEmpty() ? "/" : rootUrl;
+        }
+        StringBuilder sb = new StringBuilder(rootUrl);
+        for (int i = 1; i < nodes.length; i++) {
+            sb.append('/');
+            sb.append(((DefaultMutableTreeNode) nodes[i]).getUserObject());
+        }
+        return sb.toString();
     }
 
     /** Return the underlying JTree for further customization. */
