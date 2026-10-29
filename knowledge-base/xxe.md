@@ -108,6 +108,19 @@ Billion Laughs:
 
 Casos reais e mentalidade de ataque (RWBH): Yahoo (parsers XML em mail/upload) e Facebook (DOCX/XLSX) mostram que o vetor não é só SOAP; o atacante testa SVG, DOCX, SAML e OOB quando a resposta não reflete o arquivo.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2018-17247 | Elasticsearch | 2018 | XXE no find_file_structure API do ML -- leitura de arquivo e SSRF se policy de rede permitir | File disclosure |
+| CVE-2018-20843 | libexpat | 2019 | Billion Laughs via nomes XML com muitos colons -- DoS exponencial no parser | DoS (entity expansion) |
+| CVE-2019-12415 | Apache POI | 2019 | XXE ao converter documentos Excel via XSSFExportToXml -- leitura de arquivo local | File disclosure |
+| CVE-2018-11788 | Apache Karaf | 2019 | XXE via features deployer no hot deploy -- permite resolver entidades externas | File disclosure |
+| CVE-2020-26258 | XStream | 2020 | SSRF via XXE em deserializacao XML -- atacante controla URL de entidade externa | SSRF via XXE |
+| CVE-2020-26259 | XStream | 2020 | Delecao arbitraria de arquivo via deserializacao XML maliciosa | File manipulation |
+| CVE-2021-23926 | Apache XMLBeans | 2021 | Parser XML sem properties de seguranca -- Billion Laughs e XXE out-of-band | OOB + DoS |
+| CVE-2021-29505 | XStream | 2021 | RCE via desserializacao de objeto embarcado em XML | RCE via XML |
+
 ## Target Context (Crawler Hints)
 - **Parâmetros comuns:** `xml`, `data`, `document`, `file`, `upload`, `content`, `body`, `payload`, `svg`, `feed`, `soap`, `saml`, `config`.
 - **Paths comuns:** `/api/import`, `/upload`, `/xml`, `/soap`, `/saml`, `/parse`, `/convert`, `/preview`, `/avatar`, `/invoice`, `/export`.
