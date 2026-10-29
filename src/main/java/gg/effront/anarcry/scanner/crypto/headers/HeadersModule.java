@@ -47,7 +47,7 @@ public class HeadersModule implements Scanner {
         conn.setConnectTimeout(5000);
         conn.setReadTimeout(10000);
         conn.setInstanceFollowRedirects(true);
-        conn.setRequestProperty("User-Agent", "AnarCry/1.1");
+        conn.setRequestProperty("User-Agent", gg.effront.anarcry.Version.userAgent());
 
         final Map<String, List<String>> headers;
         final String evidence;

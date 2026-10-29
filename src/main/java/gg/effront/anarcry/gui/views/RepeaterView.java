@@ -85,7 +85,7 @@ public class RepeaterView extends JPanel {
         JLabel headersLabel = new JLabel("  Headers (Key: Value, one per line):");
         headersArea = new JTextArea(5, 40);
         headersArea.setFont(monoFont());
-        headersArea.setText("User-Agent: AnarCry/1.2\nAccept: */*");
+        headersArea.setText("User-Agent: " + gg.effront.anarcry.Version.userAgent() + "\nAccept: */*");
         JScrollPane headersScroll = new JScrollPane(headersArea);
         headersScroll.setPreferredSize(new Dimension(0, 100));
 

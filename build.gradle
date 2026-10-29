@@ -39,6 +39,12 @@ dependencies {
     spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0'
 }
 
+processResources {
+    filesMatching('version.properties') {
+        expand(version: project.version)
+    }
+}
+
 shadowJar {
     archiveBaseName = 'anarcry'
     archiveVersion = version
