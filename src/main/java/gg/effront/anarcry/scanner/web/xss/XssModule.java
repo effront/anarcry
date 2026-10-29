@@ -10,6 +10,7 @@ import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.ProbeExecutor;
+import gg.effront.anarcry.scanner.util.WafEvasion;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -134,7 +135,7 @@ public class XssModule implements Scanner {
                         }
                         String htmlPayload = xp.template();
                         String marker = xp.marker();
-                        String encodedHtml = URLEncoder.encode(htmlPayload, "UTF-8");
+                        String encodedHtml = URLEncoder.encode(WafEvasion.evasionPayload(ctx, htmlPayload), "UTF-8");
                         String payloadUrl = base + path + "?" + param + "=" + encodedHtml;
                         String payloadBody = fetchBody(ctx, hc, payloadUrl);
                         String endpoint = path + "?" + param + "=" + encodedHtml;

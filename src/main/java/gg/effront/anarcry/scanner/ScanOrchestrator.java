@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner;
 
 import gg.effront.anarcry.model.RequestRecord;
+import gg.effront.anarcry.scanner.util.WafState;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -18,7 +19,7 @@ public final class ScanOrchestrator {
     public static ScanContext buildContext(String target, String jwt, String jwt2, Set<String> modules,
             Consumer<RequestRecord> requestLogCb) {
         ScanConfig cfg = new ScanConfig(0, "", Set.of(), SuppressionLoader.loadFromCwd(), "");
-        return new ScanContext(target, jwt, jwt2, modules, cfg, requestLogCb, new DiscoveredPaths());
+        return new ScanContext(target, jwt, jwt2, modules, cfg, requestLogCb, new DiscoveredPaths(), new WafState());
     }
 
     public static ScanContext buildContext(String target, String jwt, String jwt2, Set<String> modules) {

@@ -71,6 +71,7 @@ public class HeadersModule implements Scanner {
                             || server.toLowerCase().contains("awselb") || server.toLowerCase().contains("incapsula")
                             || server.toLowerCase().contains("sucuri") || server.toLowerCase().contains("ddos-guard"));
             if (wafLikely) {
+                ctx.wafState().markWafDetected(server);
                 log.accept("[!] HEADERS: HTTP 403 com Server: " + server
                         + " -- possivel bloqueio por WAF, headers nao confiaveis");
                 findings.add(
