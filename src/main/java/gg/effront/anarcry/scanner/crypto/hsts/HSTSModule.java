@@ -112,6 +112,14 @@ public class HSTSModule implements Scanner {
 
             ctx.requestLog()
                     .accept(new RequestRecord("GET", ctx.targetUrl(), status, 0, System.currentTimeMillis(), id()));
+
+            if (ctx.wafState().isWafDetected() && (status == 403 || status == 406 || status == 429)) {
+                log.accept("[~] HSTS: HTTPS probe retornou HTTP " + status
+                        + " de WAF -- findings HTTPS suprimidos (falso positivo)");
+                log.accept("[+] HSTS: " + findings.size() + " finding(s)");
+                return findings;
+            }
+
             String evidence = "GET " + ctx.targetUrl() + " → HTTP " + status;
             String hstsVal = getHeader(headers, "Strict-Transport-Security");
 

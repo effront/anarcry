@@ -2,7 +2,9 @@ package gg.effront.anarcry.scanner;
 
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.RequestRecord;
+import gg.effront.anarcry.scanner.util.BrowserTransport;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
+import gg.effront.anarcry.scanner.util.StealthHttpClient;
 import gg.effront.anarcry.scanner.util.WafEvasion;
 import gg.effront.anarcry.scanner.web.cors.CorsModule;
 import gg.effront.anarcry.scanner.web.crlf.CrlfModule;
@@ -96,6 +98,7 @@ public class ScanRunner {
             } catch (Exception e) {
                 logCb.accept("[!] Scan falhou: " + e.getMessage());
             } finally {
+                ctx.wafState().closeBrowserTransport();
                 onScanFinish.run();
             }
         });
@@ -244,19 +247,96 @@ public class ScanRunner {
             eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, enricher.id(), moduleIndex, moduleCount));
         }
 
-        // Phase 1.5: WAF detection probe
-        if (ctx.wafState().isWafDetected()) {
-            safeLog.accept(
-                    "[*] Phase 1.5: WAF detectado (" + ctx.wafState().wafProduct() + ") -- probing bypass strategies");
+        // Phase 1.5: WAF detection + bypass
+        if (!ctx.wafState().isWafDetected()) {
+            safeLog.accept("[*] Phase 1.5: WAF detection probe em " + ctx.targetUrl());
             try {
-                WafEvasion.Strategy effective = WafEvasion.probeStrategies(ctx, HttpClientFactory.http2(),
-                        ctx.targetUrl(), "WafProbe", safeLog);
-                if (effective != null) {
-                    ctx.wafState().markEffectiveStrategy(effective);
-                    safeLog.accept("[+] WAF bypass: usando " + effective + " para modulos de payload");
+                java.net.http.HttpClient probeHc = HttpClientFactory.http2();
+                String canary = java.net.URLEncoder.encode("<script>alert(1)</script>",
+                        java.nio.charset.StandardCharsets.UTF_8);
+                String probeUrl = ctx.targetUrl() + "?wafprobe=" + canary;
+                java.net.http.HttpRequest probeReq = java.net.http.HttpRequest.newBuilder()
+                        .uri(java.net.URI.create(probeUrl)).timeout(java.time.Duration.ofSeconds(6)).GET().build();
+                java.net.http.HttpResponse<String> probeResp = probeHc.send(probeReq,
+                        java.net.http.HttpResponse.BodyHandlers.ofString());
+                String serverHdr = probeResp.headers().firstValue("Server").orElse("");
+                String probeBody = probeResp.body() != null ? probeResp.body() : "";
+
+                // Check JS challenge first (Vercel/Cloudflare managed challenge)
+                if (WafEvasion.isJsChallenge(probeResp.statusCode(), probeResp.headers().map(), probeBody)) {
+                    String challengeType = WafEvasion.detectChallengeType(probeResp.statusCode(),
+                            probeResp.headers().map(), probeBody);
+                    String product = WafEvasion.detectWafProduct(serverHdr);
+                    ctx.wafState().markWafDetected(product.isEmpty() ? serverHdr : product);
+                    ctx.wafState().markJsChallenge(challengeType);
+                    safeLog.accept("[!] Phase 1.5: JS challenge detectado -- " + challengeType + " (HTTP "
+                            + probeResp.statusCode() + ")");
+                } else if (WafEvasion.isWafBlocked(probeResp.statusCode(), serverHdr, probeBody)) {
+                    String product = WafEvasion.detectWafProduct(serverHdr);
+                    ctx.wafState().markWafDetected(product.isEmpty() ? serverHdr : product);
+                    safeLog.accept("[!] Phase 1.5: WAF detectado -- " + ctx.wafState().wafProduct() + " (HTTP "
+                            + probeResp.statusCode() + ")");
+                } else {
+                    safeLog.accept("[+] Phase 1.5: nenhum WAF detectado");
                 }
             } catch (Exception e) {
-                safeLog.accept("[!] WAF probe falhou: " + e.getMessage());
+                safeLog.accept("[~] Phase 1.5: WAF detection falhou: " + e.getMessage());
+            }
+        }
+
+        if (ctx.wafState().isWafDetected()) {
+            if (ctx.wafState().isJsChallenge()) {
+                // JS challenge -- use headless Chromium as request transport
+                safeLog.accept("[*] Phase 1.5: ativando BrowserTransport (headless Chromium)...");
+                BrowserTransport bt = BrowserTransport.create(ctx.targetUrl(), safeLog);
+                if (bt != null) {
+                    ctx.wafState().setBrowserTransport(bt);
+                    safeLog.accept("[+] Phase 1.5: JS challenge bypassado -- requests via Chromium headless");
+                } else {
+                    safeLog.accept("[-] Phase 1.5: BrowserTransport indisponivel");
+                    safeLog.accept("[*] Alternativa: abra o alvo no Chrome, copie os cookies e cole em Session Cookie");
+                }
+            } else {
+                // WAF rule block -- try TLS fingerprint bypass
+                safeLog.accept("[*] Phase 1.5: TLS fingerprint bypass (Chrome JA3 + H2) em " + ctx.targetUrl());
+                try {
+                    String canary = java.net.URLEncoder.encode("<script>alert(1)</script>",
+                            java.nio.charset.StandardCharsets.UTF_8);
+                    String stealthUrl = ctx.targetUrl() + "?wafprobe=" + canary;
+                    java.net.http.HttpRequest stealthReq = java.net.http.HttpRequest.newBuilder()
+                            .uri(java.net.URI.create(stealthUrl)).timeout(java.time.Duration.ofSeconds(6)).GET()
+                            .build();
+                    java.net.http.HttpResponse<String> stealthResp = StealthHttpClient.send(stealthReq);
+                    String sHdr = stealthResp.headers().firstValue("Server").orElse("");
+                    String sBody = stealthResp.body() != null ? stealthResp.body() : "";
+                    if (!WafEvasion.isWafBlocked(stealthResp.statusCode(), sHdr, sBody)) {
+                        ctx.wafState().markStealthActive();
+                        safeLog.accept("[+] Phase 1.5: TLS bypass efetivo -- Chrome JA3+H2 passa WAF (HTTP "
+                                + stealthResp.statusCode() + ")");
+                    } else {
+                        safeLog.accept(
+                                "[-] Phase 1.5: TLS bypass insuficiente -- WAF bloqueia por regra, nao fingerprint"
+                                        + " (HTTP " + stealthResp.statusCode() + ")");
+                    }
+                } catch (Exception e) {
+                    safeLog.accept("[~] Phase 1.5: stealth probe falhou: " + e.getMessage());
+                }
+
+                // Payload-level bypass strategies (complementar ao TLS)
+                safeLog.accept("[*] Phase 1.5: probing payload bypass strategies para " + ctx.wafState().wafProduct());
+                try {
+                    java.net.http.HttpClient probeHc = HttpClientFactory.http2();
+                    WafEvasion.Strategy effective = WafEvasion.probeStrategies(ctx, probeHc, ctx.targetUrl(),
+                            "WafProbe", safeLog);
+                    if (effective != null) {
+                        ctx.wafState().markEffectiveStrategy(effective);
+                        safeLog.accept("[+] WAF bypass: usando " + effective + " para modulos de payload");
+                    } else {
+                        safeLog.accept("[-] WAF bypass: nenhuma estrategia de payload efetiva");
+                    }
+                } catch (Exception e) {
+                    safeLog.accept("[!] WAF probe falhou: " + e.getMessage());
+                }
             }
         }
 

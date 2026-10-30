@@ -77,6 +77,9 @@ public class SqlInjectionModule implements Scanner {
         List<String> errorPayloads = mergeKbErrorPayloads();
         log.accept("[~] SQLi: iniciando error-based e time-based em " + base + " (" + PATHS.size() + " paths x "
                 + PARAMS.size() + " params, " + errorPayloads.size() + " error payloads)");
+        if (ctx.wafState().browserTransport() != null) {
+            log.accept("[~] SQLi: BrowserTransport ativo -- phase 2 (time-based blind) desabilitada");
+        }
 
         AtomicBoolean cancel = new AtomicBoolean(false);
         List<Callable<List<Finding>>> tasks = new ArrayList<>();
@@ -143,7 +146,9 @@ public class SqlInjectionModule implements Scanner {
                     }
 
                     // -- Phase 2: Time-Based Blind --
-                    // Measure baseline RTT using 2 samples (median of small set)
+                    if (ctx.wafState().browserTransport() != null) {
+                        return local;
+                    }
                     long b1 = measureRtt(ctx, hc, base + path + "?" + param + "=1", log);
                     long b2 = measureRtt(ctx, hc, base + path + "?" + param + "=2", log);
                     if (b1 < 0 || b2 < 0) {

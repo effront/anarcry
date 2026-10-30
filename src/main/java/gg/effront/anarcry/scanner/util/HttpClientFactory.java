@@ -1,7 +1,10 @@
 package gg.effront.anarcry.scanner.util;
 
+import com.github.zhkl0228.impersonator.ImpersonatorFactory;
+
 import java.net.http.HttpClient;
 import java.time.Duration;
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 
 public final class HttpClientFactory {
@@ -12,6 +15,9 @@ public final class HttpClientFactory {
 
     // HTTP/1.1, no redirect -- for SSRF and OpenRedirect probing
     private static volatile HttpClient noRedirectInstance;
+
+    // HTTP/2, follows redirects -- Chrome TLS fingerprint (JA3/JA4 spoofing)
+    private static volatile HttpClient stealthInstance;
 
     private HttpClientFactory() {
     }
@@ -44,6 +50,22 @@ public final class HttpClientFactory {
             }
         }
         return noRedirectInstance;
+    }
+
+    public static HttpClient stealth() throws Exception {
+        if (stealthInstance == null) {
+            synchronized (HttpClientFactory.class) {
+                if (stealthInstance == null) {
+                    SSLContext chromeTls = ImpersonatorFactory.macChrome().newSSLContext(null, null);
+                    SSLParameters params = new SSLParameters();
+                    params.setEndpointIdentificationAlgorithm("");
+                    stealthInstance = HttpClient.newBuilder().sslContext(chromeTls).sslParameters(params)
+                            .followRedirects(HttpClient.Redirect.NORMAL).version(HttpClient.Version.HTTP_2)
+                            .connectTimeout(Duration.ofSeconds(6)).build();
+                }
+            }
+        }
+        return stealthInstance;
     }
 
     private static volatile HttpClient followOneInstance;

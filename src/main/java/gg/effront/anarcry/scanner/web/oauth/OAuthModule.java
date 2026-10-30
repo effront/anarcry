@@ -92,18 +92,24 @@ public class OAuthModule implements Scanner {
                             .GET().build();
                     HttpResponse<Void> resp = Http.send(ctx, hcNoRedirect, req, HttpResponse.BodyHandlers.discarding(),
                             id());
-                    if (resp.statusCode() != 404) {
-                        log.accept(
-                                "[+] OAuth: authorize path encontrado: " + path + " (HTTP " + resp.statusCode() + ")");
-                        authorizeEndpoint = baseUrl + path;
-                        findings.add(Finding.of("OAuth", authorizeEndpoint, "OAuth authorize endpoint descoberto",
-                                Severity.INFO, "URL: " + authorizeEndpoint + " | HTTP " + resp.statusCode(),
-                                "Endpoint de autorização OAuth identificado -- auditar segurança do fluxo",
-                                "curl '" + authorizeEndpoint + "?response_type=code&client_id=test'",
-                                "Exigir state e PKCE; validar redirect_uri contra whitelist estrita", _cweId, _cweTitle,
-                                _cveVector, _score));
-                        break;
+                    int status = resp.statusCode();
+                    if (status == 404) {
+                        continue;
                     }
+                    if (ctx.wafState().isWafDetected() && (status == 403 || status == 406 || status == 429)) {
+                        log.accept("[~] OAuth: " + path + " retornou HTTP " + status
+                                + " de WAF -- ignorando (falso positivo)");
+                        continue;
+                    }
+                    log.accept("[+] OAuth: authorize path encontrado: " + path + " (HTTP " + status + ")");
+                    authorizeEndpoint = baseUrl + path;
+                    findings.add(Finding.of("OAuth", authorizeEndpoint, "OAuth authorize endpoint descoberto",
+                            Severity.INFO, "URL: " + authorizeEndpoint + " | HTTP " + status,
+                            "Endpoint de autorização OAuth identificado -- auditar segurança do fluxo",
+                            "curl '" + authorizeEndpoint + "?response_type=code&client_id=test'",
+                            "Exigir state e PKCE; validar redirect_uri contra whitelist estrita", _cweId, _cweTitle,
+                            _cveVector, _score));
+                    break;
                 } catch (Exception e) {
                     log.accept("[~] OAuth: " + path + " -- " + e.getMessage());
                 }
