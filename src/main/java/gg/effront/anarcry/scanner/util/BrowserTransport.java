@@ -47,6 +47,10 @@ public final class BrowserTransport implements AutoCloseable {
     private final Page page;
     private final String targetHost;
 
+    public static BrowserTransport stub(String targetHost) {
+        return new BrowserTransport(null, null, null, targetHost);
+    }
+
     private BrowserTransport(Playwright pw, Browser browser, Page page, String targetHost) {
         this.pw = pw;
         this.browser = browser;

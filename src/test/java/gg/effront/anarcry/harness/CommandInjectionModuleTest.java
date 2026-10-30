@@ -9,7 +9,6 @@ import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.util.BrowserTransport;
 import gg.effront.anarcry.scanner.web.cmdinject.CommandInjectionModule;
 
-import java.lang.reflect.Constructor;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -26,10 +25,8 @@ import org.junit.jupiter.api.TestMethodOrder;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CommandInjectionModuleTest {
 
-    private static BrowserTransport stubBrowserTransport() throws Exception {
-        Constructor<?> ctor = BrowserTransport.class.getDeclaredConstructors()[0];
-        ctor.setAccessible(true);
-        return (BrowserTransport) ctor.newInstance(null, null, null, "stub.local");
+    private static BrowserTransport stubBrowserTransport() {
+        return BrowserTransport.stub("stub.local");
     }
 
     private static HttpServer vulnerableServer() throws Exception {
