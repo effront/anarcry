@@ -8,7 +8,6 @@ import gg.effront.anarcry.scanner.util.BrowserTransport;
 import gg.effront.anarcry.scanner.web.sqli.SqlInjectionModule;
 import org.junit.jupiter.api.*;
 
-import java.lang.reflect.Constructor;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
@@ -167,10 +166,8 @@ class SqlInjectionModuleTest {
     // BrowserTransport interaction: Phase 2 skip
     // -------------------------------------------------
 
-    private static BrowserTransport stubBrowserTransport() throws Exception {
-        Constructor<?> ctor = BrowserTransport.class.getDeclaredConstructors()[0];
-        ctor.setAccessible(true);
-        return (BrowserTransport) ctor.newInstance(null, null, null, "stub.local");
+    private static BrowserTransport stubBrowserTransport() {
+        return BrowserTransport.stub("stub.local");
     }
 
     @Test
