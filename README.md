@@ -103,13 +103,13 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.4.2.jar
+java -jar build/libs/anarcry-1.5.0.jar
 ```
 
 With `.env.local` for pre-configured targets:
 
 ```bash
-java -jar build/libs/anarcry-1.4.2.jar --env .env.local
+java -jar build/libs/anarcry-1.5.0.jar --env .env.local
 ```
 
 ---
@@ -334,6 +334,17 @@ ScanRunner.run(ScanContext)
 
 ## 09 - Changelog
 
+### v1.5.0
+
+- **WAF evasion engine**: WafState + WafEvasion in scanner/util/ -- 5 bypass strategies (DOUBLE_ENCODE, CASE_MUTATION, UNICODE_NORMALIZE, CHARSET_EBCDIC, HPP)
+- **ScanRunner Phase 1.5**: automatic WAF probe between Crawler recon and scanner modules -- detects effective bypass strategy
+- **Module integration**: SQLi, XSS, LFI, SSTI, CmdInjection, XXE apply evasion payloads transparently when WAF detected
+- **HeadersModule WAF state**: marks shared WafState on 403 + WAF signature detection
+- **Test harness**: 26 WAF tests (18 unit + 8 integration with mock WAF server)
+
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
+
 ### v1.4.2
 
 - **CVE-enriched reports**: scan reports (MD, HackerOne, Bugcrowd) now include Known CVEs table per vulnerability class, sourced from the knowledge base
@@ -375,6 +386,8 @@ ScanRunner.run(ScanContext)
 ### v1.1
 
 - Initial public release with 25 attack modules, CVSS v3.1 auto-scoring, HackerOne/Bugcrowd export, and TUI
+
+</details>
 
 ---
 

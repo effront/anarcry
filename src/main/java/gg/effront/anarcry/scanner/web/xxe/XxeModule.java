@@ -7,6 +7,7 @@ import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.TlsUtil;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
+import gg.effront.anarcry.scanner.util.WafEvasion;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -137,9 +138,18 @@ public class XxeModule implements Scanner {
 
     private String sendXml(ScanContext ctx, HttpClient hc, String url, String payload) {
         try {
-            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6))
-                    .header("Content-Type", "application/xml").POST(HttpRequest.BodyPublishers.ofString(payload))
-                    .build();
+            HttpRequest req;
+            if (ctx.wafState().isWafDetected()
+                    && ctx.wafState().effectiveStrategy() == WafEvasion.Strategy.CHARSET_EBCDIC) {
+                byte[] ebcdicBody = WafEvasion.encodeEbcdic(payload);
+                req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6))
+                        .header("Content-Type", "application/xml; charset=ibm500")
+                        .POST(HttpRequest.BodyPublishers.ofByteArray(ebcdicBody)).build();
+            } else {
+                req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6))
+                        .header("Content-Type", "application/xml").POST(HttpRequest.BodyPublishers.ofString(payload))
+                        .build();
+            }
             HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
             if (resp.statusCode() == 200 && resp.body() != null) {
                 return resp.body();
