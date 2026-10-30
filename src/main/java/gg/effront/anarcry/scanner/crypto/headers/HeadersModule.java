@@ -47,7 +47,7 @@ public class HeadersModule implements Scanner {
         conn.setConnectTimeout(5000);
         conn.setReadTimeout(10000);
         conn.setInstanceFollowRedirects(true);
-        conn.setRequestProperty("User-Agent", "AnarCry/1.1");
+        conn.setRequestProperty("User-Agent", gg.effront.anarcry.Version.userAgent());
 
         final Map<String, List<String>> headers;
         final String evidence;
@@ -71,6 +71,7 @@ public class HeadersModule implements Scanner {
                             || server.toLowerCase().contains("awselb") || server.toLowerCase().contains("incapsula")
                             || server.toLowerCase().contains("sucuri") || server.toLowerCase().contains("ddos-guard"));
             if (wafLikely) {
+                ctx.wafState().markWafDetected(server);
                 log.accept("[!] HEADERS: HTTP 403 com Server: " + server
                         + " -- possivel bloqueio por WAF, headers nao confiaveis");
                 findings.add(

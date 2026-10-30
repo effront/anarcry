@@ -9,6 +9,7 @@ import gg.effront.anarcry.model.KnowledgeEntry;
 import gg.effront.anarcry.scanner.DiscoveredPaths;
 import gg.effront.anarcry.scanner.ScanConfig;
 import gg.effront.anarcry.scanner.ScanContext;
+import gg.effront.anarcry.scanner.util.WafState;
 import gg.effront.anarcry.scanner.ScanRunner;
 import gg.effront.anarcry.scanner.web.crawler.CrawlerModule;
 import gg.effront.anarcry.scanner.web.idor.IdorModule;
@@ -340,7 +341,7 @@ class Sprint18E2ETest {
         try {
             ScanConfig config = new ScanConfig(200, "", Set.of(), List.of(), "");
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", "", Set.of("Crawler"), config, r -> {
-            }, new DiscoveredPaths());
+            }, new DiscoveredPaths(), new WafState());
 
             new CrawlerModule().scan(ctx, msg -> {
             });

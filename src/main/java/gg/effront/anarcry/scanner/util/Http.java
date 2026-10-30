@@ -9,12 +9,29 @@ import java.net.http.HttpResponse;
 
 public class Http {
 
+    @SuppressWarnings("unchecked")
     public static <T> HttpResponse<T> send(ScanContext ctx, HttpClient hc, HttpRequest req,
             HttpResponse.BodyHandler<T> handler, String moduleId) throws Exception {
+        String cookies = "";
         if (!ctx.config().sessionCookie().isBlank()) {
-            req = HttpRequest.newBuilder(req, (n, v) -> true).header("Cookie", ctx.config().sessionCookie()).build();
+            cookies = ctx.config().sessionCookie();
         }
-        HttpResponse<T> resp = hc.send(req, handler);
+        String challengeCookies = ctx.wafState().challengeCookies();
+        if (!challengeCookies.isEmpty()) {
+            cookies = cookies.isEmpty() ? challengeCookies : cookies + "; " + challengeCookies;
+        }
+        if (!cookies.isEmpty()) {
+            req = HttpRequest.newBuilder(req, (n, v) -> true).header("Cookie", cookies).build();
+        }
+        HttpResponse<T> resp;
+        BrowserTransport bt = ctx.wafState().browserTransport();
+        if (bt != null && bt.isTargetHost(req.uri().toString())) {
+            resp = (HttpResponse<T>) bt.fetch(req);
+        } else if (ctx.wafState().isStealthActive()) {
+            resp = (HttpResponse<T>) StealthHttpClient.send(req);
+        } else {
+            resp = hc.send(req, handler);
+        }
         if (ctx.config().delayMs() > 0) {
             try {
                 Thread.sleep(ctx.config().delayMs());

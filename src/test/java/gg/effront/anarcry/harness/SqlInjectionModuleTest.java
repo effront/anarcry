@@ -4,10 +4,12 @@ import com.sun.net.httpserver.HttpServer;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
+import gg.effront.anarcry.scanner.util.BrowserTransport;
 import gg.effront.anarcry.scanner.web.sqli.SqlInjectionModule;
 import org.junit.jupiter.api.*;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -158,5 +160,76 @@ class SqlInjectionModuleTest {
                 "CweRegistry deve ter CWE-89 para SQLi");
         assertTrue(gg.effront.anarcry.model.CweRegistry.cvssVector("SQLi").startsWith("AV:N"),
                 "CVSS vector para SQLi deve ser network-based");
+    }
+
+    // -------------------------------------------------
+    // BrowserTransport interaction: Phase 2 skip
+    // -------------------------------------------------
+
+    private static BrowserTransport stubBrowserTransport() {
+        return BrowserTransport.stub("stub.local");
+    }
+
+    @Test
+    @Order(7)
+    void sqliPhase2SkippedWhenBrowserTransportActive() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            byte[] body = "ok".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("SQLi"));
+            ctx.wafState().setBrowserTransport(stubBrowserTransport());
+
+            List<String> logs = new ArrayList<>();
+            List<Finding> findings = new SqlInjectionModule().scan(ctx, logs::add);
+
+            assertTrue(logs.stream().anyMatch(l -> l.contains("BrowserTransport") && l.contains("time-based")),
+                    "Deve logar que phase 2 (time-based) esta desabilitada com BrowserTransport");
+            assertTrue(findings.isEmpty(), "Clean server com BT ativo nao deve gerar findings");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(8)
+    void sqliPhase1WorksWithBrowserTransportActive() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            String raw = exchange.getRequestURI().getRawQuery();
+            byte[] body;
+            if (raw != null && (raw.contains("%27") || raw.contains("'"))) {
+                body = "You have an error in your SQL syntax; check the manual near '' at line 1".getBytes();
+            } else {
+                body = "ok".getBytes();
+            }
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("SQLi"));
+            ctx.wafState().setBrowserTransport(stubBrowserTransport());
+
+            List<String> logs = new ArrayList<>();
+            List<Finding> findings = new SqlInjectionModule().scan(ctx, logs::add);
+
+            assertTrue(logs.stream().anyMatch(l -> l.contains("BrowserTransport")), "Phase 2 deve estar desabilitada");
+            assertFalse(findings.isEmpty(), "Phase 1 (error-based) deve funcionar mesmo com BT ativo");
+            assertTrue(
+                    findings.stream().anyMatch(
+                            f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("sql")),
+                    "Error-based SQLi deve gerar CRITICAL mesmo com BT");
+        } finally {
+            server.stop(0);
+        }
     }
 }

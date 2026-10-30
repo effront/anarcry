@@ -10,6 +10,7 @@ import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.ProbeExecutor;
+import gg.effront.anarcry.scanner.util.WafEvasion;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -228,7 +229,10 @@ public class LfiModule implements Scanner {
                         if (cancelLinux.get()) {
                             return local;
                         }
-                        String qv = payload.asQueryValue();
+                        String evadedVal = payload.encode()
+                                ? WafEvasion.evasionPayload(ctx, payload.value())
+                                : payload.value();
+                        String qv = payload.encode() ? URLEncoder.encode(evadedVal, "UTF-8") : evadedVal;
                         String testUrl = base + path + "?" + param + "=" + qv;
                         try {
                             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(testUrl))
@@ -307,7 +311,10 @@ public class LfiModule implements Scanner {
                             if (cancelWindows.get()) {
                                 return local;
                             }
-                            String qv = payload.asQueryValue();
+                            String evadedVal = payload.encode()
+                                    ? WafEvasion.evasionPayload(ctx, payload.value())
+                                    : payload.value();
+                            String qv = payload.encode() ? URLEncoder.encode(evadedVal, "UTF-8") : evadedVal;
                             String testUrl = base + path + "?" + param + "=" + qv;
                             try {
                                 HttpRequest req = HttpRequest.newBuilder().uri(URI.create(testUrl))

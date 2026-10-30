@@ -9,6 +9,7 @@ import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.ProbeExecutor;
+import gg.effront.anarcry.scanner.util.WafEvasion;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -174,7 +175,7 @@ public class SstiModule implements Scanner {
                 continue;
             }
             try {
-                String encoded = URLEncoder.encode(rce.payload(), "UTF-8");
+                String encoded = URLEncoder.encode(WafEvasion.evasionPayload(ctx, rce.payload()), "UTF-8");
                 String url = base + path + "?" + param + "=" + encoded;
                 HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6)).GET()
                         .build();
@@ -194,7 +195,7 @@ public class SstiModule implements Scanner {
     private String tryMathProbe(ScanContext ctx, HttpClient hc, String base, String path, String param, SstiProbe probe,
             String baseline, Consumer<String> log) {
         try {
-            String encoded = URLEncoder.encode(probe.payload(), "UTF-8");
+            String encoded = URLEncoder.encode(WafEvasion.evasionPayload(ctx, probe.payload()), "UTF-8");
             String url = base + path + "?" + param + "=" + encoded;
             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(5)).GET()
                     .build();

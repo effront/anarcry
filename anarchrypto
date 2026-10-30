@@ -1,9 +1,13 @@
 #!/bin/bash
-JAR="$(dirname "$(realpath "$0")")/build/libs/anarcry-1.4.2.jar"
+DIR="$(dirname "$(realpath "$0")")"
 SELF="$(realpath "$0")"
 
-if [ ! -f "$JAR" ]; then
-    echo "AnarCry: JAR nao encontrado. Execute: ./gradlew shadowJar"
+# Resolve version from build.gradle so the launcher never goes stale
+VERSION=$(grep -oP "^version\s*=\s*'\K[^']+" "$DIR/build.gradle" 2>/dev/null || echo "")
+JAR="$DIR/build/libs/anarcry-${VERSION}.jar"
+
+if [ -z "$VERSION" ] || [ ! -f "$JAR" ]; then
+    echo "AnarCry: JAR nao encontrado (v${VERSION:-?}). Execute: ./gradlew shadowJar"
     exit 1
 fi
 
@@ -21,7 +25,7 @@ if [ "$TUI_MODE" = true ]; then
             exec kitty \
                 --override initial_window_width=180c \
                 --override initial_window_height=82c \
-                --title "AnarCry v1.4.2" \
+                --title "AnarCry v${VERSION}" \
                 bash "$SELF" "$@"
         fi
         printf '\e[8;54;220t'

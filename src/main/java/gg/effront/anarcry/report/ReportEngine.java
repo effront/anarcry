@@ -13,8 +13,11 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ReportEngine {
 
@@ -75,17 +78,33 @@ public class ReportEngine {
         sb.append("\n");
 
         sb.append("## Details\n\n");
+        Map<String, List<Finding>> groups = new LinkedHashMap<>();
         for (Finding f : findings) {
-            sb.append("### [").append(f.severity()).append("] ").append(f.title()).append("\n\n");
-            sb.append("**Module:** ").append(f.module()).append("  \n");
-            sb.append("**Endpoint:** ").append(f.endpoint()).append("  \n");
-            sb.append("**Evidence:** ").append(f.evidence()).append("  \n");
-            sb.append("**Impact:** ").append(f.impact()).append("  \n");
-            sb.append("**Reproduction:**\n```\n").append(f.reproduction()).append("\n```\n");
-            sb.append("**Recommendation:** ").append(f.recommendation()).append("  \n");
-            sb.append("**CWE:** ").append(f.cweId()).append(" -- ").append(f.cweTitle()).append("  \n");
-            sb.append("**CVSS v3.1:** ").append(f.cvssScore()).append(" (").append(f.cvssVector()).append(")  \n");
-            appendCves(sb, f.module());
+            groups.computeIfAbsent(f.module() + "|" + f.title(), k -> new ArrayList<>()).add(f);
+        }
+        for (List<Finding> group : groups.values()) {
+            Finding rep = group.getFirst();
+            sb.append("### [").append(rep.severity()).append("] ").append(rep.title()).append("\n\n");
+            sb.append("**Module:** ").append(rep.module()).append("  \n");
+            if (group.size() == 1) {
+                sb.append("**Endpoint:** ").append(rep.endpoint()).append("  \n");
+                sb.append("**Evidence:** ").append(rep.evidence()).append("  \n");
+            } else {
+                sb.append("\n**Affected Endpoints (").append(group.size()).append("):**\n\n");
+                sb.append("| Endpoint | Evidence |\n");
+                sb.append("|----------|----------|\n");
+                for (Finding f : group) {
+                    sb.append("| ").append(escape(f.endpoint())).append(" | ").append(escape(f.evidence()))
+                            .append(" |\n");
+                }
+                sb.append("\n");
+            }
+            sb.append("**Impact:** ").append(rep.impact()).append("  \n");
+            sb.append("**Reproduction:**\n```\n").append(rep.reproduction()).append("\n```\n");
+            sb.append("**Recommendation:** ").append(rep.recommendation()).append("  \n");
+            sb.append("**CWE:** ").append(rep.cweId()).append(" -- ").append(rep.cweTitle()).append("  \n");
+            sb.append("**CVSS v3.1:** ").append(rep.cvssScore()).append(" (").append(rep.cvssVector()).append(")  \n");
+            appendCves(sb, rep.module());
             sb.append("\n---\n\n");
         }
         return sb.toString();

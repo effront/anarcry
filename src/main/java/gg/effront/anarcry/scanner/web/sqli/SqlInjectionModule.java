@@ -10,6 +10,7 @@ import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.ProbeExecutor;
+import gg.effront.anarcry.scanner.util.WafEvasion;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -76,6 +77,9 @@ public class SqlInjectionModule implements Scanner {
         List<String> errorPayloads = mergeKbErrorPayloads();
         log.accept("[~] SQLi: iniciando error-based e time-based em " + base + " (" + PATHS.size() + " paths x "
                 + PARAMS.size() + " params, " + errorPayloads.size() + " error payloads)");
+        if (ctx.wafState().browserTransport() != null) {
+            log.accept("[~] SQLi: BrowserTransport ativo -- phase 2 (time-based blind) desabilitada");
+        }
 
         AtomicBoolean cancel = new AtomicBoolean(false);
         List<Callable<List<Finding>>> tasks = new ArrayList<>();
@@ -103,7 +107,7 @@ public class SqlInjectionModule implements Scanner {
                         if (cancel.get()) {
                             return local;
                         }
-                        String encoded = URLEncoder.encode(payload, "UTF-8");
+                        String encoded = URLEncoder.encode(WafEvasion.evasionPayload(ctx, payload), "UTF-8");
                         String url = base + path + "?" + param + "=" + encoded;
                         try {
                             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
@@ -142,7 +146,9 @@ public class SqlInjectionModule implements Scanner {
                     }
 
                     // -- Phase 2: Time-Based Blind --
-                    // Measure baseline RTT using 2 samples (median of small set)
+                    if (ctx.wafState().browserTransport() != null) {
+                        return local;
+                    }
                     long b1 = measureRtt(ctx, hc, base + path + "?" + param + "=1", log);
                     long b2 = measureRtt(ctx, hc, base + path + "?" + param + "=2", log);
                     if (b1 < 0 || b2 < 0) {
@@ -155,7 +161,7 @@ public class SqlInjectionModule implements Scanner {
                         if (cancel.get()) {
                             return local;
                         }
-                        String encoded = URLEncoder.encode(tp.payload(), "UTF-8");
+                        String encoded = URLEncoder.encode(WafEvasion.evasionPayload(ctx, tp.payload()), "UTF-8");
                         String url = base + path + "?" + param + "=" + encoded;
                         try {
                             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
