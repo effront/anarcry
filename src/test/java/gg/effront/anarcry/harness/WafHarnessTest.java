@@ -116,9 +116,11 @@ class WafHarnessTest {
         int port = server.getAddress().getPort();
         try {
             HttpClient hc = HttpClientFactory.http2();
-            String encoded = WafEvasion.doubleEncode("<script>alert(1)</script>");
-            HttpRequest req = HttpRequest.newBuilder().uri(URI.create("http://127.0.0.1:" + port + "/?q=" + encoded))
-                    .GET().build();
+            // doubleEncode returns single-encoded; caller's URLEncode completes the double
+            String transformed = WafEvasion.doubleEncode("<script>alert(1)</script>");
+            String wireEncoded = java.net.URLEncoder.encode(transformed, "UTF-8");
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create("http://127.0.0.1:" + port + "/?q=" + wireEncoded)).GET().build();
             HttpResponse<String> resp = hc.send(req, HttpResponse.BodyHandlers.ofString());
             assertEquals(200, resp.statusCode(),
                     "WAF nao deve bloquear payload double-encoded, got " + resp.statusCode());
@@ -247,8 +249,10 @@ class WafHarnessTest {
             String evaded = WafEvasion.evasionPayload(ctx, payload);
             assertNotEquals(payload, evaded, "Payload deve ser transformado");
 
+            // evasionPayload returns transformed form; URLEncode completes wire encoding
+            String wireEncoded = java.net.URLEncoder.encode(evaded, "UTF-8");
             HttpRequest evadedReq = HttpRequest.newBuilder()
-                    .uri(URI.create("http://127.0.0.1:" + port + "/?q=" + evaded)).GET().build();
+                    .uri(URI.create("http://127.0.0.1:" + port + "/?q=" + wireEncoded)).GET().build();
             HttpResponse<String> evadedResp = hc.send(evadedReq, HttpResponse.BodyHandlers.ofString());
             assertEquals(200, evadedResp.statusCode(),
                     "Payload transformado deve passar pelo WAF, got " + evadedResp.statusCode());

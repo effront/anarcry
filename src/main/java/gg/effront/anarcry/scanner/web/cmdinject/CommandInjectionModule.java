@@ -95,6 +95,12 @@ public class CommandInjectionModule implements Scanner {
                 + NETWORK_KEYWORDS.size() + " params, " + activePayloads.size() + " active + " + sleepPayloads.size()
                 + " sleep payloads)");
 
+        boolean browserActive = ctx.wafState().browserTransport() != null;
+        if (browserActive) {
+            log.accept("[~] CmdInjection: BrowserTransport ativo -- phase 2 (time-based blind) desabilitada"
+                    + " (latência do browser inviabiliza medição temporal)");
+        }
+
         AtomicBoolean cancel = new AtomicBoolean(false);
         List<Callable<List<Finding>>> tasks = new ArrayList<>();
 
@@ -178,7 +184,9 @@ public class CommandInjectionModule implements Scanner {
                     }
 
                     // -- Phase 2: Time-based blind injection --
-                    if (cancel.get()) {
+                    // Skip when BrowserTransport is active: its inherent latency
+                    // (~4-5s per request) makes timing measurements unreliable.
+                    if (cancel.get() || ctx.wafState().browserTransport() != null) {
                         return local;
                     }
                     long baselineMs = measureBaselineRtt(ctx, hc, base, path, param);
@@ -190,11 +198,9 @@ public class CommandInjectionModule implements Scanner {
                         long elapsed = measureElapsed(ctx, hc, base, path, param, sleepPayload);
 
                         if (elapsed <= baselineMs + TIMING_THRESHOLD_MS) {
-                            continue; // No significant spike for this payload
+                            continue;
                         }
 
-                        // Proportional verification: eliminates slow-server false
-                        // positives
                         boolean confirmed = verifyProportionalDelay(ctx, hc, baselineMs, base, path, param,
                                 sleepPayload);
                         if (confirmed) {

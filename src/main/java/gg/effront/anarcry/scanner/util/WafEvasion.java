@@ -11,6 +11,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
@@ -36,8 +37,7 @@ public final class WafEvasion {
     // -- Strategy implementations (GET-compatible: transform payload string) --
 
     public static String doubleEncode(String payload) {
-        String first = URLEncoder.encode(payload, StandardCharsets.UTF_8);
-        return first.replace("%", "%25");
+        return URLEncoder.encode(payload, StandardCharsets.UTF_8);
     }
 
     public static String mutateCase(String payload) {
@@ -130,6 +130,36 @@ public final class WafEvasion {
         return m.find() ? m.group(1) : "";
     }
 
+    // -- JS Challenge detection (Vercel / Cloudflare managed challenge) --
+
+    public static boolean isJsChallenge(int statusCode, Map<String, List<String>> headers, String body) {
+        return !detectChallengeType(statusCode, headers, body).isEmpty();
+    }
+
+    public static String detectChallengeType(int statusCode, Map<String, List<String>> headers, String body) {
+        if (statusCode != 403 && statusCode != 503) {
+            return "";
+        }
+        if ("challenge".equalsIgnoreCase(firstHeader(headers, "x-vercel-mitigated"))
+                || (body != null && body.contains("Vercel Security Checkpoint"))) {
+            return "Vercel Security Checkpoint";
+        }
+        if ("challenge".equalsIgnoreCase(firstHeader(headers, "cf-mitigated"))
+                || (body != null && (body.contains("cf_chl_opt") || body.contains("cf-challenge-")))) {
+            return "Cloudflare Managed Challenge";
+        }
+        return "";
+    }
+
+    private static String firstHeader(Map<String, List<String>> headers, String name) {
+        for (var entry : headers.entrySet()) {
+            if (name.equalsIgnoreCase(entry.getKey()) && !entry.getValue().isEmpty()) {
+                return entry.getValue().getFirst();
+            }
+        }
+        return "";
+    }
+
     // -- Probe: try each strategy against target to find effective one --
 
     public static Strategy probeStrategies(ScanContext ctx, HttpClient hc, String targetUrl, String moduleId,
@@ -154,10 +184,16 @@ public final class WafEvasion {
                 String server = resp.headers().firstValue("Server").orElse("");
                 String body = resp.body() != null ? resp.body() : "";
                 if (!isWafBlocked(resp.statusCode(), server, body)) {
+                    if (s == Strategy.CHARSET_EBCDIC || s == Strategy.HPP) {
+                        log.accept("[+] WAF bypass: " + s + " efetiva mas incompativel com GET inline"
+                                + " -- requer construcao de request especifica");
+                        continue;
+                    }
                     log.accept("[+] WAF bypass: estrategia " + s + " efetiva (HTTP " + resp.statusCode() + ")");
                     return s;
                 }
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                log.accept("[-] WAF probe " + s + " falhou: " + e.getMessage());
             }
         }
         log.accept("[-] WAF bypass: nenhuma estrategia efetiva");
