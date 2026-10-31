@@ -156,7 +156,8 @@ tasks.register('jpackageDeb', Exec) {
     dependsOn shadowJar
     group = 'distribution'
     description = 'Build .deb installer via jpackage'
-    commandLine 'jpackage',
+    def args = [
+        'jpackage',
         '--type', 'deb',
         '--name', 'AnarCry',
         '--app-version', version.toString(),
@@ -164,20 +165,25 @@ tasks.register('jpackageDeb', Exec) {
         '--main-jar', "anarcry-${version}.jar",
         '--main-class', 'gg.effront.anarcry.Main',
         '--dest', 'build/dist',
-        '--icon', 'public/logoAnarChy.png',
         '--java-options', '--enable-native-access=ALL-UNNAMED',
         '--linux-deb-maintainer', 'noreply@effront.gg',
         '--linux-app-category', 'utils',
         '--linux-shortcut',
         '--resource-dir', 'packaging/linux',
-        '--description', 'AnarCry Security Scanner'
+        '--description', 'AnarCry Security Scanner',
+    ]
+    if (file('public/logoAnarChy.png').exists()) {
+        args += ['--icon', 'public/logoAnarChy.png']
+    }
+    commandLine args
 }
 
 tasks.register('jpackageRpm', Exec) {
     dependsOn shadowJar
     group = 'distribution'
     description = 'Build .rpm installer via jpackage'
-    commandLine 'jpackage',
+    def args = [
+        'jpackage',
         '--type', 'rpm',
         '--name', 'AnarCry',
         '--app-version', version.toString(),
@@ -185,12 +191,16 @@ tasks.register('jpackageRpm', Exec) {
         '--main-jar', "anarcry-${version}.jar",
         '--main-class', 'gg.effront.anarcry.Main',
         '--dest', 'build/dist',
-        '--icon', 'public/logoAnarChy.png',
         '--java-options', '--enable-native-access=ALL-UNNAMED',
         '--linux-rpm-license-type', 'Proprietary',
         '--linux-shortcut',
         '--resource-dir', 'packaging/linux',
-        '--description', 'AnarCry Security Scanner'
+        '--description', 'AnarCry Security Scanner',
+    ]
+    if (file('public/logoAnarChy.png').exists()) {
+        args += ['--icon', 'public/logoAnarChy.png']
+    }
+    commandLine args
 }
 
 tasks.register('jpackageMsi', Exec) {
