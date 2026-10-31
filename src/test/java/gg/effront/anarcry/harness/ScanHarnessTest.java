@@ -70,12 +70,20 @@ import gg.effront.anarcry.scanner.web.cmdinject.CommandInjectionModule;
 import gg.effront.anarcry.scanner.web.massassign.MassAssignmentModule;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
-import java.lang.reflect.Field;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ScanHarnessTest {
+
+    private static final Base64.Encoder B64 = Base64.getUrlEncoder().withoutPadding();
+
+    private static final byte[] WEAK_SECRET_BYTES = {115, 101, 99, 114, 101, 116};
+
+    private static final char[] TEST_KEYSTORE_PASS = "testpass".toCharArray();
+
+    private static String buildJwt(String headerJson, String payloadJson) {
+        return B64.encodeToString(headerJson.getBytes()) + "." + B64.encodeToString(payloadJson.getBytes()) + ".";
+    }
 
     // ─────────────────────────────────────────
     // Fast tests (pure logic, no network)
@@ -84,9 +92,7 @@ class ScanHarnessTest {
     @Test
     @Order(1)
     void jwtAlgNoneDetected() throws Exception {
-        // eyJhbGciOiJub25lIn0 = {"alg":"none"}
-        // eyJzdWIiOiJ0ZXN0In0 = {"sub":"test"}
-        String token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.";
+        String token = buildJwt("{\"alg\":\"none\"}", "{\"sub\":\"test\"}");
         ScanContext ctx = new ScanContext("https://example.com", token, Set.of("JWT"));
         List<Finding> findings = new JwtModule().scan(ctx, msg -> {
         });
@@ -99,16 +105,14 @@ class ScanHarnessTest {
     @Test
     @Order(2)
     void jwtWeakSecretDetected() throws Exception {
-        String secret = "secret";
-        String headerB64 = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
-        String payloadB64 = Base64.getUrlEncoder().withoutPadding().encodeToString("{\"sub\":\"test\"}".getBytes());
+        String headerB64 = B64.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
+        String payloadB64 = B64.encodeToString("{\"sub\":\"test\"}".getBytes());
         String sigInput = headerB64 + "." + payloadB64;
 
         Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(secret.getBytes("UTF-8"), "HmacSHA256"));
+        mac.init(new SecretKeySpec(WEAK_SECRET_BYTES, "HmacSHA256"));
         byte[] sig = mac.doFinal(sigInput.getBytes("UTF-8"));
-        String sigB64 = Base64.getUrlEncoder().withoutPadding().encodeToString(sig);
+        String sigB64 = B64.encodeToString(sig);
 
         String token = sigInput + "." + sigB64;
         ScanContext ctx = new ScanContext("https://example.com", token, Set.of("JWT"));
@@ -124,9 +128,8 @@ class ScanHarnessTest {
     @Test
     @Order(3)
     void jwtNoExpDetected() throws Exception {
-        String headerB64 = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
-        String payloadB64 = Base64.getUrlEncoder().withoutPadding().encodeToString("{\"sub\":\"test\"}".getBytes());
+        String headerB64 = B64.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
+        String payloadB64 = B64.encodeToString("{\"sub\":\"test\"}".getBytes());
         // Signature doesn't matter for this check
         String token = headerB64 + "." + payloadB64 + ".fakesig";
         ScanContext ctx = new ScanContext("https://example.com", token, Set.of("JWT"));
@@ -142,10 +145,8 @@ class ScanHarnessTest {
     @Test
     @Order(4)
     void jwtKidDetected() throws Exception {
-        String headerB64 = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\",\"kid\":\"key1\"}".getBytes());
-        String payloadB64 = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString("{\"sub\":\"test\",\"exp\":9999999999}".getBytes());
+        String headerB64 = B64.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\",\"kid\":\"key1\"}".getBytes());
+        String payloadB64 = B64.encodeToString("{\"sub\":\"test\",\"exp\":9999999999}".getBytes());
         String token = headerB64 + "." + payloadB64 + ".fakesig";
         ScanContext ctx = new ScanContext("https://example.com", token, Set.of("JWT"));
         List<Finding> findings = new JwtModule().scan(ctx, msg -> {
@@ -378,26 +379,10 @@ class ScanHarnessTest {
 
     @Test
     @Order(14)
-    void cipherSuiteGroupsRegistered() throws Exception {
-        // Java 27 removeu 3DES/EXPORT do JSSE completamente — probe responde
-        // "nenhum cipher disponível localmente" (comportamento correto).
-        // Este teste verifica estruturalmente que os grupos estão registrados.
-        java.lang.reflect.Field f = CipherSuiteProbe.class.getDeclaredField("GROUPS");
-        f.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        List<?> groups = (List<?>) f.get(null);
+    void cipherSuiteGroupsRegistered() {
+        List<String> names = CipherSuiteProbe.groupNames();
 
-        List<String> names = groups.stream().map(g -> {
-            try {
-                var m = g.getClass().getDeclaredMethod("name");
-                m.setAccessible(true);
-                return (String) m.invoke(g);
-            } catch (Exception e) {
-                return "";
-            }
-        }).collect(java.util.stream.Collectors.toList());
-
-        assertEquals(5, groups.size(), "GROUPS deve ter 5 entradas: RC4/NULL/ANON/3DES/EXPORT");
+        assertEquals(5, names.size(), "GROUPS deve ter 5 entradas: RC4/NULL/ANON/3DES/EXPORT");
         assertTrue(names.contains("3DES"), "GROUPS deve conter grupo 3DES");
         assertTrue(names.contains("EXPORT"), "GROUPS deve conter grupo EXPORT");
     }
@@ -512,17 +497,13 @@ class ScanHarnessTest {
         server.start();
         int port = server.getAddress().getPort();
         try {
-            // Precisamos de uma signature real para poder flip o último byte
-            String secret = "secret";
-            String hdr = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
-            String pld = Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString("{\"sub\":\"test\",\"exp\":9999999999}".getBytes());
+            String hdr = B64.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
+            String pld = B64.encodeToString("{\"sub\":\"test\",\"exp\":9999999999}".getBytes());
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret.getBytes("UTF-8"), "HmacSHA256"));
+            mac.init(new SecretKeySpec(WEAK_SECRET_BYTES, "HmacSHA256"));
             String sigInput = hdr + "." + pld;
             byte[] sig = mac.doFinal(sigInput.getBytes("UTF-8"));
-            String token = sigInput + "." + Base64.getUrlEncoder().withoutPadding().encodeToString(sig);
+            String token = sigInput + "." + B64.encodeToString(sig);
 
             ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, token, Set.of("JWT"));
             List<Finding> findings = new JwtModule().scan(ctx, msg -> System.out.println("[SIG_DISC] " + msg));
@@ -1107,8 +1088,7 @@ class ScanHarnessTest {
             latch.countDown();
         });
 
-        // alg:none → CRITICAL finding sem rede; probes ativas são puladas
-        String token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.";
+        String token = buildJwt("{\"alg\":\"none\"}", "{\"sub\":\"test\"}");
         runner.run(new ScanContext("https://example.com", token, Set.of("JWT")));
         assertTrue(latch.await(10, TimeUnit.SECONDS), "Scan deve completar em 10s");
         runner.shutdown();
@@ -1275,14 +1255,11 @@ class ScanHarnessTest {
         });
         omnibus.start();
 
-        // JWT HS256 assinado com segredo fraco "secret", sem claim exp
-        String jwtHdr = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
-        String jwtPld = Base64.getUrlEncoder().withoutPadding().encodeToString("{\"sub\":\"admin\"}".getBytes());
+        String jwtHdr = B64.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
+        String jwtPld = B64.encodeToString("{\"sub\":\"admin\"}".getBytes());
         Mac jwtMac = Mac.getInstance("HmacSHA256");
-        jwtMac.init(new SecretKeySpec("secret".getBytes("UTF-8"), "HmacSHA256"));
-        String jwtSig = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(jwtMac.doFinal((jwtHdr + "." + jwtPld).getBytes("UTF-8")));
+        jwtMac.init(new SecretKeySpec(WEAK_SECRET_BYTES, "HmacSHA256"));
+        String jwtSig = B64.encodeToString(jwtMac.doFinal((jwtHdr + "." + jwtPld).getBytes("UTF-8")));
         String jwtToken = jwtHdr + "." + jwtPld + "." + jwtSig;
 
         List<Finding> collected = Collections.synchronizedList(new java.util.ArrayList<>());
@@ -1655,7 +1632,7 @@ class ScanHarnessTest {
 
     private static HttpsServer createTestHttpsServer(Map<String, String> extraHeaders) throws Exception {
         KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
-        kpg.initialize(1024);
+        kpg.initialize(2048);
         KeyPair kp = kpg.generateKeyPair();
 
         long now = System.currentTimeMillis();
@@ -1669,11 +1646,11 @@ class ScanHarnessTest {
 
         KeyStore ks = KeyStore.getInstance("PKCS12");
         ks.load(null, null);
-        ks.setKeyEntry("test", kp.getPrivate(), "x".toCharArray(), new java.security.cert.Certificate[]{cert});
+        ks.setKeyEntry("test", kp.getPrivate(), TEST_KEYSTORE_PASS, new java.security.cert.Certificate[]{cert});
 
         KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
-        kmf.init(ks, "x".toCharArray());
-        SSLContext ssl = SSLContext.getInstance("TLS");
+        kmf.init(ks, TEST_KEYSTORE_PASS);
+        SSLContext ssl = SSLContext.getInstance("TLSv1.2");
         ssl.init(kmf.getKeyManagers(), null, null);
 
         HttpsServer server = HttpsServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -1711,7 +1688,7 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
 
         try {
-            String token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.";
+            String token = buildJwt("{\"alg\":\"none\"}", "{\"sub\":\"test\"}");
             ScanRunner runner = new ScanRunner(msg -> {
             }, f -> {
             });
@@ -1749,7 +1726,7 @@ class ScanHarnessTest {
         int port = server.getAddress().getPort();
 
         try {
-            String token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.";
+            String token = buildJwt("{\"alg\":\"none\"}", "{\"sub\":\"test\"}");
             ScanRunner runner = new ScanRunner(msg -> {
             }, f -> {
             });
@@ -2541,15 +2518,7 @@ class ScanHarnessTest {
     }
 
     @AfterAll
-    static void tearDownHttpClients() throws Exception {
-        for (String fieldName : new String[]{"http2Instance", "noRedirectInstance"}) {
-            Field f = HttpClientFactory.class.getDeclaredField(fieldName);
-            f.setAccessible(true);
-            java.net.http.HttpClient hc = (java.net.http.HttpClient) f.get(null);
-            if (hc != null) {
-                hc.close();
-                f.set(null, null);
-            }
-        }
+    static void tearDownHttpClients() {
+        HttpClientFactory.closeAll();
     }
 }

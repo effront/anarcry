@@ -220,16 +220,20 @@ public class HeadersModule implements Scanner {
 
     private static boolean directiveHasEffectiveUnsafeInline(String csp, String... candidates) {
         for (String candidate : candidates) {
+            String matched = null;
             for (String directive : csp.split(";")) {
                 String d = directive.trim().toLowerCase();
-                if (!d.startsWith(candidate)) {
-                    continue;
+                if (d.startsWith(candidate)) {
+                    matched = d;
+                    break;
                 }
-                if (!d.contains("unsafe-inline")) {
+            }
+            if (matched != null) {
+                if (!matched.contains("unsafe-inline")) {
                     return false;
                 }
-                boolean neutralized = d.contains("'nonce-") || d.contains("'sha256-") || d.contains("'sha384-")
-                        || d.contains("'sha512-");
+                boolean neutralized = matched.contains("'nonce-") || matched.contains("'sha256-")
+                        || matched.contains("'sha384-") || matched.contains("'sha512-");
                 return !neutralized;
             }
         }
@@ -248,12 +252,16 @@ public class HeadersModule implements Scanner {
 
     private static boolean directiveContainsWildcard(String csp, String... candidates) {
         for (String candidate : candidates) {
+            String matched = null;
             for (String part : csp.split(";")) {
                 String d = part.trim().toLowerCase();
-                if (!d.startsWith(candidate.toLowerCase())) {
-                    continue;
+                if (d.startsWith(candidate.toLowerCase())) {
+                    matched = d;
+                    break;
                 }
-                for (String token : d.split("\\s+")) {
+            }
+            if (matched != null) {
+                for (String token : matched.split("\\s+")) {
                     if (token.equals("*") || token.startsWith("*.")) {
                         return true;
                     }

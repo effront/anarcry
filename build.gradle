@@ -8,7 +8,7 @@ plugins {
 }
 
 group = 'gg.effront'
-version = '1.5.0'
+version = '1.6.0'
 
 java {
     toolchain {
@@ -191,4 +191,52 @@ tasks.register('jpackageRpm', Exec) {
         '--linux-shortcut',
         '--resource-dir', 'packaging/linux',
         '--description', 'AnarCry Security Scanner'
+}
+
+tasks.register('jpackageMsi', Exec) {
+    dependsOn shadowJar
+    group = 'distribution'
+    description = 'Build .msi installer via jpackage (Windows)'
+    def args = [
+        'jpackage',
+        '--type', 'msi',
+        '--name', 'AnarCry',
+        '--app-version', version.toString(),
+        '--input', 'build/libs',
+        '--main-jar', "anarcry-${version}.jar",
+        '--main-class', 'gg.effront.anarcry.Main',
+        '--dest', 'build/dist',
+        '--java-options', '--enable-native-access=ALL-UNNAMED',
+        '--win-dir-chooser',
+        '--win-shortcut',
+        '--win-menu',
+        '--description', 'AnarCry Security Scanner',
+    ]
+    if (file('public/logoAnarChy.ico').exists()) {
+        args += ['--icon', 'public/logoAnarChy.ico']
+    }
+    commandLine args
+}
+
+tasks.register('jpackageDmg', Exec) {
+    dependsOn shadowJar
+    group = 'distribution'
+    description = 'Build .dmg installer via jpackage (macOS)'
+    def args = [
+        'jpackage',
+        '--type', 'dmg',
+        '--name', 'AnarCry',
+        '--app-version', version.toString(),
+        '--input', 'build/libs',
+        '--main-jar', "anarcry-${version}.jar",
+        '--main-class', 'gg.effront.anarcry.Main',
+        '--dest', 'build/dist',
+        '--java-options', '--enable-native-access=ALL-UNNAMED',
+        '--mac-package-name', 'AnarCry',
+        '--description', 'AnarCry Security Scanner',
+    ]
+    if (file('public/logoAnarChy.icns').exists()) {
+        args += ['--icon', 'public/logoAnarChy.icns']
+    }
+    commandLine args
 }
