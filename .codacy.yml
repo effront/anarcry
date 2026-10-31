@@ -1,0 +1,14 @@
+---
+# AnarCry is a security scanner / pentest toolkit.
+# Scanner modules intentionally connect to arbitrary hosts (SSRF),
+# use weak TLS for version probing, include crypto keys in JWT attack
+# probes, and execute SSH via ProcessBuilder for infra detection.
+# These patterns are core scanner functionality, not vulnerabilities.
+engines:
+  semgrep:
+    exclude_paths:
+      - "src/main/java/gg/effront/anarcry/scanner/**"
+      - "src/main/java/gg/effront/anarcry/EnvLoader.java"
+      - "SECURITY.md"
+exclude_paths:
+  - "docs/**"
