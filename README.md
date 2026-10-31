@@ -103,13 +103,19 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.5.0.jar
+java -jar build/libs/anarcry-1.6.0.jar
+```
+
+Or use the launcher (auto-builds if source changed):
+
+```bash
+./anarchrypto
 ```
 
 With `.env.local` for pre-configured targets:
 
 ```bash
-java -jar build/libs/anarcry-1.5.0.jar --env .env.local
+./anarchrypto --env .env.local
 ```
 
 ---
@@ -207,7 +213,9 @@ Two operational modes: **Target** (main scan interface) and **Repeater** (HTTP r
 | Target:       |                                                       |
 | target.com    |                                                       |
 |               |                                                       |
-| JWT:          |                                                       |
+| Auth Type:    |                                                       |
+| [JWT v]       |                                                       |
+| JWT Token:    |                                                       |
 | eyJ...        |                                                       |
 |               |                                                       |
 | [Start]       |                                                       |
@@ -271,6 +279,7 @@ src/main/java/gg/effront/anarcry/
 |   |                                vrtId, summary, description, impact, payloads,
 |   |                                crawlerHints, recommendation
 |   +-- RequestRecord.java          HTTP request/response log entry
+|   +-- AuthType.java               Auth selector enum (NONE, JWT, COOKIE, BEARER)
 |   +-- Suppression.java            Finding suppression config
 +-- scanner/
 |   +-- Scanner.java                Interface: id() + scan(ScanContext, Consumer<String>)
@@ -334,6 +343,17 @@ ScanRunner.run(ScanContext)
 
 ## 09 - Changelog
 
+### v1.6.0
+
+- **AuthType selector**: NONE / JWT / COOKIE / BEARER auth mode in both TUI and GUI -- dynamic credential fields, AuthType.buildContext() factory routes tokens/cookies correctly
+- **Multi-platform release CI**: matrix build (Linux .deb, Windows .msi, macOS .dmg) via GitHub Actions release workflow
+- **Codacy compliance**: 31 findings resolved (13 code fixes, 18 false-positive suppressions via .codacy.yml for scanner-inherent patterns)
+- **anarchrypto auto-build**: launcher detects stale JAR and rebuilds automatically via `./gradlew shadowJar`
+- **AuthType e2e harness**: 25 tests covering enum contract, wiring, module skip, HTTP header injection, and integration
+
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
+
 ### v1.5.0
 
 - **WAF evasion engine**: WafState + WafEvasion in scanner/util/ -- 5 bypass strategies (DOUBLE_ENCODE, CASE_MUTATION, UNICODE_NORMALIZE, CHARSET_EBCDIC, HPP)
@@ -386,6 +406,8 @@ ScanRunner.run(ScanContext)
 ### v1.1
 
 - Initial public release with 25 attack modules, CVSS v3.1 auto-scoring, HackerOne/Bugcrowd export, and TUI
+
+</details>
 
 </details>
 
