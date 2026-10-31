@@ -121,7 +121,7 @@ Casos reais e mentalidade de ataque (RWBH): Twitter (stored XSS em perfis/tweets
 | CVE-2024-4367 | Mozilla PDF.js (Firefox < 126) | 2024 | Type check ausente no handling de fontes em PDF.js permite execucao de JavaScript arbitrario no contexto do viewer | DOM XSS |
 | CVE-2023-44389 | Zope | 2023 | Propriedade title de objetos Zope aceita script code que executa ao visualizar o objeto no Zope Management Interface | Stored XSS |
 | CVE-2024-25600 | WordPress Bricks Builder <= 1.9.6 | 2024 | Code injection via builder permite RCE sem autenticacao -- vetor inicial via XSS em templates | Stored XSS / RCE |
-| CVE-2022-29078 | EJS 3.1.6 (Node.js) | 2022 | Server-side template injection via settings[view options][outputFunctionName] permite execucao de codigo arbitrario | SSTI / XSS |
+| CVE-2022-29078 | EJS 3.1.6 (Node.js) | 2022 | Server-side template injection via `settings[view options][outputFunctionName]` permite execucao de codigo arbitrario | SSTI / XSS |
 | CVE-2023-6553 | WordPress Backup Migration <= 1.3.7 | 2023 | RCE via /includes/backup-heart.php sem autenticacao -- frequentemente encadeado com XSS para persistence | RCE via injection |
 | CVE-2022-35914 | GLPI <= 10.0.2 (htmlawed) | 2022 | PHP code injection via htmLawedTest.php exposto -- modulo de sanitizacao HTML exploitavel | Stored XSS / RCE |
 

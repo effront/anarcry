@@ -153,7 +153,7 @@ public class SstiModule implements Scanner {
                                     _cweId, _cweTitle, _cveVector, _score));
                         }
                         cancel.set(true);
-                        return local;
+                        break;
                     }
                 }
                 return local;
