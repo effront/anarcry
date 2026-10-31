@@ -6,17 +6,15 @@ import com.sun.net.httpserver.HttpServer;
 import gg.effront.anarcry.model.AuthType;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.Severity;
-import gg.effront.anarcry.scanner.DiscoveredPaths;
-import gg.effront.anarcry.scanner.ScanConfig;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.crypto.headers.HeadersModule;
 import gg.effront.anarcry.scanner.crypto.jwt.JwtModule;
-import gg.effront.anarcry.scanner.util.WafState;
 import gg.effront.anarcry.scanner.web.cors.CorsModule;
 import gg.effront.anarcry.scanner.web.hostheader.HostHeaderModule;
 import gg.effront.anarcry.scanner.web.idor.IdorModule;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -30,8 +28,14 @@ import org.junit.jupiter.params.provider.EnumSource;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class AuthTypeE2ETest {
 
-    private static final String SAMPLE_JWT = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.";
-    private static final String SAMPLE_JWT2 = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ1c2VyMiJ9.";
+    private static final Base64.Encoder B64 = Base64.getUrlEncoder().withoutPadding();
+
+    private static String buildJwt(String headerJson, String payloadJson) {
+        return B64.encodeToString(headerJson.getBytes()) + "." + B64.encodeToString(payloadJson.getBytes()) + ".";
+    }
+
+    private static final String SAMPLE_JWT = buildJwt("{\"alg\":\"none\"}", "{\"sub\":\"test\"}");
+    private static final String SAMPLE_JWT2 = buildJwt("{\"alg\":\"none\"}", "{\"sub\":\"user2\"}");
     private static final String SAMPLE_COOKIE = "sid=abc123; token=xyz";
     private static final String SAMPLE_BEARER = "opaque-oauth2-access-token";
 
@@ -43,24 +47,17 @@ class AuthTypeE2ETest {
 
     private static ScanContext contextFor(AuthType type, String target, Set<String> modules, String credential,
             String credential2) {
+        String cred = credential != null ? credential : defaultCredential(type);
+        String cred2 = credential2 != null ? credential2 : "";
+        return type.buildContext(target, modules, cred, cred2);
+    }
+
+    private static String defaultCredential(AuthType type) {
         return switch (type) {
-            case NONE -> new ScanContext(target, "", modules);
-            case JWT -> {
-                String jwt1 = credential != null ? credential : SAMPLE_JWT;
-                String jwt2 = credential2 != null ? credential2 : "";
-                yield new ScanContext(target, jwt1, jwt2, modules);
-            }
-            case COOKIE -> {
-                String cookie = credential != null ? credential : SAMPLE_COOKIE;
-                ScanConfig cfg = new ScanConfig(0, cookie, Set.of(), List.of(), "");
-                yield new ScanContext(target, "", "", modules, cfg, r -> {
-                }, new DiscoveredPaths(), new WafState());
-            }
-            case BEARER -> {
-                String bearer = credential != null ? credential : SAMPLE_BEARER;
-                String bearer2 = credential2 != null ? credential2 : "";
-                yield new ScanContext(target, bearer, bearer2, modules);
-            }
+            case NONE -> "";
+            case JWT -> SAMPLE_JWT;
+            case COOKIE -> SAMPLE_COOKIE;
+            case BEARER -> SAMPLE_BEARER;
         };
     }
 
