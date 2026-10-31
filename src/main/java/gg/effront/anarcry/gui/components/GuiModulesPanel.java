@@ -1,6 +1,7 @@
 package gg.effront.anarcry.gui.components;
 
 import gg.effront.anarcry.gui.PrivacyFilter;
+import gg.effront.anarcry.model.AuthType;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -18,6 +19,7 @@ import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -40,8 +42,15 @@ public class GuiModulesPanel extends JPanel {
     private final Map<String, JCheckBox> moduleChecks = new LinkedHashMap<>();
 
     private final JTextField targetField;
+    private final JComboBox<AuthType> authTypeCombo;
+    private final JLabel cred1Label;
+    private final JLabel cred2Label;
     private final JTextArea jwtField;
     private final JTextArea jwt2Field;
+    private final JScrollPane cred1Scroll;
+    private final JScrollPane cred2Scroll;
+    private final Component cred1Strut;
+    private final Component cred2Strut;
 
     private final JButton startButton;
     private final JButton stopButton;
@@ -123,25 +132,41 @@ public class GuiModulesPanel extends JPanel {
 
         bottom.add(Box.createVerticalStrut(6));
 
-        bottom.add(fieldLabel("JWT 1:"));
+        bottom.add(fieldLabel("Auth Type:"));
+        authTypeCombo = new JComboBox<>(AuthType.values());
+        authTypeCombo.setSelectedItem(AuthType.NONE);
+        authTypeCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        authTypeCombo.setAlignmentX(Component.LEFT_ALIGNMENT);
+        bottom.add(authTypeCombo);
+
+        cred1Strut = Box.createVerticalStrut(6);
+        bottom.add(cred1Strut);
+
+        cred1Label = fieldLabel("Credential 1:");
+        bottom.add(cred1Label);
         jwtField = new JTextArea(2, 20);
         jwtField.setLineWrap(true);
         jwtField.setAlignmentX(Component.LEFT_ALIGNMENT);
-        JScrollPane jwtScroll = new JScrollPane(jwtField);
-        jwtScroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
-        jwtScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
-        bottom.add(jwtScroll);
+        cred1Scroll = new JScrollPane(jwtField);
+        cred1Scroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        cred1Scroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        bottom.add(cred1Scroll);
 
-        bottom.add(Box.createVerticalStrut(6));
+        cred2Strut = Box.createVerticalStrut(6);
+        bottom.add(cred2Strut);
 
-        bottom.add(fieldLabel("JWT 2:"));
+        cred2Label = fieldLabel("Credential 2:");
+        bottom.add(cred2Label);
         jwt2Field = new JTextArea(2, 20);
         jwt2Field.setLineWrap(true);
         jwt2Field.setAlignmentX(Component.LEFT_ALIGNMENT);
-        JScrollPane jwt2Scroll = new JScrollPane(jwt2Field);
-        jwt2Scroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
-        jwt2Scroll.setAlignmentX(Component.LEFT_ALIGNMENT);
-        bottom.add(jwt2Scroll);
+        cred2Scroll = new JScrollPane(jwt2Field);
+        cred2Scroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        cred2Scroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        bottom.add(cred2Scroll);
+
+        authTypeCombo.addActionListener(e -> updateCredentialFields());
+        updateCredentialFields();
 
         bottom.add(Box.createVerticalStrut(8));
 
@@ -198,6 +223,10 @@ public class GuiModulesPanel extends JPanel {
         return rawJwt2.trim();
     }
 
+    public AuthType getAuthType() {
+        return (AuthType) authTypeCombo.getSelectedItem();
+    }
+
     public Set<String> getEnabledModules() {
         Set<String> enabled = new LinkedHashSet<>();
         for (Map.Entry<String, JCheckBox> entry : moduleChecks.entrySet()) {
@@ -216,6 +245,9 @@ public class GuiModulesPanel extends JPanel {
     public void setJwt(String j) {
         rawJwt = j != null ? j : "";
         jwtField.setText(PrivacyFilter.isEnabled() ? PrivacyFilter.apply(rawJwt) : rawJwt);
+        if (!rawJwt.isEmpty() && getAuthType() == AuthType.NONE) {
+            authTypeCombo.setSelectedItem(AuthType.JWT);
+        }
     }
 
     public void setJwt2(String j) {
@@ -236,6 +268,41 @@ public class GuiModulesPanel extends JPanel {
     public void setScanning(boolean scanning) {
         startButton.setEnabled(!scanning);
         stopButton.setEnabled(scanning);
+    }
+
+    private void updateCredentialFields() {
+        AuthType selected = getAuthType();
+        boolean showCred1 = selected.hasAuth();
+        boolean showCred2 = selected == AuthType.JWT;
+
+        cred1Label.setVisible(showCred1);
+        cred1Scroll.setVisible(showCred1);
+        cred1Strut.setVisible(showCred1);
+        cred2Label.setVisible(showCred2);
+        cred2Scroll.setVisible(showCred2);
+        cred2Strut.setVisible(showCred2);
+
+        switch (selected) {
+            case NONE -> {
+                cred1Label.setText("Credential 1:");
+                cred2Label.setText("Credential 2:");
+            }
+            case JWT -> {
+                cred1Label.setText("JWT Token:");
+                cred2Label.setText("JWT Token 2 (IDOR):");
+            }
+            case COOKIE -> {
+                cred1Label.setText("Session Cookie:");
+                cred2Label.setText("Credential 2:");
+            }
+            case BEARER -> {
+                cred1Label.setText("Bearer Token:");
+                cred2Label.setText("Credential 2:");
+            }
+        }
+
+        revalidate();
+        repaint();
     }
 
     private void onPrivacyChanged() {

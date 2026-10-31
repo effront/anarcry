@@ -1,5 +1,6 @@
 package gg.effront.anarcry.scanner;
 
+import gg.effront.anarcry.model.AuthType;
 import gg.effront.anarcry.model.RequestRecord;
 import gg.effront.anarcry.scanner.util.WafState;
 
@@ -25,6 +26,15 @@ public final class ScanOrchestrator {
     public static ScanContext buildContext(String target, String jwt, String jwt2, Set<String> modules) {
         return buildContext(target, jwt, jwt2, modules, r -> {
         });
+    }
+
+    public static ScanContext buildContext(AuthType authType, String target, String cred1, String cred2,
+            Set<String> modules, Consumer<RequestRecord> requestLogCb) {
+        String jwt = authType.usesBearer() ? (cred1 != null ? cred1 : "") : "";
+        String jwt2 = authType.usesBearer() ? (cred2 != null ? cred2 : "") : "";
+        String cookie = authType.usesCookie() ? (cred1 != null ? cred1 : "") : "";
+        ScanConfig cfg = new ScanConfig(0, cookie, Set.of(), SuppressionLoader.loadFromCwd(), "");
+        return new ScanContext(target, jwt, jwt2, modules, cfg, requestLogCb, new DiscoveredPaths(), new WafState());
     }
 
     public static Set<String> defaultModules() {

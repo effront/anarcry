@@ -1,5 +1,6 @@
 package gg.effront.anarcry.gui;
 
+import gg.effront.anarcry.model.AuthType;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.RequestRecord;
 import gg.effront.anarcry.scanner.DiscoveredPaths;
@@ -66,16 +67,19 @@ public class GuiController {
      *
      * @param target
      *            full target URL (e.g. {@code https://example.com})
-     * @param jwt
-     *            primary JWT token (may be empty)
-     * @param jwt2
-     *            secondary JWT token for IDOR testing (may be empty)
+     * @param authType
+     *            authentication type (NONE, JWT, COOKIE, BEARER)
+     * @param cred1
+     *            primary credential (JWT token, cookie, or bearer token -- may be
+     *            empty)
+     * @param cred2
+     *            secondary credential for IDOR testing (may be empty)
      * @param modules
      *            set of enabled module IDs (e.g. {@code "SQLi"}, {@code "TLS"})
      * @param requestLogCb
      *            consumer that receives every HTTP request/response record
      */
-    public void startScan(String target, String jwt, String jwt2, Set<String> modules,
+    public void startScan(String target, AuthType authType, String cred1, String cred2, Set<String> modules,
             Consumer<RequestRecord> requestLogCb) {
 
         if (target == null || target.isBlank() || "https://".equals(target)) {
@@ -88,7 +92,7 @@ public class GuiController {
             return;
         }
 
-        ScanContext ctx = ScanOrchestrator.buildContext(target, jwt, jwt2, modules, requestLogCb);
+        ScanContext ctx = ScanOrchestrator.buildContext(authType, target, cred1, cred2, modules, requestLogCb);
         lastScanContext = ctx;
         scanRunner.run(ctx);
     }
