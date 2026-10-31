@@ -28,8 +28,6 @@ public class PqcModule implements Scanner {
         String _cweTitle = CweRegistry.cweTitle(id());
         String _cveVector = CweRegistry.cvssVector(id());
         double _score = CvssCalculator.calculate(_cveVector);
-        String _infoVector = CvssCalculator.defaultVector(Severity.INFO);
-        double _infoScore = 0.0;
         List<Finding> findings = new ArrayList<>();
 
         if (!ctx.isHttps()) {
@@ -56,12 +54,6 @@ public class PqcModule implements Scanner {
             }
             tls13ok = true;
             log.accept("[+] PQC: TLS 1.3 suportado -- cipher: " + cipher);
-            findings.add(Finding.of("PQC", host + ":" + port, "TLS 1.3 suportado -- base para PQC", Severity.INFO,
-                    "Protocolo: " + proto + " | Cipher: " + cipher + " | Host: " + evidence,
-                    "TLS 1.3 é prerequisito para negociação de grupos pós-quânticos",
-                    "openssl s_client -connect " + host + ":" + port + " -tls1_3",
-                    "Habilitar grupos pós-quânticos (ex: X25519MLKEM768) para proteção futura", _cweId, _cweTitle,
-                    _infoVector, _infoScore));
         } catch (Exception e) {
             log.accept("[!] PQC: TLS 1.3 não suportado: " + e.getMessage());
             findings.add(Finding.of("PQC", host + ":" + port, "TLS 1.3 não suportado -- PQC indisponível", Severity.LOW,
@@ -84,12 +76,6 @@ public class PqcModule implements Scanner {
                     socket.startHandshake();
                 }
                 log.accept("[+] PQC: X25519MLKEM768 aceito pelo servidor");
-                findings.add(Finding.of("PQC", host + ":" + port, "X25519MLKEM768 (PQC híbrido) suportado",
-                        Severity.INFO, "Grupo de chave X25519MLKEM768 negociado com " + evidence,
-                        "O servidor suporta troca de chaves resistente a computadores quânticos",
-                        "openssl s_client -connect " + host + ":" + port + " -groups X25519MLKEM768",
-                        "Manter suporte a X25519MLKEM768 e acompanhar padronização NIST PQC", _cweId, _cweTitle,
-                        _infoVector, _infoScore));
             } catch (Exception e) {
                 log.accept("[~] PQC: X25519MLKEM768 não suportado: " + e.getMessage());
                 findings.add(

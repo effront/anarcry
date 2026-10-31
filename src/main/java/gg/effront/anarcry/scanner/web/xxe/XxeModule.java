@@ -52,12 +52,17 @@ public class XxeModule implements Scanner {
         return "XXE";
     }
 
+    private static final String CWE_ID = CweRegistry.cweId("XXE");
+    private static final String CWE_TITLE = CweRegistry.cweTitle("XXE");
+
+    private static final String VECTOR_FILE_READ = "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N";
+    private static final double SCORE_FILE_READ = CvssCalculator.calculate(VECTOR_FILE_READ);
+
+    private static final String VECTOR_SSRF = "AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N";
+    private static final double SCORE_SSRF = CvssCalculator.calculate(VECTOR_SSRF);
+
     @Override
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
-        String _cweId = CweRegistry.cweId(id());
-        String _cweTitle = CweRegistry.cweTitle(id());
-        String _cveVector = CweRegistry.cvssVector(id());
-        double _score = CvssCalculator.calculate(_cveVector);
         List<Finding> findings = new ArrayList<>();
         HttpClient hc = HttpClientFactory.noRedirect();
 
@@ -77,18 +82,17 @@ public class XxeModule implements Scanner {
                 if (fr != null && !isHtml(fr) && FILE_CONTENT_PATTERN.matcher(fr).find()) {
                     log.accept("[!!] XXE: file-read confirmado em " + path);
                     findings.add(Finding.of("XXE", path, "XXE -- leitura de arquivo do servidor (file:///etc/hostname)",
-                            Severity.CRITICAL,
+                            Severity.HIGH,
                             "Endpoint: " + url + " | Resposta contém conteúdo de /etc/hostname: "
                                     + fr.substring(0, Math.min(200, fr.length())),
                             "O parser XML expande entidades externas -- atacante pode ler arquivos "
-                                    + "arbitrários do servidor (senhas, chaves, código-fonte) e usar "
-                                    + "o servidor como proxy SSRF interno",
+                                    + "arbitrários do servidor (senhas, chaves, código-fonte)",
                             "curl -s -X POST '" + url + "' \\\n" + "  -H 'Content-Type: application/xml' \\\n"
                                     + "  -d '" + XXE_FILE_READ.replace("'", "\\'") + "'",
                             "Desabilitar DTD e entidades externas no parser XML: "
                                     + "XMLInputFactory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES,"
                                     + "false); " + "use uma allowlist de schemas; migre para JSON onde possível",
-                            _cweId, _cweTitle, _cveVector, _score));
+                            CWE_ID, CWE_TITLE, VECTOR_FILE_READ, SCORE_FILE_READ));
                     break;
                 }
 
@@ -97,7 +101,7 @@ public class XxeModule implements Scanner {
                 if (ssrf != null && !isHtml(ssrf) && SSRF_PATTERN.matcher(ssrf).find()) {
                     log.accept("[!!] XXE: SSRF via XXE confirmado em " + path);
                     findings.add(Finding.of("XXE", path,
-                            "XXE SSRF -- servidor faz requisição HTTP interna via entidade externa", Severity.CRITICAL,
+                            "XXE SSRF -- servidor faz requisição HTTP interna via entidade externa", Severity.HIGH,
                             "Endpoint: " + url + " | Resposta reflete conteúdo de http://127.0.0.1/: "
                                     + ssrf.substring(0, Math.min(200, ssrf.length())),
                             "O parser XML faz requisições HTTP para destinos internos -- atacante "
@@ -106,7 +110,7 @@ public class XxeModule implements Scanner {
                                     + "  -d '" + XXE_SSRF.replace("'", "\\'") + "'",
                             "Desabilitar DTD externo no parser XML; bloquear conexões de saída do "
                                     + "processo do servidor para redes internas (iptables egress rules)",
-                            _cweId, _cweTitle, _cveVector, _score));
+                            CWE_ID, CWE_TITLE, VECTOR_SSRF, SCORE_SSRF));
                     break;
                 }
             }

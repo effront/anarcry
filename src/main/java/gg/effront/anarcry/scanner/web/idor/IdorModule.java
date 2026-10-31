@@ -43,12 +43,20 @@ public class IdorModule implements Scanner {
         return "IDOR";
     }
 
+    private static final String CWE_ID = CweRegistry.cweId("IDOR");
+    private static final String CWE_TITLE = CweRegistry.cweTitle("IDOR");
+
+    private static final String VECTOR_READ = "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N";
+    private static final double SCORE_READ = CvssCalculator.calculate(VECTOR_READ);
+
+    private static final String VECTOR_DELETE = "AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N";
+    private static final double SCORE_DELETE = CvssCalculator.calculate(VECTOR_DELETE);
+
+    private static final String VECTOR_GRAPHQL = "AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:L/A:N";
+    private static final double SCORE_GRAPHQL = CvssCalculator.calculate(VECTOR_GRAPHQL);
+
     @Override
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
-        String _cweId = CweRegistry.cweId(id());
-        String _cweTitle = CweRegistry.cweTitle(id());
-        String _cveVector = CweRegistry.cvssVector(id());
-        double _score = CvssCalculator.calculate(_cveVector);
         String token1 = ctx.jwtToken();
         String token2 = ctx.jwtToken2();
 
@@ -113,7 +121,7 @@ public class IdorModule implements Scanner {
                 if (isSimilar(r1, r2)) {
                     log.accept("[!!] IDOR: acesso cruzado detectado em " + path);
                     findings.add(Finding.of("IDOR", path, "IDOR -- acesso não-autorizado ao recurso " + path,
-                            Severity.HIGH,
+                            Severity.MEDIUM,
                             "Token1 e Token2 recebem a mesma resposta em " + base + path + " | Similaridade: "
                                     + similarityPercent(r1, r2) + "%" + " | Body preview: "
                                     + r1.substring(0, Math.min(150, r1.length())),
@@ -125,7 +133,7 @@ public class IdorModule implements Scanner {
                                     + abbreviated(token2) + "' '" + base + path + "'",
                             "Verificar autorização no nível de objeto (BOLA): validar que o usuário "
                                     + "autenticado é o dono do recurso. Use UUIDs aleatórios em vez de IDs sequenciais",
-                            _cweId, _cweTitle, _cveVector, _score));
+                            CWE_ID, CWE_TITLE, VECTOR_READ, SCORE_READ));
                     // One confirmed GET IDOR is enough
                     break;
                 }
@@ -146,14 +154,14 @@ public class IdorModule implements Scanner {
                 if ((status == 200 || status == 204) && !isHtml(deleteBody)) {
                     log.accept("[!!] IDOR DELETE: " + path + " retornou " + status + " com token1");
                     findings.add(Finding.of("IDOR", path, "IDOR DELETE -- deleção cross-user possível em " + path,
-                            Severity.HIGH,
-                            "DELETE " + base + path + " com token1 → HTTP " + status
+                            Severity.MEDIUM,
+                            "DELETE " + base + path + " com token1 -> HTTP " + status
                                     + " | Esperado: 403/404 | Recurso de outro usuário foi deletado",
                             "IDOR via DELETE -- usuário pode deletar recursos de outros usuários sem autorização",
                             "curl -X DELETE -H 'Authorization: Bearer <TOKEN1>' '" + base + path + "'",
                             "Validar ownership do recurso antes de deletar; verificar que o ID no path "
                                     + "pertence ao usuário autenticado; retornar 403 para acesso não autorizado",
-                            _cweId, _cweTitle, _cveVector, _score));
+                            CWE_ID, CWE_TITLE, VECTOR_DELETE, SCORE_DELETE));
                     break;
                 }
             } catch (Exception ignored) {
@@ -191,8 +199,8 @@ public class IdorModule implements Scanner {
                                         + mutation + "'",
                                 "Implementar autorização por campo e por resolver no GraphQL; "
                                         + "usar DataLoader com contexto do usuário; nunca confiar no ID enviado pelo"
-                                        + "cliente",
-                                _cweId, _cweTitle, _cveVector, _score));
+                                        + " cliente",
+                                CWE_ID, CWE_TITLE, VECTOR_GRAPHQL, SCORE_GRAPHQL));
                         gqlFound = true;
                         break;
                     }
