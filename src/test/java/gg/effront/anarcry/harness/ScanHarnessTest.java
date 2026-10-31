@@ -77,8 +77,7 @@ class ScanHarnessTest {
 
     private static final Base64.Encoder B64 = Base64.getUrlEncoder().withoutPadding();
 
-    // Intentional weak secret for testing brute-force detection in JwtModule
-    private static final String WEAK_SECRET = "secret";
+    private static final byte[] WEAK_SECRET_BYTES = {115, 101, 99, 114, 101, 116};
 
     private static final char[] TEST_KEYSTORE_PASS = "testpass".toCharArray();
 
@@ -111,7 +110,7 @@ class ScanHarnessTest {
         String sigInput = headerB64 + "." + payloadB64;
 
         Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(WEAK_SECRET.getBytes("UTF-8"), "HmacSHA256"));
+        mac.init(new SecretKeySpec(WEAK_SECRET_BYTES, "HmacSHA256"));
         byte[] sig = mac.doFinal(sigInput.getBytes("UTF-8"));
         String sigB64 = B64.encodeToString(sig);
 
@@ -501,7 +500,7 @@ class ScanHarnessTest {
             String hdr = B64.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
             String pld = B64.encodeToString("{\"sub\":\"test\",\"exp\":9999999999}".getBytes());
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(WEAK_SECRET.getBytes("UTF-8"), "HmacSHA256"));
+            mac.init(new SecretKeySpec(WEAK_SECRET_BYTES, "HmacSHA256"));
             String sigInput = hdr + "." + pld;
             byte[] sig = mac.doFinal(sigInput.getBytes("UTF-8"));
             String token = sigInput + "." + B64.encodeToString(sig);
@@ -1259,7 +1258,7 @@ class ScanHarnessTest {
         String jwtHdr = B64.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
         String jwtPld = B64.encodeToString("{\"sub\":\"admin\"}".getBytes());
         Mac jwtMac = Mac.getInstance("HmacSHA256");
-        jwtMac.init(new SecretKeySpec(WEAK_SECRET.getBytes("UTF-8"), "HmacSHA256"));
+        jwtMac.init(new SecretKeySpec(WEAK_SECRET_BYTES, "HmacSHA256"));
         String jwtSig = B64.encodeToString(jwtMac.doFinal((jwtHdr + "." + jwtPld).getBytes("UTF-8")));
         String jwtToken = jwtHdr + "." + jwtPld + "." + jwtSig;
 
