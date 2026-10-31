@@ -114,46 +114,45 @@ public class SstiModule implements Scanner {
                             return local;
                         }
                         String engine = tryMathProbe(ctx, hc, base, path, param, probe, baseline, log);
-                        if (engine == null) {
-                            continue;
+                        if (engine != null) {
+                            String endpoint = path + "?" + param + "=" + URLEncoder.encode(probe.payload(), "UTF-8");
+                            log.accept("[!!] SSTI: " + engine + " detectado em " + endpoint);
+
+                            String rceEvidence = tryRceProbes(ctx, hc, base, path, param, engine, baseline, log);
+
+                            if (rceEvidence != null) {
+                                log.accept("[!!!] SSTI RCE: CONFIRMADO -- " + engine + " em " + endpoint);
+                                local.add(Finding.of("SSTI", endpoint, "SSTI RCE CONFIRMADO -- " + engine,
+                                        Severity.CRITICAL,
+                                        "Engine: " + engine + " | RCE evidence: " + rceEvidence + " | URL: " + base
+                                                + endpoint,
+                                        "RCE confirmado via SSTI (" + engine
+                                                + ") -- execução de código arbitrário no servidor",
+                                        "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
+                                                + probe.payload() + "'",
+                                        "Nunca renderize input do usuário em templates; use sandbox"
+                                                + " isolado; migrar para renderização de templates"
+                                                + " estáticos com variáveis seguras",
+                                        _cweId, _cweTitle, _cveVector, _score));
+                            } else {
+                                local.add(Finding.of("SSTI", endpoint,
+                                        "SSTI -- Template Injection detectado (" + engine + ")", Severity.CRITICAL,
+                                        "Payload: " + probe.payload() + " -> resposta contém '2401' | Engine: " + engine
+                                                + " | URL: " + base + endpoint,
+                                        "Server-Side Template Injection -- equivale a RCE na engine " + engine
+                                                + ". Payloads RCE conhecidos incluem: FreeMarker"
+                                                + " Execute?new(), Spring T(Runtime).exec(), Jinja2"
+                                                + " subclasses gadget",
+                                        "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
+                                                + probe.payload() + "'",
+                                        "Nunca renderize input do usuário diretamente em templates."
+                                                + " Use sandboxing (Jinja2 SandboxedEnvironment)"
+                                                + " ou variáveis com allowlist.",
+                                        _cweId, _cweTitle, _cveVector, _score));
+                            }
+                            cancel.set(true);
+                            break;
                         }
-
-                        String endpoint = path + "?" + param + "=" + URLEncoder.encode(probe.payload(), "UTF-8");
-                        log.accept("[!!] SSTI: " + engine + " detectado em " + endpoint);
-
-                        // Phase 2: try RCE probes for the matched engine
-                        String rceEvidence = tryRceProbes(ctx, hc, base, path, param, engine, baseline, log);
-
-                        if (rceEvidence != null) {
-                            log.accept("[!!!] SSTI RCE: CONFIRMADO -- " + engine + " em " + endpoint);
-                            local.add(Finding.of("SSTI", endpoint, "SSTI RCE CONFIRMADO -- " + engine,
-                                    Severity.CRITICAL,
-                                    "Engine: " + engine + " | RCE evidence: " + rceEvidence + " | URL: " + base
-                                            + endpoint,
-                                    "RCE confirmado via SSTI (" + engine
-                                            + ") -- execução de código arbitrário no servidor",
-                                    "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
-                                            + probe.payload() + "'",
-                                    "Nunca renderize input do usuário em templates; use sandbox isolado; "
-                                            + "migrar para renderização de templates estáticos com variáveis seguras",
-                                    _cweId, _cweTitle, _cveVector, _score));
-                        } else {
-                            local.add(Finding.of("SSTI", endpoint,
-                                    "SSTI -- Template Injection detectado (" + engine + ")", Severity.CRITICAL,
-                                    "Payload: " + probe.payload() + " -> resposta contém '2401' | Engine: " + engine
-                                            + " | URL: " + base + endpoint,
-                                    "Server-Side Template Injection -- equivale a RCE na engine " + engine
-                                            + ". Payloads RCE conhecidos incluem: FreeMarker Execute?new(), "
-                                            + "Spring T(Runtime).exec(), Jinja2 subclasses gadget",
-                                    "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
-                                            + probe.payload() + "'",
-                                    "Nunca renderize input do usuário diretamente em templates. "
-                                            + "Use sandboxing (Jinja2 SandboxedEnvironment) "
-                                            + "ou variáveis com allowlist.",
-                                    _cweId, _cweTitle, _cveVector, _score));
-                        }
-                        cancel.set(true);
-                        return local;
                     }
                 }
                 return local;

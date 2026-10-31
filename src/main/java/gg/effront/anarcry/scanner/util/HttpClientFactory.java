@@ -22,6 +22,25 @@ public final class HttpClientFactory {
     private HttpClientFactory() {
     }
 
+    public static synchronized void closeAll() {
+        if (http2Instance != null) {
+            http2Instance.close();
+            http2Instance = null;
+        }
+        if (noRedirectInstance != null) {
+            noRedirectInstance.close();
+            noRedirectInstance = null;
+        }
+        if (stealthInstance != null) {
+            stealthInstance.close();
+            stealthInstance = null;
+        }
+        if (followOneInstance != null) {
+            followOneInstance.close();
+            followOneInstance = null;
+        }
+    }
+
     public static HttpClient http2() throws Exception {
         if (http2Instance == null) {
             synchronized (HttpClientFactory.class) {

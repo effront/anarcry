@@ -44,6 +44,10 @@ public class CipherSuiteProbe {
                     "Ciphers EXPORT foram deliberadamente enfraquecidos (40-56 bits) -- FREAK/DROWN/LOGJAM",
                     "-cipher EXPORT"));
 
+    public static List<String> groupNames() {
+        return GROUPS.stream().map(CipherGroup::name).toList();
+    }
+
     public List<Finding> probe(ScanContext ctx, Consumer<String> log) {
         String _cweId = CweRegistry.cweId(id());
         String _cweTitle = CweRegistry.cweTitle(id());
