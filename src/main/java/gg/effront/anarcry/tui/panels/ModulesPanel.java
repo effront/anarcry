@@ -3,11 +3,13 @@ package gg.effront.anarcry.tui.panels;
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.gui2.Button;
 import com.googlecode.lanterna.gui2.CheckBox;
+import com.googlecode.lanterna.gui2.ComboBox;
 import com.googlecode.lanterna.gui2.Direction;
 import com.googlecode.lanterna.gui2.EmptySpace;
 import com.googlecode.lanterna.gui2.Label;
 import com.googlecode.lanterna.gui2.LinearLayout;
 import com.googlecode.lanterna.gui2.Panel;
+import gg.effront.anarcry.model.AuthType;
 import gg.effront.anarcry.model.RequestRecord;
 import gg.effront.anarcry.scanner.ScanConfig;
 import gg.effront.anarcry.scanner.ScanContext;
@@ -57,6 +59,10 @@ public class ModulesPanel extends Panel {
     private final PasteableTextBox jwtTokenBox;
     private final PasteableTextBox jwtToken2Box;
     private final PasteableTextBox concurrencyBox;
+    private final ComboBox<String> authTypeCombo;
+    private AuthType selectedAuthType = AuthType.NONE;
+    private final Label cred1Label;
+    private final Label cred2Label;
 
     public ModulesPanel(int width, LogPanel logPanel, FindingsPanel findingsPanel, ScanRunner scanRunner) {
         super(new LinearLayout(Direction.VERTICAL));
@@ -167,12 +173,25 @@ public class ModulesPanel extends Panel {
         addComponent(targetBox);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
-        addComponent(new Label("JWT Token (user 1):"));
+        addComponent(new Label("Auth Type:"));
+        authTypeCombo = new ComboBox<>("None", "JWT", "Cookie", "Bearer");
+        authTypeCombo.setReadOnly(true);
+        authTypeCombo.setSelectedIndex(0);
+        authTypeCombo.addListener((selectedIndex, previousSelection, changedByUserInteraction) -> {
+            selectedAuthType = AuthType.values()[selectedIndex];
+            updateCredentialLabels();
+        });
+        addComponent(authTypeCombo);
+
+        addComponent(new EmptySpace(new TerminalSize(1, 1)));
+        cred1Label = new Label("Credential 1:");
+        addComponent(cred1Label);
         jwtTokenBox = new PasteableTextBox(new TerminalSize(width - 2, 2));
         addComponent(jwtTokenBox);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
-        addComponent(new Label("JWT Token 2 (IDOR):"));
+        cred2Label = new Label("Credential 2:");
+        addComponent(cred2Label);
         jwtToken2Box = new PasteableTextBox(new TerminalSize(width - 2, 2));
         addComponent(jwtToken2Box);
 
@@ -206,6 +225,10 @@ public class ModulesPanel extends Panel {
         return jwtTokenBox.getText().trim();
     }
 
+    public AuthType getAuthType() {
+        return selectedAuthType;
+    }
+
     public void setTarget(String target) {
         targetBox.setText(target);
     }
@@ -213,6 +236,11 @@ public class ModulesPanel extends Panel {
     public void setJwt(String jwt) {
         if (jwt != null && !jwt.isBlank()) {
             jwtTokenBox.setText(jwt);
+            if (selectedAuthType == AuthType.NONE) {
+                selectedAuthType = AuthType.JWT;
+                authTypeCombo.setSelectedIndex(AuthType.JWT.ordinal());
+                updateCredentialLabels();
+            }
         }
     }
 
@@ -229,6 +257,27 @@ public class ModulesPanel extends Panel {
 
     public void triggerStart() {
         onStart();
+    }
+
+    private void updateCredentialLabels() {
+        switch (selectedAuthType) {
+            case NONE -> {
+                cred1Label.setText("Credential 1:");
+                cred2Label.setText("Credential 2:");
+            }
+            case JWT -> {
+                cred1Label.setText("JWT Token (user 1):");
+                cred2Label.setText("JWT Token 2 (IDOR):");
+            }
+            case COOKIE -> {
+                cred1Label.setText("Session Cookie:");
+                cred2Label.setText("Session Cookie 2:");
+            }
+            case BEARER -> {
+                cred1Label.setText("Bearer Token:");
+                cred2Label.setText("Bearer Token 2 (IDOR):");
+            }
+        }
     }
 
     private static String infraLabel() {
@@ -266,8 +315,6 @@ public class ModulesPanel extends Panel {
             logPanel.log("[!] Target não informado");
             return;
         }
-
-        String jwt = jwtTokenBox.getText().trim();
 
         Set<String> modules = new LinkedHashSet<>();
         if (tlsCheck.isChecked()) {
@@ -351,7 +398,8 @@ public class ModulesPanel extends Panel {
             return;
         }
 
-        String jwt2 = jwtToken2Box.getText().trim();
+        String cred1 = jwtTokenBox.getText().trim();
+        String cred2 = jwtToken2Box.getText().trim();
         int concurrency = ScanConfig.DEFAULT_PROBE_CONCURRENCY;
         try {
             concurrency = Integer.parseInt(concurrencyBox.getText().trim());
@@ -363,8 +411,12 @@ public class ModulesPanel extends Panel {
         } catch (NumberFormatException ignored) {
             // keep default
         }
-        logPanel.log("[*] Iniciando scan em " + target + " (concurrency=" + concurrency + ") ...");
-        ScanConfig cfg = new ScanConfig(0, "", java.util.Set.of(), SuppressionLoader.loadFromCwd(), "", concurrency);
-        scanRunner.run(new ScanContext(target, jwt, modules, jwt2, cfg, requestLogCb));
+        logPanel.log("[*] Iniciando scan em " + target + " (auth=" + selectedAuthType + ", concurrency=" + concurrency
+                + ") ...");
+        ScanContext baseCtx = selectedAuthType.buildContext(target, modules, cred1, cred2, requestLogCb);
+        ScanConfig cfg = new ScanConfig(0, selectedAuthType.usesCookie() ? cred1 : "", java.util.Set.of(),
+                SuppressionLoader.loadFromCwd(), "", concurrency);
+        scanRunner.run(new ScanContext(baseCtx.targetUrl(), baseCtx.jwtToken(), baseCtx.jwtToken2(), modules, cfg,
+                requestLogCb, baseCtx.discoveredPaths(), baseCtx.wafState()));
     }
 }
