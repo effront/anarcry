@@ -197,7 +197,8 @@ tasks.register('jpackageMsi', Exec) {
     dependsOn shadowJar
     group = 'distribution'
     description = 'Build .msi installer via jpackage (Windows)'
-    commandLine 'jpackage',
+    def args = [
+        'jpackage',
         '--type', 'msi',
         '--name', 'AnarCry',
         '--app-version', version.toString(),
@@ -205,19 +206,24 @@ tasks.register('jpackageMsi', Exec) {
         '--main-jar', "anarcry-${version}.jar",
         '--main-class', 'gg.effront.anarcry.Main',
         '--dest', 'build/dist',
-        '--icon', 'public/logoAnarChy.png',
         '--java-options', '--enable-native-access=ALL-UNNAMED',
         '--win-dir-chooser',
         '--win-shortcut',
         '--win-menu',
-        '--description', 'AnarCry Security Scanner'
+        '--description', 'AnarCry Security Scanner',
+    ]
+    if (file('public/logoAnarChy.ico').exists()) {
+        args += ['--icon', 'public/logoAnarChy.ico']
+    }
+    commandLine args
 }
 
 tasks.register('jpackageDmg', Exec) {
     dependsOn shadowJar
     group = 'distribution'
     description = 'Build .dmg installer via jpackage (macOS)'
-    commandLine 'jpackage',
+    def args = [
+        'jpackage',
         '--type', 'dmg',
         '--name', 'AnarCry',
         '--app-version', version.toString(),
@@ -225,8 +231,12 @@ tasks.register('jpackageDmg', Exec) {
         '--main-jar', "anarcry-${version}.jar",
         '--main-class', 'gg.effront.anarcry.Main',
         '--dest', 'build/dist',
-        '--icon', 'public/logoAnarChy.png',
         '--java-options', '--enable-native-access=ALL-UNNAMED',
         '--mac-package-name', 'AnarCry',
-        '--description', 'AnarCry Security Scanner'
+        '--description', 'AnarCry Security Scanner',
+    ]
+    if (file('public/logoAnarChy.icns').exists()) {
+        args += ['--icon', 'public/logoAnarChy.icns']
+    }
+    commandLine args
 }
