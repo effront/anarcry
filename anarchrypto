@@ -6,8 +6,23 @@ SELF="$(realpath "$0")"
 VERSION=$(grep -oP "^version\s*=\s*'\K[^']+" "$DIR/build.gradle" 2>/dev/null || echo "")
 JAR="$DIR/build/libs/anarcry-${VERSION}.jar"
 
+# Auto-build: rebuild JAR if missing or source is newer
+NEEDS_BUILD=false
 if [ -z "$VERSION" ] || [ ! -f "$JAR" ]; then
-    echo "AnarCry: JAR nao encontrado (v${VERSION:-?}). Execute: ./gradlew shadowJar"
+    NEEDS_BUILD=true
+elif [ -n "$(find "$DIR/src" -newer "$JAR" \( -name '*.java' -o -name '*.properties' -o -name '*.xml' -o -name '*.yaml' -o -name '*.yml' -o -name '*.json' \) -print -quit 2>/dev/null)" ]; then
+    NEEDS_BUILD=true
+elif [ -n "$(find "$DIR" -maxdepth 1 -newer "$JAR" \( -name '*.gradle' -o -name '*.gradle.kts' -o -name 'gradle.properties' \) -print -quit 2>/dev/null)" ]; then
+    NEEDS_BUILD=true
+fi
+
+if [ "$NEEDS_BUILD" = true ]; then
+    echo "AnarCry: building v${VERSION:-?} ..."
+    (cd "$DIR" && ./gradlew shadowJar --quiet) || { echo "Build failed"; exit 1; }
+fi
+
+if [ ! -f "$JAR" ]; then
+    echo "AnarCry: JAR nao encontrado apos build (v${VERSION:-?})"
     exit 1
 fi
 
