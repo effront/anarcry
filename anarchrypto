@@ -10,7 +10,9 @@ JAR="$DIR/build/libs/anarcry-${VERSION}.jar"
 NEEDS_BUILD=false
 if [ -z "$VERSION" ] || [ ! -f "$JAR" ]; then
     NEEDS_BUILD=true
-elif [ -n "$(find "$DIR/src" -newer "$JAR" -name '*.java' -print -quit 2>/dev/null)" ]; then
+elif [ -n "$(find "$DIR/src" -newer "$JAR" \( -name '*.java' -o -name '*.properties' -o -name '*.xml' -o -name '*.yaml' -o -name '*.yml' -o -name '*.json' \) -print -quit 2>/dev/null)" ]; then
+    NEEDS_BUILD=true
+elif [ -n "$(find "$DIR" -maxdepth 1 -newer "$JAR" \( -name '*.gradle' -o -name '*.gradle.kts' -o -name 'gradle.properties' \) -print -quit 2>/dev/null)" ]; then
     NEEDS_BUILD=true
 fi
 
