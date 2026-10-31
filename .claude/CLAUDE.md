@@ -30,6 +30,7 @@ src/main/java/gg/effront/anarcry/
 │   ├── CvssCalculator.java          # CVSS v3.1 score calculation
 │   ├── KnowledgeBase.java           # Knowledge base loader (knowledge-base/*.md)
 │   ├── KnowledgeEntry.java          # Single KB entry
+│   ├── AuthType.java                # Auth selector enum (NONE, JWT, COOKIE, BEARER)
 │   ├── RequestRecord.java           # HTTP request/response log
 │   └── Suppression.java             # Finding suppression config
 ├── scanner/
@@ -170,6 +171,20 @@ Http.send(ctx, httpClient, request, bodyHandler, moduleId);
 [{"module": "Headers", "title": "Missing X-Frame-Options", "host": "*.example.com"}]
 ```
 
+### Authentication Types
+`AuthType` enum (`model/AuthType.java`) controls how credentials are wired into scans:
+
+| AuthType | ScanContext.jwtToken | ScanConfig.sessionCookie | Header on wire |
+|---|---|---|---|
+| `NONE` | `""` | `""` | none |
+| `JWT` | JWT string | `""` | `Authorization: Bearer <jwt>` (per-module) |
+| `COOKIE` | `""` | cookie value | `Cookie: <value>` (via `Http.send()`) |
+| `BEARER` | opaque token | `""` | `Authorization: Bearer <token>` (per-module) |
+
+Helper methods: `usesBearer()`, `usesCookie()`, `requiresJwtParsing()`, `hasAuth()`.
+
+**Known gaps**: `HeadersModule` and `HSTSModule` use `HttpURLConnection` directly (bypass `Http.send()` -- cookies not injected). `IdorModule` skips on COOKIE auth (no `sessionCookie2` for cross-user testing).
+
 ### Scope Control
 `ScanConfig.isInScope(host)` enforces target scope -- scan is cancelled if host is out of scope.
 
@@ -194,4 +209,4 @@ AnarCry is designed for **authorized security testing** only:
 
 ---
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-10-31
