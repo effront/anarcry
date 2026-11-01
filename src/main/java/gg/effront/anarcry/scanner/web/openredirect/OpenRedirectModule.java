@@ -97,10 +97,10 @@ public class OpenRedirectModule implements Scanner {
 
                             if ((status == 301 || status == 302 || status == 307 || status == 308)
                                     && location.contains(EVIL_HOST)) {
-                                log.accept("[!!] OpenRedirect: HIGH -- " + payload.technique()
+                                log.accept("[!!] OpenRedirect: MEDIUM -- " + payload.technique()
                                         + " bypass confirmado -> " + location);
                                 local.add(Finding.of("OpenRedirect", path + "?" + param,
-                                        "Open Redirect -- " + payload.technique() + " bypass", Severity.HIGH,
+                                        "Open Redirect -- " + payload.technique() + " bypass", Severity.MEDIUM,
                                         "URL: " + url + " | Param: " + param + " | Técnica: " + payload.technique()
                                                 + " | Location: " + location,
                                         "Parâmetro de redirecionamento aceita URL externa via " + payload.technique()

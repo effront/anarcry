@@ -148,7 +148,7 @@ public class XssModule implements Scanner {
                         if (!appEscapes && payloadBody.contains(marker)) {
                             log.accept("[!!] XSS HIGH: '" + htmlPayload + "' refletido sem encoding em " + endpoint);
                             local.add(Finding.of(id(), endpoint, "Reflected XSS -- Payload Executável Refletido",
-                                    Severity.HIGH,
+                                    Severity.CRITICAL,
                                     "Payload '" + htmlPayload + "' refletido sem encoding HTML em " + base + endpoint
                                             + " | Canary: " + canary + " | Marker: " + marker,
                                     "Reflected XSS confirmado: o payload é refletido sem escape, "

@@ -78,7 +78,7 @@ public class CachePoisoningModule implements Scanner {
                         } catch (Exception ignored) {
                         }
 
-                        Severity sev = poisonPersisted ? Severity.CRITICAL : Severity.HIGH;
+                        Severity sev = Severity.HIGH;
                         String title = poisonPersisted
                                 ? "Web Cache Poisoning -- confirmado (resposta envenenada persistiu)"
                                 : "Web Cache Poisoning -- header unkeyed refletido (cache não confirmado)";

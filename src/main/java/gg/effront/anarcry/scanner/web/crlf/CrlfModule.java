@@ -86,7 +86,7 @@ public class CrlfModule implements Scanner {
                 if (injected) {
                     log.accept("[!!] CRLF: CRÍTICO -- injeção via path confirmada: " + payload);
                     findings.add(Finding.of("CRLF", url,
-                            "CRLF Injection via path -- cabeçalho HTTP arbitrário injetável", Severity.CRITICAL,
+                            "CRLF Injection via path -- cabeçalho HTTP arbitrário injetável", Severity.MEDIUM,
                             "Payload: " + payload + " | Set-Cookie: crlf=injection presente na resposta",
                             "Servidor não neutraliza CR (\\r / %0d) e LF (\\n / %0a) em paths refletidos "
                                     + "em cabeçalhos de resposta -- permite injeção de cabeçalhos arbitrários, "
@@ -148,7 +148,7 @@ public class CrlfModule implements Scanner {
                     log.accept("[!!] CRLF: CRÍTICO -- injeção via " + headerName + " refletida em response header");
                     return Finding.of("CRLF", ctx.targetUrl(),
                             "CRLF Injection via " + headerName + " -- header injetado refletido na resposta",
-                            Severity.CRITICAL,
+                            Severity.MEDIUM,
                             "Header: " + headerName + " | CRLF + '" + INJECTED_HEADER_NAME + ": "
                                     + INJECTED_HEADER_VALUE + "' refletido nos cabeçalhos da resposta",
                             "Servidor reflete o valor do header " + headerName
