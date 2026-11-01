@@ -14,10 +14,15 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 public class HeadersModule implements Scanner {
+
+    private static final Set<String> CDN_WAF_NAMES = Set.of("cloudflare", "akamai", "akamaighost", "awselb",
+            "incapsula", "sucuri", "ddos-guard", "cloudfront", "fastly", "varnish");
 
     @Override
     public String id() {
@@ -66,10 +71,7 @@ public class HeadersModule implements Scanner {
 
         if (code == 403) {
             String server = getHeader(headers, "Server");
-            boolean wafLikely = server != null
-                    && (server.toLowerCase().contains("cloudflare") || server.toLowerCase().contains("akamai")
-                            || server.toLowerCase().contains("awselb") || server.toLowerCase().contains("incapsula")
-                            || server.toLowerCase().contains("sucuri") || server.toLowerCase().contains("ddos-guard"));
+            boolean wafLikely = server != null && isCdnOrWaf(server);
             if (wafLikely) {
                 ctx.wafState().markWafDetected(server);
                 log.accept("[!] HEADERS: HTTP 403 com Server: " + server
@@ -165,7 +167,7 @@ public class HeadersModule implements Scanner {
         }
 
         String serverHeader = getHeader(headers, "Server");
-        if (serverHeader != null) {
+        if (serverHeader != null && !isCdnOrWaf(serverHeader)) {
             findings.add(Finding.of("Headers", ctx.targetUrl(), "Header Server expõe tecnologia: " + serverHeader,
                     Severity.INFO, evidence + " | Server: " + serverHeader,
                     "Divulgação de versão de servidor facilita reconhecimento do atacante",
@@ -216,6 +218,11 @@ public class HeadersModule implements Scanner {
     private String getHeader(Map<String, List<String>> headers, String name) {
         return headers.entrySet().stream().filter(e -> e.getKey() != null && e.getKey().equalsIgnoreCase(name))
                 .map(e -> e.getValue().isEmpty() ? null : e.getValue().get(0)).findFirst().orElse(null);
+    }
+
+    private static boolean isCdnOrWaf(String serverValue) {
+        String low = serverValue.toLowerCase(Locale.ROOT);
+        return CDN_WAF_NAMES.stream().anyMatch(low::contains);
     }
 
     private static boolean directiveHasEffectiveUnsafeInline(String csp, String... candidates) {
