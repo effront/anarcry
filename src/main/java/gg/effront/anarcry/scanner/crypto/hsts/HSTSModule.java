@@ -34,63 +34,9 @@ public class HSTSModule implements Scanner {
         double score = CvssCalculator.calculate(cvssVector);
         List<Finding> findings = new ArrayList<>();
 
-        // Probe 1: HTTP acessível + JWT transmitido em plaintext
-        String httpUrl = ctx.targetUrl().replaceFirst("^https://", "http://");
-        log.accept("[~] HSTS: probe HTTP em " + httpUrl);
-        try {
-            HttpURLConnection conn = (HttpURLConnection) new URL(httpUrl).openConnection();
-            conn.setInstanceFollowRedirects(false);
-            conn.setConnectTimeout(5000);
-            conn.setReadTimeout(8000);
-            conn.setRequestProperty("User-Agent", gg.effront.anarcry.Version.userAgent());
-            if (!ctx.jwtToken().isBlank()) {
-                conn.setRequestProperty("Authorization", "Bearer " + ctx.jwtToken());
-            }
-
-            int status;
-            try {
-                status = conn.getResponseCode();
-            } finally {
-                conn.disconnect();
-            }
-
-            ctx.requestLog().accept(new RequestRecord("GET", httpUrl, status, 0, System.currentTimeMillis(), id()));
-            String evidence = "GET " + httpUrl + " → HTTP " + status;
-
-            if (status == 200) {
-                findings.add(Finding.of(id(), ctx.targetUrl(),
-                        "API serve conteúdo via HTTP sem redirect -- JWT em plaintext", Severity.CRITICAL, evidence,
-                        "Servidor retorna 200 em HTTP: credenciais e dados transmitidos sem cifração",
-                        "curl -sI " + httpUrl, "Forçar HTTPS em todas as rotas e adicionar HSTS", cweId, cweTitle,
-                        cvssVector, score));
-            } else if (status / 100 == 3) {
-                if (!ctx.jwtToken().isBlank()) {
-                    // Validado via tcpdump: Authorization header é enviado no request HTTP
-                    // antes do redirect chegar -- um MITM intercepta o token sem processar o 3xx
-                    findings.add(Finding.of(id(), ctx.targetUrl(),
-                            "JWT transmitido em plaintext antes do redirect HTTP " + status, Severity.HIGH, evidence,
-                            "Authorization: Bearer enviado em TCP plaintext antes do " + status
-                                    + " -- MITM intercepta o token sem precisar quebrar TLS. "
-                                    + "Validado: tcpdump capturou JWT completo no wire em port 80.",
-                            "# Terminal 1:\nsudo tcpdump -i any -A 'tcp port 80'\n"
-                                    + "# Terminal 2:\ncurl --max-redirs 0 " + "-H 'Authorization: Bearer <jwt>' "
-                                    + httpUrl,
-                            "Adicionar HSTS com max-age=31536000; includeSubDomains; preload", cweId, cweTitle,
-                            cvssVector, score));
-                } else {
-                    findings.add(Finding.of(id(), ctx.targetUrl(),
-                            "Endpoint HTTP acessível -- downgrade via SSLstrip possível", Severity.MEDIUM, evidence,
-                            "Sem HSTS, MITM pode interceptar o redirect " + status + " e manter conexão em HTTP",
-                            "curl -sv --max-redirs 0 " + httpUrl,
-                            "Adicionar HSTS com max-age=31536000; includeSubDomains; preload", cweId, cweTitle,
-                            cvssVector, score));
-                }
-            }
-        } catch (Exception e) {
-            log.accept("[~] HSTS: probe HTTP falhou -- " + e.getMessage());
-        }
-
-        // Probe 2: qualidade do header HSTS no response HTTPS
+        // Probe 1: qualidade do header HSTS no response HTTPS (roda primeiro para
+        // informar o probe HTTP)
+        boolean hstsAdequate = false;
         log.accept("[~] HSTS: verificando policy HTTPS em " + ctx.targetUrl());
         try {
             HttpsURLConnection https = (HttpsURLConnection) new URL(ctx.targetUrl()).openConnection();
@@ -133,6 +79,7 @@ public class HSTSModule implements Scanner {
                                 cweId, cweTitle, cvssVector, score));
             } else {
                 long maxAge = parseMaxAge(hstsVal);
+                hstsAdequate = maxAge >= MIN_MAX_AGE;
                 if (maxAge >= 0 && maxAge < MIN_MAX_AGE) {
                     findings.add(Finding.of(id(), ctx.targetUrl(),
                             "HSTS max-age insuficiente: " + maxAge + "s (mínimo recomendado: " + MIN_MAX_AGE + "s)",
@@ -159,6 +106,61 @@ public class HSTSModule implements Scanner {
             }
         } catch (Exception e) {
             log.accept("[~] HSTS: probe HTTPS falhou -- " + e.getMessage());
+        }
+
+        // Probe 2: HTTP acessível + JWT transmitido em plaintext
+        String httpUrl = ctx.targetUrl().replaceFirst("^https://", "http://");
+        log.accept("[~] HSTS: probe HTTP em " + httpUrl);
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL(httpUrl).openConnection();
+            conn.setInstanceFollowRedirects(false);
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(8000);
+            conn.setRequestProperty("User-Agent", gg.effront.anarcry.Version.userAgent());
+            if (!ctx.jwtToken().isBlank()) {
+                conn.setRequestProperty("Authorization", "Bearer " + ctx.jwtToken());
+            }
+
+            int status;
+            try {
+                status = conn.getResponseCode();
+            } finally {
+                conn.disconnect();
+            }
+
+            ctx.requestLog().accept(new RequestRecord("GET", httpUrl, status, 0, System.currentTimeMillis(), id()));
+            String evidence = "GET " + httpUrl + " → HTTP " + status;
+
+            if (status == 200) {
+                findings.add(Finding.of(id(), ctx.targetUrl(),
+                        "API serve conteúdo via HTTP sem redirect -- JWT em plaintext", Severity.CRITICAL, evidence,
+                        "Servidor retorna 200 em HTTP: credenciais e dados transmitidos sem cifração",
+                        "curl -sI " + httpUrl, "Forçar HTTPS em todas as rotas e adicionar HSTS", cweId, cweTitle,
+                        cvssVector, score));
+            } else if (status / 100 == 3) {
+                if (!ctx.jwtToken().isBlank()) {
+                    findings.add(Finding.of(id(), ctx.targetUrl(),
+                            "JWT transmitido em plaintext antes do redirect HTTP " + status, Severity.HIGH, evidence,
+                            "Authorization: Bearer enviado em TCP plaintext antes do " + status
+                                    + " -- MITM intercepta o token sem precisar quebrar TLS. "
+                                    + "Validado: tcpdump capturou JWT completo no wire em port 80.",
+                            "# Terminal 1:\nsudo tcpdump -i any -A 'tcp port 80'\n"
+                                    + "# Terminal 2:\ncurl --max-redirs 0 " + "-H 'Authorization: Bearer <jwt>' "
+                                    + httpUrl,
+                            "Adicionar HSTS com max-age=31536000; includeSubDomains; preload", cweId, cweTitle,
+                            cvssVector, score));
+                } else if (!hstsAdequate) {
+                    findings.add(Finding.of(id(), ctx.targetUrl(),
+                            "Endpoint HTTP acessível -- downgrade via SSLstrip possível", Severity.MEDIUM, evidence,
+                            "Sem HSTS adequado, MITM pode interceptar o redirect " + status
+                                    + " e manter conexão em HTTP",
+                            "curl -sv --max-redirs 0 " + httpUrl,
+                            "Adicionar HSTS com max-age=31536000; includeSubDomains; preload", cweId, cweTitle,
+                            cvssVector, score));
+                }
+            }
+        } catch (Exception e) {
+            log.accept("[~] HSTS: probe HTTP falhou -- " + e.getMessage());
         }
 
         log.accept("[+] HSTS: " + findings.size() + " finding(s)");
