@@ -2517,6 +2517,129 @@ class ScanHarnessTest {
         }
     }
 
+    // ─────────────────────────────────────────
+    // False-positive regression tests -- severity inflation + CDN + HSTS
+    // ─────────────────────────────────────────
+
+    @Test
+    @Order(85)
+    void findingOfPreservesCallerSeverityAutoFill() {
+        // Headers maps to CWE-693 CVSS 5.4 which would give MEDIUM via fromScore --
+        // verify the factory does NOT override the caller's INFO to MEDIUM
+        Finding f = Finding.of("Headers", "/test", "Test finding", Severity.INFO, "evidence", "impact", "repro", "rec");
+        assertEquals(Severity.INFO, f.severity(),
+                "Finding.of auto-fill must preserve caller severity, not override via CVSS score");
+    }
+
+    @Test
+    @Order(86)
+    void findingOfPreservesCallerSeverityExplicit() {
+        // The explicit overload receives CVSS 5.4 (MEDIUM range) but caller says INFO
+        // --
+        // verify the explicit overload also preserves the passed severity
+        Finding f = Finding.of("Headers", "/test", "Test finding", Severity.INFO, "evidence", "impact", "repro", "rec",
+                "CWE-693", "Protection Mechanism Failure", "AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N", 5.4);
+        assertEquals(Severity.INFO, f.severity(),
+                "Finding.of explicit must preserve caller severity, not derive from CVSS score");
+    }
+
+    @Test
+    @Order(87)
+    void headersCdnServerSuppressed() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            exchange.getResponseHeaders().set("Server", "cloudflare");
+            byte[] body = "ok".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("Headers"));
+            List<Finding> findings = new HeadersModule().scan(ctx, msg -> {
+            });
+            assertTrue(findings.stream().noneMatch(f -> f.title().contains("Server")),
+                    "CDN server name (cloudflare) must be filtered out -- no Server finding");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(88)
+    void headersNonCdnServerReported() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            exchange.getResponseHeaders().set("Server", "nginx/1.21.3");
+            byte[] body = "ok".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", Set.of("Headers"));
+            List<Finding> findings = new HeadersModule().scan(ctx, msg -> {
+            });
+            assertTrue(
+                    findings.stream()
+                            .anyMatch(f -> f.title().contains("Server") && f.title().contains("nginx")
+                                    && f.severity() == Severity.INFO),
+                    "Non-CDN server (nginx/1.21.3) must be reported with INFO severity");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(89)
+    void hstsHttpDowngradeSuppressedWithAdequateHsts() throws Exception {
+        HttpsServer server = createTestHttpsServer(Map.of("Strict-Transport-Security", "max-age=31536000"));
+        int port = server.getAddress().getPort();
+        try {
+            ScanContext ctx = new ScanContext("https://127.0.0.1:" + port, "", Set.of("HSTS"));
+            List<Finding> findings = new HSTSModule().scan(ctx, msg -> {
+            });
+            // HTTP probe fails (HTTPS port does not speak plain HTTP) -- no false positive
+            assertTrue(
+                    findings.stream()
+                            .noneMatch(f -> f.title().contains("HTTP acess") || f.title().contains("SSLstrip")),
+                    "No HTTP downgrade finding when HSTS is adequate and HTTP probe fails");
+            // HSTS probe ran and parsed the header -- includeSubDomains finding proves it
+            assertTrue(findings.stream().anyMatch(f -> f.title().contains("includeSubDomains")),
+                    "HSTS probe must detect missing includeSubDomains");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(90)
+    void hstsHttpDowngradePresentWithoutHsts() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.start();
+        final int finalPort = server.getAddress().getPort();
+        server.createContext("/", exchange -> {
+            exchange.getResponseHeaders().set("Location", "https://127.0.0.1:" + finalPort + "/");
+            exchange.sendResponseHeaders(301, -1);
+            exchange.getResponseBody().close();
+        });
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + finalPort, "", Set.of("HSTS"));
+            List<Finding> findings = new HSTSModule().scan(ctx, msg -> {
+            });
+            // HTTPS probe fails (plain HTTP server) so hstsAdequate stays false,
+            // and the HTTP 301 triggers the downgrade finding
+            assertTrue(findings.stream().anyMatch(f -> f.title().contains("HTTP acess")),
+                    "HTTP downgrade finding must fire when HSTS is absent and HTTP returns 301");
+        } finally {
+            server.stop(0);
+        }
+    }
+
     @AfterAll
     static void tearDownHttpClients() {
         HttpClientFactory.closeAll();
