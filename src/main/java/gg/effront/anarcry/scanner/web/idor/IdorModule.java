@@ -131,14 +131,13 @@ public class IdorModule implements Scanner {
                 if (isSimilar(r1, r2)) {
                     log.accept("[!!] IDOR: acesso cruzado detectado em " + path);
                     String repro = cookieCrossUser
-                            ? "# Com cookie do usuário 1:\ncurl -b '" + abbreviated(ctx.config().sessionCookie())
-                                    + "' '" + base + path + "'\n"
-                                    + "# Com cookie do usuário 2 (não deve ter acesso):\ncurl -b '"
-                                    + abbreviated(ctx.config().sessionCookie2()) + "' '" + base + path + "'"
-                            : "# Com token do usuário 1:\ncurl -H 'Authorization: Bearer " + abbreviated(token1) + "' '"
-                                    + base + path + "'\n"
+                            ? "# Com cookie do usuário 1:\ncurl -b '<SESSION_COOKIE_1>' '" + base + path + "'\n"
+                                    + "# Com cookie do usuário 2 (não deve ter acesso):\ncurl -b '<SESSION_COOKIE_2>' '"
+                                    + base + path + "'"
+                            : "# Com token do usuário 1:\ncurl -H 'Authorization: Bearer <TOKEN_1>' '" + base + path
+                                    + "'\n"
                                     + "# Com token do usuário 2 (não deve ter acesso):\ncurl -H 'Authorization: Bearer "
-                                    + abbreviated(token2) + "' '" + base + path + "'";
+                                    + "<TOKEN_2>' '" + base + path + "'";
                     String evidence = (cookieCrossUser ? "Cookie1 e Cookie2" : "Token1 e Token2")
                             + " recebem a mesma resposta em " + base + path + " | Similaridade: "
                             + similarityPercent(r1, r2) + "%" + " | Body preview: "
@@ -217,9 +216,12 @@ public class IdorModule implements Scanner {
                                         + " | Response (200 chars): " + body.substring(0, Math.min(200, body.length())),
                                 "GraphQL IDOR -- mutation ou query retorna dados de outro usuário sem "
                                         + "verificação de autorização no nível de objeto",
-                                "curl -X POST -H 'Content-Type: application/json' "
-                                        + "-H 'Authorization: Bearer <TOKEN>' '" + base + gqlPath + "' " + "-d '"
-                                        + mutation + "'",
+                                hasCookieAuth
+                                        ? "curl -X POST -H 'Content-Type: application/json' -b '<SESSION_COOKIE>' '"
+                                                + base + gqlPath + "' -d '" + mutation + "'"
+                                        : "curl -X POST -H 'Content-Type: application/json' "
+                                                + "-H 'Authorization: Bearer <TOKEN>' '" + base + gqlPath + "' -d '"
+                                                + mutation + "'",
                                 "Implementar autorização por campo e por resolver no GraphQL; "
                                         + "usar DataLoader com contexto do usuário; nunca confiar no ID enviado pelo"
                                         + " cliente",
