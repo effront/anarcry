@@ -250,10 +250,7 @@ public class ScanRunner {
                         safeLog.accept("[~] dedup: ignorado finding duplicado -- " + f.module() + " " + f.title());
                     }
                 }
-                testedModules.add(enricher.id());
-                if (findings.isEmpty()) {
-                    testedClean.add(enricher.id());
-                }
+                recordModuleResult(enricher.id(), findings);
                 safeLog.accept("[+] " + enricher.id() + ": " + findings.size() + " finding(s), "
                         + ctx.discoveredPaths().pathCount() + " paths, " + ctx.discoveredPaths().parameterCount()
                         + " params discovered");
@@ -381,7 +378,7 @@ public class ScanRunner {
                     if (ex != null) {
                         safeLog.accept("[!] " + module.id() + " erro: " + ex.getMessage());
                     } else {
-                        testedModules.add(module.id());
+                        recordModuleResult(module.id(), findings);
                         for (Finding f : findings) {
                             String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
                             if (seenFindings.add(dedupKey)) {
@@ -398,9 +395,6 @@ public class ScanRunner {
                                         "[~] dedup: ignorado finding duplicado -- " + f.module() + " " + f.title());
                             }
                         }
-                        if (findings.isEmpty()) {
-                            testedClean.add(module.id());
-                        }
                         safeLog.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
                     }
                     eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, module.id(), moduleIndex, moduleCount));
@@ -412,6 +406,13 @@ public class ScanRunner {
 
         eventCb.accept(new ScanEvent(ScanEvent.Type.SCAN_DONE, null, moduleCount, moduleCount));
         safeLog.accept("[*] Scan concluído -- " + total[0] + " finding(s) no total");
+    }
+
+    private void recordModuleResult(String moduleId, List<Finding> findings) {
+        testedModules.add(moduleId);
+        if (findings.isEmpty()) {
+            testedClean.add(moduleId);
+        }
     }
 
     public void shutdown() {

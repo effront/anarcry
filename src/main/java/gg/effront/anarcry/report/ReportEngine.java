@@ -103,10 +103,7 @@ public class ReportEngine {
     private void buildRootCauseSection(StringBuilder sb, List<Finding> findings) {
         sb.append("## Root Cause Analysis\n\n");
 
-        Map<String, List<Finding>> byModule = new LinkedHashMap<>();
-        for (Finding f : findings) {
-            byModule.computeIfAbsent(f.module(), k -> new ArrayList<>()).add(f);
-        }
+        Map<String, List<Finding>> byModule = groupByRootCause(findings);
 
         Severity worstOverall = findings.stream().map(Finding::severity)
                 .min(Comparator.comparingInt(s -> ORDER.indexOf(s))).orElse(Severity.INFO);
@@ -123,8 +120,7 @@ public class ReportEngine {
             String module = entry.getKey();
             List<Finding> group = entry.getValue();
             Finding rep = group.getFirst();
-            KnowledgeBase kb = KnowledgeBase.getInstance();
-            KnowledgeEntry kbEntry = kb.byModule(module).orElse(null);
+            KnowledgeEntry kbEntry = resolveKb(module);
 
             sb.append("### Root Cause ").append(rootCauseIdx++).append(" -- ").append(module).append(" (")
                     .append(group.size()).append(" finding");
@@ -280,16 +276,13 @@ public class ReportEngine {
         KnowledgeBase kb = KnowledgeBase.getInstance();
         StringBuilder sb = new StringBuilder();
 
-        Map<String, List<Finding>> rootCauses = new LinkedHashMap<>();
-        for (Finding f : findings) {
-            rootCauses.computeIfAbsent(f.module(), k -> new ArrayList<>()).add(f);
-        }
+        Map<String, List<Finding>> rootCauses = groupByRootCause(findings);
 
         for (var entry : rootCauses.entrySet()) {
             String module = entry.getKey();
             List<Finding> group = entry.getValue();
             Finding rep = group.getFirst();
-            KnowledgeEntry kbEntry = kb.byModule(module).orElse(null);
+            KnowledgeEntry kbEntry = resolveKb(module);
             String kbSummary = kbEntry != null ? kbEntry.summary() : rep.impact();
             String kbDescription = kbEntry != null ? kbEntry.description() : "";
             String kbImpact = kbEntry != null ? kbEntry.impact() : rep.impact();
@@ -406,16 +399,13 @@ public class ReportEngine {
         KnowledgeBase kb = KnowledgeBase.getInstance();
         StringBuilder sb = new StringBuilder();
 
-        Map<String, List<Finding>> rootCauses = new LinkedHashMap<>();
-        for (Finding f : findings) {
-            rootCauses.computeIfAbsent(f.module(), k -> new ArrayList<>()).add(f);
-        }
+        Map<String, List<Finding>> rootCauses = groupByRootCause(findings);
 
         for (var entry : rootCauses.entrySet()) {
             String module = entry.getKey();
             List<Finding> group = entry.getValue();
             Finding rep = group.getFirst();
-            KnowledgeEntry kbEntry = kb.byModule(module).orElse(null);
+            KnowledgeEntry kbEntry = resolveKb(module);
             String vrt = kbEntry != null ? kbEntry.vrtId() : "other";
             String kbSummary = kbEntry != null ? kbEntry.summary() : rep.impact();
             String kbImpact = kbEntry != null ? kbEntry.impact() : rep.impact();
@@ -522,6 +512,18 @@ public class ReportEngine {
     // -------------------------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------------------------
+
+    private static Map<String, List<Finding>> groupByRootCause(List<Finding> findings) {
+        Map<String, List<Finding>> groups = new LinkedHashMap<>();
+        for (Finding f : findings) {
+            groups.computeIfAbsent(f.module(), k -> new ArrayList<>()).add(f);
+        }
+        return groups;
+    }
+
+    private static KnowledgeEntry resolveKb(String module) {
+        return KnowledgeBase.getInstance().byModule(module).orElse(null);
+    }
 
     private void appendCves(StringBuilder sb, String module) {
         KnowledgeBase kb = KnowledgeBase.getInstance();
