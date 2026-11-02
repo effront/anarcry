@@ -281,10 +281,13 @@ public class RequestSmugglingModule implements Scanner {
                 return false;
             }
             int sp = resp.indexOf(' ');
-            if (sp < 0 || sp + 3 > resp.length()) {
+            if (sp < 0 || sp + 4 > resp.length()) {
                 return false;
             }
-            return resp.charAt(sp + 1) == '2';
+            char c1 = resp.charAt(sp + 1);
+            char c2 = resp.charAt(sp + 2);
+            char c3 = resp.charAt(sp + 3);
+            return c1 == '2' && c2 >= '0' && c2 <= '9' && c3 >= '0' && c3 <= '9';
         } catch (Exception e) {
             return false;
         }
