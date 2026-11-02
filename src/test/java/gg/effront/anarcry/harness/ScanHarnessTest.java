@@ -54,6 +54,7 @@ import java.security.KeyStore;
 import java.security.cert.X509Certificate;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
@@ -62,6 +63,7 @@ import java.util.Set;
 import gg.effront.anarcry.scanner.web.cachepoisoning.CachePoisoningModule;
 import gg.effront.anarcry.scanner.web.smuggling.RequestSmugglingModule;
 import gg.effront.anarcry.scanner.web.crawler.CrawlerModule;
+import gg.effront.anarcry.scanner.DiscoveredPaths;
 import gg.effront.anarcry.scanner.ScanConfig;
 import gg.effront.anarcry.scanner.web.xss.XssModule;
 import gg.effront.anarcry.scanner.web.sqli.SqlInjectionModule;
@@ -2635,6 +2637,91 @@ class ScanHarnessTest {
             // and the HTTP 301 triggers the downgrade finding
             assertTrue(findings.stream().anyMatch(f -> f.title().contains("HTTP acess")),
                     "HTTP downgrade finding must fire when HSTS is absent and HTTP returns 301");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    // ─────────────────────────────────────────
+    // IDOR + COOKIE auth regression tests
+    // ─────────────────────────────────────────
+
+    @Test
+    @Order(91)
+    void idorSkipsWhenNoAuthAtAll() throws Exception {
+        List<String> logs = new ArrayList<>();
+        ScanContext ctx = new ScanContext("http://127.0.0.1:1", "", Set.of("IDOR"));
+        List<Finding> findings = new IdorModule().scan(ctx, logs::add);
+        assertTrue(findings.isEmpty(), "IDOR must produce no findings without any auth");
+        assertTrue(logs.stream().anyMatch(l -> l.contains("nenhuma autenticação")),
+                "IDOR must log skip reason when no auth is provided");
+    }
+
+    @Test
+    @Order(92)
+    void idorRunsDeletePhaseWithCookieAuth() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            if ("DELETE".equals(exchange.getRequestMethod())) {
+                String cookie = exchange.getRequestHeaders().getFirst("Cookie");
+                if (cookie != null && cookie.contains("session=abc")) {
+                    exchange.sendResponseHeaders(200, -1);
+                } else {
+                    exchange.sendResponseHeaders(403, -1);
+                }
+            } else {
+                exchange.sendResponseHeaders(404, -1);
+            }
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanConfig cfg = new ScanConfig(0, "session=abc", Set.of(), List.of(), "");
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", "", Set.of("IDOR"), cfg, r -> {
+            }, new DiscoveredPaths(), new gg.effront.anarcry.scanner.util.WafState());
+            List<String> logs = new ArrayList<>();
+            List<Finding> findings = new IdorModule().scan(ctx, logs::add);
+            assertTrue(logs.stream().anyMatch(l -> l.contains("Cookie")), "IDOR must log cookie auth mode");
+            assertTrue(logs.stream().anyMatch(l -> l.contains("DELETE")),
+                    "IDOR must run DELETE phase with cookie auth");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @Order(93)
+    void idorCrossUserWithCookies() throws Exception {
+        String userData = "{\"id\":\"42\",\"name\":\"Bob\",\"email\":\"bob@test.com\","
+                + "\"role\":\"user\",\"balance\":500,\"secret\":\"data\"}";
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            if ("DELETE".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(403, -1);
+                exchange.getResponseBody().close();
+                return;
+            }
+            byte[] body = userData.getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        int port = server.getAddress().getPort();
+        try {
+            ScanConfig cfg = new ScanConfig(0, "session=user1", "session=user2", Set.of(), List.of(), "",
+                    ScanConfig.DEFAULT_PROBE_CONCURRENCY);
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + port, "", "", Set.of("IDOR"), cfg, r -> {
+            }, new DiscoveredPaths(), new gg.effront.anarcry.scanner.util.WafState());
+            List<String> logs = new ArrayList<>();
+            List<Finding> findings = new IdorModule().scan(ctx, logs::add);
+            assertTrue(findings.stream().anyMatch(f -> f.title().contains("IDOR") && f.severity() == Severity.MEDIUM),
+                    "IDOR cross-user GET must detect same response for two different cookies");
+            assertTrue(
+                    findings.stream()
+                            .anyMatch(f -> f.evidence().contains("Cookie1") || f.reproduction().contains("curl -b")),
+                    "IDOR finding must reference cookie-based reproduction");
         } finally {
             server.stop(0);
         }

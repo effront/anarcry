@@ -33,7 +33,9 @@ public final class ScanOrchestrator {
         String jwt = authType.usesBearer() ? (cred1 != null ? cred1 : "") : "";
         String jwt2 = authType.usesBearer() ? (cred2 != null ? cred2 : "") : "";
         String cookie = authType.usesCookie() ? (cred1 != null ? cred1 : "") : "";
-        ScanConfig cfg = new ScanConfig(0, cookie, Set.of(), SuppressionLoader.loadFromCwd(), "");
+        String cookie2 = authType.usesCookie() ? (cred2 != null ? cred2 : "") : "";
+        ScanConfig cfg = new ScanConfig(0, cookie, cookie2, Set.of(), SuppressionLoader.loadFromCwd(), "",
+                ScanConfig.DEFAULT_PROBE_CONCURRENCY);
         return new ScanContext(target, jwt, jwt2, modules, cfg, requestLogCb, new DiscoveredPaths(), new WafState());
     }
 

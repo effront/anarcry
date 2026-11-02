@@ -5,8 +5,8 @@ import gg.effront.anarcry.model.Suppression;
 import java.util.List;
 import java.util.Set;
 
-public record ScanConfig(int delayMs, String sessionCookie, Set<String> inScopeHosts, List<Suppression> suppressions,
-        String redirectRelayUrl, int probeConcurrency) {
+public record ScanConfig(int delayMs, String sessionCookie, String sessionCookie2, Set<String> inScopeHosts,
+        List<Suppression> suppressions, String redirectRelayUrl, int probeConcurrency) {
 
     public static final int DEFAULT_PROBE_CONCURRENCY = 12;
 
@@ -16,6 +16,9 @@ public record ScanConfig(int delayMs, String sessionCookie, Set<String> inScopeH
         }
         if (sessionCookie == null) {
             sessionCookie = "";
+        }
+        if (sessionCookie2 == null) {
+            sessionCookie2 = "";
         }
         if (inScopeHosts == null) {
             inScopeHosts = Set.of();
@@ -33,11 +36,11 @@ public record ScanConfig(int delayMs, String sessionCookie, Set<String> inScopeH
 
     public ScanConfig(int delayMs, String sessionCookie, Set<String> inScopeHosts, List<Suppression> suppressions,
             String redirectRelayUrl) {
-        this(delayMs, sessionCookie, inScopeHosts, suppressions, redirectRelayUrl, DEFAULT_PROBE_CONCURRENCY);
+        this(delayMs, sessionCookie, "", inScopeHosts, suppressions, redirectRelayUrl, DEFAULT_PROBE_CONCURRENCY);
     }
 
     public static ScanConfig defaults() {
-        return new ScanConfig(0, "", Set.of(), List.of(), "", DEFAULT_PROBE_CONCURRENCY);
+        return new ScanConfig(0, "", "", Set.of(), List.of(), "", DEFAULT_PROBE_CONCURRENCY);
     }
 
     public boolean isInScope(String host) {
