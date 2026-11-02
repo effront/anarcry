@@ -19,6 +19,10 @@ fi
 if [ "$NEEDS_BUILD" = true ]; then
     echo "AnarCry: building v${VERSION:-?} ..."
     (cd "$DIR" && ./gradlew shadowJar --quiet --console=plain) || { echo "Build failed"; exit 1; }
+    # Remove old versioned JARs that don't match the current version
+    for old in "$DIR"/build/libs/anarcry-*.jar; do
+        [ "$old" != "$JAR" ] && rm -f "$old"
+    done
 fi
 
 if [ ! -f "$JAR" ]; then
