@@ -129,6 +129,140 @@ class ReportEngineTest {
         assertEquals(2, countOccurrences(bc, "### Proof of Concept"), "Bugcrowd should have 2 findings");
     }
 
+    @Test
+    void rootCauseGrouping() throws IOException {
+        Finding xss1 = Finding.of("XSS", "https://target.com/search", "Reflected XSS in search", Severity.CRITICAL,
+                "alert(1) reflected", "Session hijack", "curl ...", "Encode output");
+        Finding xss2 = Finding.of("XSS", "https://target.com/profile", "Reflected XSS in profile", Severity.HIGH,
+                "alert(2) reflected", "Session hijack", "curl ...", "Encode output");
+        Finding sqli = Finding.of("SQLi", "https://target.com/api/users", "SQL injection in users", Severity.CRITICAL,
+                "error in SQL syntax", "Data breach", "curl ...", "Use parameterized queries");
+
+        String file = engine.export(List.of(xss1, xss2, sqli), "https://target.com", List.of("XSS", "SQLi", "CORS"),
+                List.of("CORS"));
+        cleanupPaths.add(Path.of(file));
+        cleanupPaths.add(Path.of(file.replace(".md", ".json")));
+
+        String content = Files.readString(Path.of(file));
+
+        assertTrue(content.contains("## Root Cause Analysis"), "Missing root cause section");
+        assertTrue(content.contains("Root Cause 1 -- XSS (2 findings)"), "Missing XSS root cause group");
+        assertTrue(content.contains("Root Cause 2 -- SQLi (1 finding)"), "Missing SQLi root cause group");
+        assertTrue(content.contains("**Affected endpoints (2):**"), "Missing grouped endpoints for XSS");
+        assertTrue(content.contains("**Unified remediation:**"), "Missing unified remediation");
+        assertTrue(content.contains("Apply this fix across all 2 affected endpoints"),
+                "Missing cross-endpoint remediation note");
+    }
+
+    @Test
+    void negativeCompanions() throws IOException {
+        Finding xss = xssFinding();
+        List<String> testedModules = List.of("XSS", "SQLi", "CORS", "SSRF");
+        List<String> testedClean = List.of("SQLi", "CORS", "SSRF");
+
+        String file = engine.export(List.of(xss), "https://target.com", testedModules, testedClean);
+        cleanupPaths.add(Path.of(file));
+        cleanupPaths.add(Path.of(file.replace(".md", ".json")));
+
+        String content = Files.readString(Path.of(file));
+
+        assertTrue(content.contains("## Tested and Secure"), "Missing negative companion section");
+        assertTrue(content.contains("| SQLi |"), "Missing SQLi in clean modules");
+        assertTrue(content.contains("| CORS |"), "Missing CORS in clean modules");
+        assertTrue(content.contains("| SSRF |"), "Missing SSRF in clean modules");
+        assertTrue(content.contains("**Modules tested:** 4"), "Missing tested count");
+        assertTrue(content.contains("**Modules clean:** 3"), "Missing clean count");
+    }
+
+    @Test
+    void crossFindingCorrelation() throws IOException {
+        Finding xss = Finding.of("XSS", "https://target.com/search", "Reflected XSS", Severity.CRITICAL,
+                "alert reflected", "Session hijack", "curl ...", "Encode output");
+        Finding cors = Finding.of("CORS", "https://target.com/api", "CORS misconfiguration", Severity.HIGH,
+                "ACAO: evil.com", "Cross-origin data theft", "curl ...", "Restrict origins");
+
+        String file = engine.export(List.of(xss, cors), "https://target.com");
+        cleanupPaths.add(Path.of(file));
+        cleanupPaths.add(Path.of(file.replace(".md", ".json")));
+
+        String content = Files.readString(Path.of(file));
+
+        assertTrue(content.contains("### Cross-Finding Correlation"), "Missing correlation section");
+        assertTrue(content.contains("XSS + CORS misconfiguration"), "Missing XSS+CORS chain");
+    }
+
+    @Test
+    void severityAnchor() throws IOException {
+        Finding critical = Finding.of("SQLi", "https://target.com/api", "SQL injection", Severity.CRITICAL, "SQL error",
+                "Data breach", "curl ...", "Parameterized queries");
+        Finding low = Finding.of("Headers", "https://target.com/", "Missing X-Frame-Options", Severity.LOW,
+                "No XFO header", "Clickjacking", "curl ...", "Add header");
+
+        String file = engine.export(List.of(critical, low), "https://target.com");
+        cleanupPaths.add(Path.of(file));
+        cleanupPaths.add(Path.of(file.replace(".md", ".json")));
+
+        String content = Files.readString(Path.of(file));
+
+        assertTrue(content.contains("**Severity anchor:** SQL injection"), "Missing severity anchor");
+        assertTrue(content.contains("CRITICAL"), "Anchor should show CRITICAL severity");
+    }
+
+    @Test
+    void h1NegativeCompanionSection() throws IOException {
+        Finding xss = xssFinding();
+        List<String> testedClean = List.of("SQLi", "SSRF");
+
+        String file = engine.exportH1(List.of(xss), "https://target.com", "TestProgram", List.of("XSS", "SQLi", "SSRF"),
+                testedClean);
+        cleanupPaths.add(Path.of(file));
+
+        String content = Files.readString(Path.of(file));
+
+        assertTrue(content.contains("# Negative Companion -- Tested and Secure"),
+                "H1 missing negative companion section");
+        assertTrue(content.contains("**SQLi**"), "H1 missing SQLi in clean list");
+        assertTrue(content.contains("**SSRF**"), "H1 missing SSRF in clean list");
+    }
+
+    @Test
+    void h1NegativeCompanionAppearsOnce() throws IOException {
+        Finding xss = xssFinding();
+        Finding sqli = Finding.of("SQLi", "https://target.com/api", "SQL injection", Severity.CRITICAL, "SQL error",
+                "Data breach", "curl ...", "Parameterized queries");
+        List<String> testedClean = List.of("CORS", "SSRF");
+
+        String file = engine.exportH1(List.of(xss, sqli), "https://target.com", "TestProgram",
+                List.of("XSS", "SQLi", "CORS", "SSRF"), testedClean);
+        cleanupPaths.add(Path.of(file));
+
+        String content = Files.readString(Path.of(file));
+
+        assertEquals(1, countOccurrences(content, "Negative Companion -- Tested and Secure"),
+                "H1 negative companion section should appear exactly once");
+    }
+
+    @Test
+    void bugcrowdRootCauseGrouping() throws IOException {
+        Finding idor1 = Finding.of("IDOR", "https://target.com/api/user/1", "IDOR on user endpoint", Severity.HIGH,
+                "Other user data returned", "Cross-account read", "curl ...", "Check ownership");
+        Finding idor2 = Finding.of("IDOR", "https://target.com/api/order/1", "IDOR on order endpoint", Severity.HIGH,
+                "Other user orders returned", "Cross-account read", "curl ...", "Check ownership");
+
+        String file = engine.exportBugcrowd(List.of(idor1, idor2), "https://target.com", List.of("IDOR", "CORS"),
+                List.of("CORS"));
+        cleanupPaths.add(Path.of(file));
+
+        String content = Files.readString(Path.of(file));
+
+        assertTrue(content.contains("IDOR: 2 findings, one root cause"), "Missing root cause title");
+        assertTrue(content.contains("**Finding 1**"), "Missing finding 1 in group");
+        assertTrue(content.contains("**Finding 2**"), "Missing finding 2 in group");
+        assertTrue(content.contains("Apply this fix across all 2 affected endpoints"),
+                "Missing unified remediation note");
+        assertTrue(content.contains("## Tested and Secure"), "Missing negative companion section");
+    }
+
     private static int countOccurrences(String text, String sub) {
         int count = 0;
         int idx = 0;

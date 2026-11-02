@@ -352,6 +352,9 @@ ScanRunner.run(ScanContext)
 - **KB enrichment -- Request Smuggling**: comprehensive variant taxonomy (25+ techniques), 8 real-world cases (Pingora, HAProxy CVEs, Akamai, Google Cloud TE.0), PortSwigger research timeline, detection methodology, academic/vendor/tooling references
 - **6 new harness tests**: positive + negative tests for Duplicate CL, CL.0, and Hop-by-hop TE probes
 
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
+
 ### v1.7.0
 
 - **IDOR COOKIE authentication**: IdorModule supports COOKIE auth type for cross-user testing with session cookies
@@ -373,9 +376,6 @@ ScanRunner.run(ScanContext)
 - **anarchrypto auto-build**: launcher detects stale JAR and rebuilds automatically via `./gradlew shadowJar`
 - **AuthType e2e harness**: 25 tests covering enum contract, wiring, module skip, HTTP header injection, and integration
 
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
-
 ### v1.5.0
 
 - **WAF evasion engine**: WafState + WafEvasion in scanner/util/ -- 5 bypass strategies (DOUBLE_ENCODE, CASE_MUTATION, UNICODE_NORMALIZE, CHARSET_EBCDIC, HPP)
@@ -383,9 +383,6 @@ ScanRunner.run(ScanContext)
 - **Module integration**: SQLi, XSS, LFI, SSTI, CmdInjection, XXE apply evasion payloads transparently when WAF detected
 - **HeadersModule WAF state**: marks shared WafState on 403 + WAF signature detection
 - **Test harness**: 26 WAF tests (18 unit + 8 integration with mock WAF server)
-
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v1.4.2
 
@@ -428,8 +425,6 @@ ScanRunner.run(ScanContext)
 ### v1.1
 
 - Initial public release with 25 attack modules, CVSS v3.1 auto-scoring, HackerOne/Bugcrowd export, and TUI
-
-</details>
 
 </details>
 
