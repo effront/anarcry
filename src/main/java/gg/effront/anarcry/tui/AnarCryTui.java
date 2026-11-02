@@ -38,6 +38,7 @@ import gg.effront.anarcry.tui.chrome.StatusBar;
 import gg.effront.anarcry.tui.modes.Mode;
 import gg.effront.anarcry.tui.modes.RepeaterMode;
 import gg.effront.anarcry.tui.modes.TargetMode;
+import gg.effront.anarcry.tui.panels.AssistantPanel;
 import gg.effront.anarcry.tui.panels.FindingsPanel;
 import gg.effront.anarcry.tui.panels.LogPanel;
 import gg.effront.anarcry.tui.panels.ModulesPanel;
@@ -69,6 +70,7 @@ public class AnarCryTui {
     private FindingsPanel findingsPanel;
     private SiteMapPanel siteMapPanel;
     private ModulesPanel modulesPanel;
+    private AssistantPanel assistantPanel;
     private Consumer<RequestRecord> requestCb;
     private BasicWindow window;
     private ModeBar modeBar;
@@ -233,6 +235,9 @@ public class AnarCryTui {
                     switchMode(Mode.SITEMAP);
                     hasBeenHandled.set(true);
                 } else if (kt == KeyType.F8) {
+                    switchMode(Mode.ASSISTANT);
+                    hasBeenHandled.set(true);
+                } else if (kt == KeyType.F9) {
                     EventLogDrawer.show(gui, logHistory);
                     hasBeenHandled.set(true);
                 } else if (keyStroke instanceof MouseAction ma && ma.getActionType() == MouseActionType.CLICK_RELEASE
@@ -255,6 +260,25 @@ public class AnarCryTui {
                             hasBeenHandled.set(true);
                         } else if (ma.getActionType() == MouseActionType.SCROLL_DOWN) {
                             logPanel.scrollDown(3);
+                            hasBeenHandled.set(true);
+                        }
+                    }
+                } else if (currentMode == Mode.ASSISTANT && assistantPanel != null) {
+                    if (kt == KeyType.Enter) {
+                        assistantPanel.handleEnter();
+                        hasBeenHandled.set(true);
+                    } else if (kt == KeyType.PageUp) {
+                        assistantPanel.scrollUp(8);
+                        hasBeenHandled.set(true);
+                    } else if (kt == KeyType.PageDown) {
+                        assistantPanel.scrollDown(8);
+                        hasBeenHandled.set(true);
+                    } else if (keyStroke instanceof MouseAction ma) {
+                        if (ma.getActionType() == MouseActionType.SCROLL_UP) {
+                            assistantPanel.scrollUp(3);
+                            hasBeenHandled.set(true);
+                        } else if (ma.getActionType() == MouseActionType.SCROLL_DOWN) {
+                            assistantPanel.scrollDown(3);
                             hasBeenHandled.set(true);
                         }
                     }
@@ -331,6 +355,7 @@ public class AnarCryTui {
             case REPEATER -> RepeaterMode.build(modulesPanel.getTarget(), modulesPanel.getJwt());
             case REPORT -> buildReportContent();
             case SITEMAP -> buildSiteMapContent();
+            case ASSISTANT -> buildAssistantContent();
         };
     }
 
@@ -357,6 +382,27 @@ public class AnarCryTui {
         p.addComponent(siteMapPanel.withBorder(Borders.singleLine("SITE MAP -- F7  requisições HTTP interceptadas")),
                 BorderLayout.Location.CENTER);
         return p;
+    }
+
+    private Component buildAssistantContent() {
+        if (assistantPanel == null) {
+            boolean configured = envPreload != null && envPreload.hasAssistant();
+            TerminalSize ts = gui.getScreen().getTerminalSize();
+            int chatHeight = Math.max(8, ts.getRows() - 4);
+            assistantPanel = new AssistantPanel(chatHeight, configured);
+            assistantPanel.setOnSend(msg -> {
+                addToLog("[*] Assistant query: " + msg.substring(0, Math.min(60, msg.length())) + "...");
+            });
+            assistantPanel.setOnSlashCommand(cmd -> {
+                addToLog("[*] Assistant command: " + cmd);
+            });
+        }
+
+        var wrapper = new Panel(new BorderLayout());
+        wrapper.addComponent(assistantPanel, BorderLayout.Location.CENTER);
+
+        assistantPanel.getInputBox().takeFocus();
+        return wrapper;
     }
 
     private Component buildDashboardContent() {

@@ -10,11 +10,11 @@ import gg.effront.anarcry.tui.modes.Mode;
 public class ModeBar extends Panel {
 
     private static final Mode[] MODES = Mode.values();
-    private static final String[] KEYS = {"F1", "F2", "F3", "F4", "F5", "F6", "F7"};
+    private static final String[] KEYS = {"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8"};
     private static final String[] NAMES = {"Dashboard", "Scan", "Target", "Findings", "Repeater", "Relatório",
-            "Site Map"};
+            "Site Map", "Assistente"};
 
-    private final Label[] tabs = new Label[7];
+    private final Label[] tabs = new Label[8];
 
     private Mode activeMode = Mode.SCAN;
     private boolean scanning = false;
@@ -22,7 +22,7 @@ public class ModeBar extends Panel {
 
     public ModeBar() {
         super(new LinearLayout(Direction.HORIZONTAL));
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 8; i++) {
             tabs[i] = new Label(" ");
             addComponent(tabs[i]);
         }

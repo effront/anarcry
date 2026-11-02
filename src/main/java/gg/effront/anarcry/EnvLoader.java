@@ -3,10 +3,12 @@ package gg.effront.anarcry;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public record EnvLoader(String target, String jwt1, String jwt2) {
+public record EnvLoader(String target, String jwt1, String jwt2, String assistantProvider, String assistantApiKey,
+        String assistantModel, int assistantMaxTokens) {
 
     public static EnvLoader load(String path) throws IOException {
         Map<String, String> map = new HashMap<>();
@@ -26,11 +28,32 @@ public record EnvLoader(String target, String jwt1, String jwt2) {
         String target = normalize(map.getOrDefault("target", ""));
         String jwt1 = map.getOrDefault("jwt1", "");
         String jwt2 = map.getOrDefault("jwt2", "");
-        return new EnvLoader(target, jwt1, jwt2);
+        String assistantProvider = map.getOrDefault("assistant_provider", "");
+        String assistantApiKey = map.getOrDefault("assistant_api_key", "");
+        String assistantModel = map.getOrDefault("assistant_model", "");
+        int assistantMaxTokens = parseIntOrDefault(map.getOrDefault("assistant_max_tokens", ""), 4096);
+        return new EnvLoader(target, jwt1, jwt2, assistantProvider, assistantApiKey, assistantModel,
+                assistantMaxTokens);
     }
 
     public boolean hasTarget() {
         return target != null && !target.isBlank();
+    }
+
+    public boolean hasAssistant() {
+        return assistantProvider != null && !assistantProvider.isBlank();
+    }
+
+    public Map<String, String> asMap() {
+        Map<String, String> m = new HashMap<>();
+        m.put("target", target != null ? target : "");
+        m.put("jwt1", jwt1 != null ? jwt1 : "");
+        m.put("jwt2", jwt2 != null ? jwt2 : "");
+        m.put("assistant_provider", assistantProvider != null ? assistantProvider : "");
+        m.put("assistant_api_key", assistantApiKey != null ? assistantApiKey : "");
+        m.put("assistant_model", assistantModel != null ? assistantModel : "");
+        m.put("assistant_max_tokens", String.valueOf(assistantMaxTokens));
+        return Collections.unmodifiableMap(m);
     }
 
     private static String normalize(String t) {
@@ -45,5 +68,16 @@ public record EnvLoader(String target, String jwt1, String jwt2) {
             return "https://" + t;
         }
         return t;
+    }
+
+    private static int parseIntOrDefault(String s, int defaultVal) {
+        if (s == null || s.isBlank()) {
+            return defaultVal;
+        }
+        try {
+            return Integer.parseInt(s.strip());
+        } catch (NumberFormatException e) {
+            return defaultVal;
+        }
     }
 }
