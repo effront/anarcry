@@ -2727,6 +2727,292 @@ class ScanHarnessTest {
         }
     }
 
+    // ─────────────────────────────────────────
+    // HTTP Request Smuggling -- New Probes
+    // ─────────────────────────────────────────
+
+    @Test
+    @Order(94)
+    void reqSmugglingDuplicateClDetected() throws Exception {
+        // Server that accepts duplicate Content-Length without 400
+        java.net.ServerSocket rawServer = new java.net.ServerSocket(0);
+        int rawPort = rawServer.getLocalPort();
+        Thread serverThread = new Thread(() -> {
+            while (!rawServer.isClosed()) {
+                try (java.net.Socket conn = rawServer.accept()) {
+                    conn.setSoTimeout(5_000);
+                    byte[] buf = new byte[4096];
+                    conn.getInputStream().read(buf);
+                    // Accept anything with 200 -- vulnerable: no CL validation
+                    String resp = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+                    conn.getOutputStream().write(resp.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                } catch (Exception ignored) {
+                }
+            }
+        });
+        serverThread.setDaemon(true);
+        serverThread.start();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + rawPort, "", Set.of("ReqSmuggling"));
+            List<Finding> findings = new RequestSmugglingModule().scan(ctx, msg -> System.out.println("[SMUG] " + msg));
+            assertTrue(findings.stream().anyMatch(f -> f.title().contains("Duplicate Content-Length")),
+                    "Servidor que aceita CL duplicado deve gerar finding");
+        } finally {
+            rawServer.close();
+        }
+    }
+
+    @Test
+    @Order(95)
+    void reqSmugglingDuplicateClClean() throws Exception {
+        // Server that rejects duplicate Content-Length with 400
+        java.net.ServerSocket rawServer = new java.net.ServerSocket(0);
+        int rawPort = rawServer.getLocalPort();
+        Thread serverThread = new Thread(() -> {
+            while (!rawServer.isClosed()) {
+                try (java.net.Socket conn = rawServer.accept()) {
+                    conn.setSoTimeout(5_000);
+                    byte[] buf = new byte[4096];
+                    int read = conn.getInputStream().read(buf);
+                    String req = read > 0 ? new String(buf, 0, read, java.nio.charset.StandardCharsets.US_ASCII) : "";
+                    String resp;
+                    // Count Content-Length occurrences
+                    int clCount = 0;
+                    int idx = 0;
+                    while ((idx = req.indexOf("Content-Length:", idx)) != -1) {
+                        clCount++;
+                        idx += 15;
+                    }
+                    if (clCount > 1) {
+                        resp = "HTTP/1.1 400 Bad Request\r\nContent-Length: 11\r\n\r\nBad Request";
+                    } else {
+                        resp = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+                    }
+                    conn.getOutputStream().write(resp.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                } catch (Exception ignored) {
+                }
+            }
+        });
+        serverThread.setDaemon(true);
+        serverThread.start();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + rawPort, "", Set.of("ReqSmuggling"));
+            List<Finding> findings = new RequestSmugglingModule().scan(ctx, msg -> {
+            });
+            assertTrue(findings.stream().noneMatch(f -> f.title().contains("Duplicate Content-Length")),
+                    "Servidor que rejeita CL duplicado com 400 não deve gerar finding");
+        } finally {
+            rawServer.close();
+        }
+    }
+
+    @Test
+    @Order(96)
+    void reqSmugglingCl0Detected() throws Exception {
+        // CL.0 vulnerable server: reads only headers, responds without consuming
+        // body. Leftover body bytes (the smuggled GET) become a second request.
+        java.net.ServerSocket rawServer = new java.net.ServerSocket(0);
+        int rawPort = rawServer.getLocalPort();
+        Thread serverThread = new Thread(() -> {
+            while (!rawServer.isClosed()) {
+                try (java.net.Socket conn = rawServer.accept()) {
+                    conn.setSoTimeout(5_000);
+                    java.io.InputStream in = conn.getInputStream();
+                    java.io.OutputStream out = conn.getOutputStream();
+                    // Read only until end of headers (byte by byte)
+                    StringBuilder headers = new StringBuilder();
+                    while (true) {
+                        int b = in.read();
+                        if (b < 0)
+                            break;
+                        headers.append((char) b);
+                        int len = headers.length();
+                        if (len >= 4 && headers.charAt(len - 4) == '\r' && headers.charAt(len - 3) == '\n'
+                                && headers.charAt(len - 2) == '\r' && headers.charAt(len - 1) == '\n') {
+                            break;
+                        }
+                    }
+                    // Respond immediately -- body bytes remain unread in the stream
+                    String firstResp = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+                    out.write(firstResp.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                    out.flush();
+                    // Now read leftover bytes (the smuggled request) and respond
+                    try {
+                        conn.setSoTimeout(1_000);
+                        byte[] buf = new byte[4096];
+                        int read = in.read(buf);
+                        if (read > 0) {
+                            String secondResp = "HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\n\r\nNot Found";
+                            out.write(secondResp.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                            out.flush();
+                        }
+                    } catch (java.net.SocketTimeoutException e) {
+                        // no leftover bytes -- not a smuggling scenario
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        });
+        serverThread.setDaemon(true);
+        serverThread.start();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + rawPort, "", Set.of("ReqSmuggling"));
+            List<Finding> findings = new RequestSmugglingModule().scan(ctx, msg -> System.out.println("[SMUG] " + msg));
+            assertTrue(findings.stream().anyMatch(f -> f.title().contains("CL.0") && f.severity() == Severity.CRITICAL),
+                    "Servidor CL.0 deve gerar CRITICAL");
+        } finally {
+            rawServer.close();
+        }
+    }
+
+    @Test
+    @Order(97)
+    void reqSmugglingCl0Clean() throws Exception {
+        // Server that consumes full body before responding -- no CL.0
+        java.net.ServerSocket rawServer = new java.net.ServerSocket(0);
+        int rawPort = rawServer.getLocalPort();
+        Thread serverThread = new Thread(() -> {
+            while (!rawServer.isClosed()) {
+                try (java.net.Socket conn = rawServer.accept()) {
+                    conn.setSoTimeout(5_000);
+                    java.io.InputStream in = conn.getInputStream();
+                    byte[] buf = new byte[8192];
+                    int read = in.read(buf);
+                    if (read <= 0)
+                        continue;
+                    String req = new String(buf, 0, read, java.nio.charset.StandardCharsets.US_ASCII);
+                    // Parse CL and consume exactly that many body bytes
+                    int clIdx = req.indexOf("Content-Length: ");
+                    if (clIdx >= 0) {
+                        int endIdx = req.indexOf("\r\n", clIdx);
+                        int cl = Integer.parseInt(req.substring(clIdx + 16, endIdx).trim());
+                        int headerEnd = req.indexOf("\r\n\r\n");
+                        if (headerEnd >= 0) {
+                            int bodyStart = headerEnd + 4;
+                            int bodyRead = read - bodyStart;
+                            while (bodyRead < cl) {
+                                int n = in.read(buf);
+                                if (n <= 0)
+                                    break;
+                                bodyRead += n;
+                            }
+                        }
+                    }
+                    String resp = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nOK";
+                    conn.getOutputStream().write(resp.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                } catch (Exception ignored) {
+                }
+            }
+        });
+        serverThread.setDaemon(true);
+        serverThread.start();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + rawPort, "", Set.of("ReqSmuggling"));
+            List<Finding> findings = new RequestSmugglingModule().scan(ctx, msg -> {
+            });
+            assertTrue(findings.stream().noneMatch(f -> f.title().contains("CL.0")),
+                    "Servidor que consome body completo não deve gerar CL.0 finding");
+        } finally {
+            rawServer.close();
+        }
+    }
+
+    @Test
+    @Order(98)
+    void reqSmugglingHopByHopTeDetected() throws Exception {
+        // Multi-threaded server: hangs on CL+TE without Connection: TE,
+        // responds fast when Connection: Transfer-Encoding is present
+        java.net.ServerSocket rawServer = new java.net.ServerSocket(0);
+        int rawPort = rawServer.getLocalPort();
+        Thread acceptThread = new Thread(() -> {
+            while (!rawServer.isClosed()) {
+                try {
+                    java.net.Socket conn = rawServer.accept();
+                    Thread handler = new Thread(() -> {
+                        try (conn) {
+                            conn.setSoTimeout(10_000);
+                            byte[] buf = new byte[4096];
+                            int read = conn.getInputStream().read(buf);
+                            String req = read > 0
+                                    ? new String(buf, 0, read, java.nio.charset.StandardCharsets.US_ASCII)
+                                    : "";
+                            boolean hasConnectionTe = req.contains("Connection: Transfer-Encoding")
+                                    || req.contains("Connection: transfer-encoding");
+                            boolean hasTe = req.contains("Transfer-Encoding:");
+                            if (hasTe && !hasConnectionTe) {
+                                Thread.sleep(5_000);
+                            }
+                            String resp = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+                            conn.getOutputStream().write(resp.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                        } catch (Exception ignored) {
+                        }
+                    });
+                    handler.setDaemon(true);
+                    handler.start();
+                } catch (Exception ignored) {
+                }
+            }
+        });
+        acceptThread.setDaemon(true);
+        acceptThread.start();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + rawPort, "", Set.of("ReqSmuggling"));
+            List<Finding> findings = new RequestSmugglingModule().scan(ctx, msg -> System.out.println("[SMUG] " + msg));
+            assertTrue(findings.stream().anyMatch(f -> f.title().contains("Hop-by-hop")),
+                    "Servidor com hop-by-hop TE stripping deve gerar finding");
+        } finally {
+            rawServer.close();
+        }
+    }
+
+    @Test
+    @Order(99)
+    void reqSmugglingHopByHopTeClean() throws Exception {
+        // Multi-threaded server: always hangs on CL+TE regardless of Connection header.
+        // No differential = no hop-by-hop finding.
+        java.net.ServerSocket rawServer = new java.net.ServerSocket(0);
+        int rawPort = rawServer.getLocalPort();
+        Thread acceptThread = new Thread(() -> {
+            while (!rawServer.isClosed()) {
+                try {
+                    java.net.Socket conn = rawServer.accept();
+                    Thread handler = new Thread(() -> {
+                        try (conn) {
+                            conn.setSoTimeout(10_000);
+                            byte[] buf = new byte[4096];
+                            int read = conn.getInputStream().read(buf);
+                            String req = read > 0
+                                    ? new String(buf, 0, read, java.nio.charset.StandardCharsets.US_ASCII)
+                                    : "";
+                            boolean hasTe = req.contains("Transfer-Encoding:");
+                            boolean hasCl = req.contains("Content-Length:");
+                            if (hasTe && hasCl) {
+                                Thread.sleep(5_000);
+                            }
+                            String resp = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+                            conn.getOutputStream().write(resp.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                        } catch (Exception ignored) {
+                        }
+                    });
+                    handler.setDaemon(true);
+                    handler.start();
+                } catch (Exception ignored) {
+                }
+            }
+        });
+        acceptThread.setDaemon(true);
+        acceptThread.start();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + rawPort, "", Set.of("ReqSmuggling"));
+            List<Finding> findings = new RequestSmugglingModule().scan(ctx, msg -> {
+            });
+            assertTrue(findings.stream().noneMatch(f -> f.title().contains("Hop-by-hop")),
+                    "Servidor que trata ambos CL+TE igualmente não deve gerar hop-by-hop finding");
+        } finally {
+            rawServer.close();
+        }
+    }
+
     @AfterAll
     static void tearDownHttpClients() {
         HttpClientFactory.closeAll();
