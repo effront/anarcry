@@ -3013,6 +3013,114 @@ class ScanHarnessTest {
         }
     }
 
+    @Test
+    @Order(100)
+    void reqSmugglingTeClFiresWhenClTeAlsoTimesOut() throws Exception {
+        // Server that hangs on ANY CL+TE probe (both CL.TE and TE.CL trigger)
+        java.net.ServerSocket rawServer = new java.net.ServerSocket(0);
+        int rawPort = rawServer.getLocalPort();
+        Thread acceptThread = new Thread(() -> {
+            while (!rawServer.isClosed()) {
+                try {
+                    java.net.Socket conn = rawServer.accept();
+                    Thread handler = new Thread(() -> {
+                        try (conn) {
+                            conn.setSoTimeout(10_000);
+                            byte[] buf = new byte[4096];
+                            int read = conn.getInputStream().read(buf);
+                            String req = read > 0
+                                    ? new String(buf, 0, read, java.nio.charset.StandardCharsets.US_ASCII)
+                                    : "";
+                            if (req.contains("Transfer-Encoding:") && req.contains("Content-Length:")) {
+                                Thread.sleep(5_000);
+                            }
+                            String resp = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+                            conn.getOutputStream().write(resp.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                        } catch (Exception ignored) {
+                        }
+                    });
+                    handler.setDaemon(true);
+                    handler.start();
+                } catch (Exception ignored) {
+                }
+            }
+        });
+        acceptThread.setDaemon(true);
+        acceptThread.start();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + rawPort, "", Set.of("ReqSmuggling"));
+            List<Finding> findings = new RequestSmugglingModule().scan(ctx, msg -> System.out.println("[SMUG] " + msg));
+            assertTrue(findings.stream().anyMatch(f -> f.title().contains("CL.TE")), "CL.TE deve ser detectado");
+            assertTrue(findings.stream().anyMatch(f -> f.title().contains("TE.CL")),
+                    "TE.CL deve ser detectado independentemente do CL.TE");
+        } finally {
+            rawServer.close();
+        }
+    }
+
+    @Test
+    @Order(101)
+    void reqSmugglingDuplicateClRejectsNon2xx() throws Exception {
+        for (String status : List.of("301 Moved", "500 Internal Server Error")) {
+            java.net.ServerSocket rawServer = new java.net.ServerSocket(0);
+            int rawPort = rawServer.getLocalPort();
+            String httpStatus = status;
+            Thread serverThread = new Thread(() -> {
+                while (!rawServer.isClosed()) {
+                    try (java.net.Socket conn = rawServer.accept()) {
+                        conn.setSoTimeout(5_000);
+                        byte[] buf = new byte[4096];
+                        conn.getInputStream().read(buf);
+                        String resp = "HTTP/1.1 " + httpStatus + "\r\nContent-Length: 2\r\n\r\nOK";
+                        conn.getOutputStream().write(resp.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                    } catch (Exception ignored) {
+                    }
+                }
+            });
+            serverThread.setDaemon(true);
+            serverThread.start();
+            try {
+                ScanContext ctx = new ScanContext("http://127.0.0.1:" + rawPort, "", Set.of("ReqSmuggling"));
+                List<Finding> findings = new RequestSmugglingModule().scan(ctx, msg -> {
+                });
+                assertTrue(findings.stream().noneMatch(f -> f.title().contains("Duplicate Content-Length")),
+                        "HTTP " + httpStatus + " nao deve gerar Duplicate CL finding");
+            } finally {
+                rawServer.close();
+            }
+        }
+    }
+
+    @Test
+    @Order(102)
+    void reqSmugglingDuplicateClRejectsMalformedStatus() throws Exception {
+        java.net.ServerSocket rawServer = new java.net.ServerSocket(0);
+        int rawPort = rawServer.getLocalPort();
+        Thread serverThread = new Thread(() -> {
+            while (!rawServer.isClosed()) {
+                try (java.net.Socket conn = rawServer.accept()) {
+                    conn.setSoTimeout(5_000);
+                    byte[] buf = new byte[4096];
+                    conn.getInputStream().read(buf);
+                    String resp = "HTTP/1.1 2\r\nContent-Length: 2\r\n\r\nOK";
+                    conn.getOutputStream().write(resp.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                } catch (Exception ignored) {
+                }
+            }
+        });
+        serverThread.setDaemon(true);
+        serverThread.start();
+        try {
+            ScanContext ctx = new ScanContext("http://127.0.0.1:" + rawPort, "", Set.of("ReqSmuggling"));
+            List<Finding> findings = new RequestSmugglingModule().scan(ctx, msg -> {
+            });
+            assertTrue(findings.stream().noneMatch(f -> f.title().contains("Duplicate Content-Length")),
+                    "Status truncado '2' nao deve gerar Duplicate CL finding");
+        } finally {
+            rawServer.close();
+        }
+    }
+
     @AfterAll
     static void tearDownHttpClients() {
         HttpClientFactory.closeAll();
