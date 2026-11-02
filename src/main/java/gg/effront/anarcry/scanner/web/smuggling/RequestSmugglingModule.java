@@ -52,9 +52,7 @@ public class RequestSmugglingModule implements Scanner {
             return findings;
         }
 
-        // CL.TE probe -- CL says 4 bytes, TE body is 8 bytes (complete chunked)
-        // If frontend uses CL: forwards 4 bytes → backend (TE) gets "1\r\nA" →
-        // incomplete chunk → hangs
+        // ── Phase 1: CL.TE ──
         boolean clTeTimeout = sendProbeAndCheckTimeout(ctx, host, port, buildClTeProbe(host), PROBE_TIMEOUT_MS);
         if (clTeTimeout) {
             log.accept("[!!] ReqSmuggling: CRITICAL -- CL.TE desync confirmado (probe excedeu " + PROBE_TIMEOUT_MS
@@ -74,32 +72,29 @@ public class RequestSmugglingModule implements Scanner {
                             + "que contenha tanto Content-Length quanto Transfer-Encoding; "
                             + "ou reescrever para usar apenas um dos dois",
                     _cweId, _cweTitle, _cveVector, _score));
-            return findings;
         }
 
-        // TE.CL probe -- TE body completa, CL diz 1 byte
-        // Se frontend usa TE: processa chunked completo → backend (usa CL) lê 1 byte →
-        // resto vaza
-        boolean teCLTimeout = sendProbeAndCheckTimeout(ctx, host, port, buildTeCLProbe(host), PROBE_TIMEOUT_MS);
-        if (teCLTimeout) {
-            log.accept("[!!] ReqSmuggling: CRITICAL -- TE.CL desync confirmado");
-            findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(), "HTTP Request Smuggling -- TE.CL desync",
-                    Severity.CRITICAL,
-                    "TE.CL timing probe: POST com Transfer-Encoding=chunked e Content-Length=1 " + "causou timeout de "
-                            + PROBE_TIMEOUT_MS + "ms -- backend usa CL e ficou aguardando "
-                            + "dados que o frontend (usa TE) não repassou completamente",
-                    "Frontend e backend discordam sobre como interpretar Transfer-Encoding vs Content-Length. "
-                            + "Permite HTTP request smuggling com impacto equivalente ao CL.TE.",
-                    "# Probe TE.CL -- envia via socket raw:\n" + "printf 'POST / HTTP/1.1\\r\\nHost: " + host + "\\r\\n"
-                            + "Content-Length: 1\\r\\nTransfer-Encoding: chunked\\r\\n\\r\\n"
-                            + "1\\r\\nA\\r\\n0\\r\\n\\r\\n' | nc " + host + " " + port,
-                    "Normalizar requests ambíguos no proxy: rejeitar 400 para Content-Length + Transfer-Encoding",
-                    _cweId, _cweTitle, _cveVector, _score));
-            return findings;
+        // ── Phase 2: TE.CL ──
+        if (!clTeTimeout) {
+            boolean teCLTimeout = sendProbeAndCheckTimeout(ctx, host, port, buildTeCLProbe(host), PROBE_TIMEOUT_MS);
+            if (teCLTimeout) {
+                log.accept("[!!] ReqSmuggling: CRITICAL -- TE.CL desync confirmado");
+                findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(), "HTTP Request Smuggling -- TE.CL desync",
+                        Severity.CRITICAL,
+                        "TE.CL timing probe: POST com Transfer-Encoding=chunked e Content-Length=1 "
+                                + "causou timeout de " + PROBE_TIMEOUT_MS + "ms -- backend usa CL e ficou aguardando "
+                                + "dados que o frontend (usa TE) não repassou completamente",
+                        "Frontend e backend discordam sobre como interpretar Transfer-Encoding vs Content-Length. "
+                                + "Permite HTTP request smuggling com impacto equivalente ao CL.TE.",
+                        "# Probe TE.CL -- envia via socket raw:\n" + "printf 'POST / HTTP/1.1\\r\\nHost: " + host
+                                + "\\r\\n" + "Content-Length: 1\\r\\nTransfer-Encoding: chunked\\r\\n\\r\\n"
+                                + "1\\r\\nA\\r\\n0\\r\\n\\r\\n' | nc " + host + " " + port,
+                        "Normalizar requests ambíguos no proxy: rejeitar 400 para Content-Length + Transfer-Encoding",
+                        _cweId, _cweTitle, _cveVector, _score));
+            }
         }
 
-        // TE.TE obfuscation -- se ambos processam TE mas um fica confuso com
-        // obfuscation
+        // ── Phase 3: TE.TE obfuscation ──
         String verdict = probeTeTeObfuscation(ctx, host, port, log);
         if (verdict != null) {
             log.accept("[!!] ReqSmuggling: HIGH -- TE.TE obfuscation aceito pelo servidor: " + verdict);
@@ -115,6 +110,71 @@ public class RequestSmugglingModule implements Scanner {
                             + "5\\r\\nHELLO' | openssl s_client -connect " + host + ":" + port + " -quiet",
                     "Rejeitar Transfer-Encoding com valores não-padrão (xchunked, identity com TE duplo etc.)", _cweId,
                     _cweTitle, _cveVector, _score));
+        }
+
+        // ── Phase 4: Duplicate Content-Length ──
+        log.accept("[~] ReqSmuggling: testando Duplicate Content-Length em " + host + ":" + port);
+        boolean duplCl = probeDuplicateContentLength(ctx, host, port);
+        if (duplCl) {
+            log.accept("[!] ReqSmuggling: HIGH -- servidor aceita Content-Length duplicado");
+            findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(),
+                    "HTTP Request Smuggling -- Duplicate Content-Length aceito", Severity.HIGH,
+                    "Servidor aceitou request com dois headers Content-Length divergentes (0 e 42) "
+                            + "sem rejeitar com 400 -- indica parser que escolhe um dos valores, "
+                            + "criando discrepância explorável entre proxy e backend",
+                    "Parser que aceita Content-Length duplicado pode permitir smuggling quando "
+                            + "proxy e backend escolhem valores diferentes. " + "Ref: HAProxy CVE-2021-40346.",
+                    "printf 'GET / HTTP/1.1\\r\\nHost: " + host + "\\r\\n"
+                            + "Content-Length: 0\\r\\nContent-Length: 42\\r\\n" + "Connection: close\\r\\n\\r\\n' | nc "
+                            + host + " " + port,
+                    "Rejeitar com 400 qualquer request contendo headers Content-Length duplicados "
+                            + "com valores divergentes (RFC 9112 Section 6.3)",
+                    _cweId, _cweTitle, _cveVector, _score));
+        }
+
+        // ── Phase 5: CL.0 desync ──
+        log.accept("[~] ReqSmuggling: testando CL.0 desync em " + host + ":" + port);
+        boolean cl0 = probeCl0(ctx, host, port);
+        if (cl0) {
+            log.accept("[!!] ReqSmuggling: CRITICAL -- CL.0 desync confirmado (duas respostas para um send)");
+            findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(), "HTTP Request Smuggling -- CL.0 desync",
+                    Severity.CRITICAL,
+                    "CL.0 probe: POST com Content-Length contendo request smuggled no body "
+                            + "gerou duas respostas HTTP na mesma conexão -- backend ignorou o body "
+                            + "e os bytes restantes foram interpretados como nova requisição",
+                    "Backend ignora Content-Length e responde antes de consumir o body. "
+                            + "Bytes não consumidos viram o início da próxima requisição na mesma conexão, "
+                            + "permitindo request hijacking, bypass de ACL e cache poisoning. "
+                            + "Não requer Content-Length + Transfer-Encoding -- funciona com CL sozinho.",
+                    "# Probe CL.0 -- envia via socket raw (keep-alive):\n" + "printf 'POST / HTTP/1.1\\r\\nHost: "
+                            + host + "\\r\\n" + "Content-Length: <N>\\r\\nConnection: keep-alive\\r\\n\\r\\n"
+                            + "GET /admin HTTP/1.1\\r\\nHost: " + host + "\\r\\n\\r\\n' | nc " + host + " " + port,
+                    "Garantir que o backend consome o body completo antes de responder; "
+                            + "não reutilizar conexões quando o body não foi totalmente lido; "
+                            + "configurar proxy para fechar conexão após early response",
+                    _cweId, _cweTitle, _cveVector, _score));
+        }
+
+        // ── Phase 6: Hop-by-hop TE confusion ──
+        log.accept("[~] ReqSmuggling: testando hop-by-hop TE confusion em " + host + ":" + port);
+        boolean hopByHop = probeHopByHopTe(ctx, host, port);
+        if (hopByHop) {
+            log.accept("[!] ReqSmuggling: HIGH -- hop-by-hop TE stripping detectado");
+            findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(),
+                    "HTTP Request Smuggling -- Hop-by-hop TE stripping", Severity.HIGH,
+                    "Probe com Connection: Transfer-Encoding respondeu normalmente, enquanto "
+                            + "a mesma probe sem o header Connection causou timeout -- "
+                            + "proxy removeu Transfer-Encoding como hop-by-hop header, "
+                            + "backend processou body apenas via Content-Length",
+                    "Proxy trata Transfer-Encoding como hop-by-hop e o remove antes de repassar. "
+                            + "Backend recebe request sem TE e usa CL, criando parser differential explorável. "
+                            + "Ref: Akamai CVE-2026-26365.",
+                    "# Probe hop-by-hop TE:\n" + "printf 'POST / HTTP/1.1\\r\\nHost: " + host + "\\r\\n"
+                            + "Content-Length: 8\\r\\nConnection: Transfer-Encoding\\r\\n"
+                            + "Transfer-Encoding: chunked\\r\\n\\r\\n" + "5\\r\\nHELLO' | nc " + host + " " + port,
+                    "Não tratar Transfer-Encoding como hop-by-hop header; "
+                            + "rejeitar requests onde Connection lista Transfer-Encoding",
+                    _cweId, _cweTitle, _cveVector, _score));
         }
 
         if (findings.isEmpty()) {
@@ -206,6 +266,87 @@ public class RequestSmugglingModule implements Scanner {
             }
             return new String(buf, 0, read, StandardCharsets.US_ASCII);
         }
+    }
+
+    private boolean probeDuplicateContentLength(ScanContext ctx, String host, int port) {
+        String probe = "GET / HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "Content-Length: 0\r\n"
+                + "Content-Length: 42\r\n" + "Connection: close\r\n" + "\r\n";
+        try {
+            String resp = rawSend(ctx, host, port, probe, BASELINE_TIMEOUT_MS);
+            if (resp == null) {
+                return false;
+            }
+            // RFC 9112: server MUST reject duplicate CL with different values (400)
+            // If we get 2xx/3xx, the server accepted the ambiguous request
+            return resp.startsWith("HTTP/") && !resp.contains(" 400 ");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean probeCl0(ScanContext ctx, String host, int port) {
+        // Smuggled GET baked into the POST body; if backend ignores CL
+        // and does not consume the body, leftover bytes become a second request
+        String smuggled = "GET /cl0-probe HTTP/1.1\r\nHost: " + host + "\r\n\r\n";
+        String probe = "POST / HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "Content-Length: " + smuggled.length()
+                + "\r\n" + "Connection: keep-alive\r\n" + "\r\n" + smuggled;
+        try (Socket socket = createSocket(ctx, host, port, PROBE_TIMEOUT_MS)) {
+            OutputStream out = socket.getOutputStream();
+            out.write(probe.getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+
+            InputStream in = socket.getInputStream();
+            byte[] buf = new byte[8192];
+            int totalRead = 0;
+            long deadline = System.currentTimeMillis() + PROBE_TIMEOUT_MS;
+            while (totalRead < buf.length && System.currentTimeMillis() < deadline) {
+                int remaining = (int) (deadline - System.currentTimeMillis());
+                if (remaining <= 0) {
+                    break;
+                }
+                socket.setSoTimeout(remaining);
+                try {
+                    int n = in.read(buf, totalRead, buf.length - totalRead);
+                    if (n <= 0) {
+                        break;
+                    }
+                    totalRead += n;
+                } catch (java.net.SocketTimeoutException e) {
+                    break;
+                }
+            }
+            if (totalRead == 0) {
+                return false;
+            }
+            String resp = new String(buf, 0, totalRead, StandardCharsets.US_ASCII);
+            // Count HTTP response start lines -- two means desync
+            int count = 0;
+            int idx = 0;
+            while ((idx = resp.indexOf("HTTP/", idx)) != -1) {
+                count++;
+                idx += 5;
+            }
+            return count >= 2;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean probeHopByHopTe(ScanContext ctx, String host, int port) {
+        // Incomplete chunked body -- server that processes TE will hang
+        String bodyWithTe = "POST / HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "Content-Length: 8\r\n"
+                + "Transfer-Encoding: chunked\r\n" + "\r\n" + "5\r\nHELLO";
+        // Same probe but with Connection: Transfer-Encoding
+        // If proxy strips TE as hop-by-hop, backend uses CL=8, gets "5\r\nHELLO"
+        // (8 bytes), responds normally instead of hanging
+        String bodyWithHopByHop = "POST / HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "Content-Length: 8\r\n"
+                + "Connection: Transfer-Encoding\r\n" + "Transfer-Encoding: chunked\r\n" + "\r\n" + "5\r\nHELLO";
+
+        boolean teTimeout = sendProbeAndCheckTimeout(ctx, host, port, bodyWithTe, PROBE_TIMEOUT_MS);
+        boolean hopTimeout = sendProbeAndCheckTimeout(ctx, host, port, bodyWithHopByHop, PROBE_TIMEOUT_MS);
+        // TE alone hangs (server processes chunked) but hop-by-hop version responds
+        // normally -- proxy stripped TE
+        return teTimeout && !hopTimeout;
     }
 
     private Socket createSocket(ScanContext ctx, String host, int port, int timeoutMs) throws Exception {
