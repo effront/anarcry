@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class ReportEngine {
 
@@ -28,6 +29,11 @@ public class ReportEngine {
     private static final Path REPORTS_DIR = Path.of("docs", "reports");
 
     public String export(List<Finding> findings, String targetUrl) throws IOException {
+        return export(findings, targetUrl, List.of(), List.of());
+    }
+
+    public String export(List<Finding> findings, String targetUrl, List<String> testedModules, List<String> testedClean)
+            throws IOException {
         String timestamp = LocalDateTime.now().format(FMT);
         String base = "anarcry-report-" + timestamp;
 
@@ -38,7 +44,7 @@ public class ReportEngine {
         Path mdPath = REPORTS_DIR.resolve(base + ".md");
         Path jsonPath = REPORTS_DIR.resolve(base + ".json");
 
-        Files.writeString(mdPath, buildMarkdown(sorted, targetUrl, timestamp));
+        Files.writeString(mdPath, buildMarkdown(sorted, targetUrl, timestamp, testedModules, testedClean));
         Files.writeString(jsonPath, toJson(sorted));
 
         return mdPath.toString();
@@ -50,12 +56,15 @@ public class ReportEngine {
         return GSON.toJson(sorted);
     }
 
-    private String buildMarkdown(List<Finding> findings, String targetUrl, String timestamp) {
+    private String buildMarkdown(List<Finding> findings, String targetUrl, String timestamp, List<String> testedModules,
+            List<String> testedClean) {
         StringBuilder sb = new StringBuilder();
         sb.append("# AnarCry Report\n\n");
         sb.append("**Target:** ").append(targetUrl).append("  \n");
         sb.append("**Date:** ").append(timestamp).append("  \n");
-        sb.append("**Total findings:** ").append(findings.size()).append("\n\n");
+        sb.append("**Total findings:** ").append(findings.size()).append("  \n");
+        sb.append("**Modules tested:** ").append(testedModules.size()).append("  \n");
+        sb.append("**Modules clean:** ").append(testedClean.size()).append("\n\n");
 
         sb.append("## Summary\n\n");
         for (Severity s : ORDER) {
@@ -77,37 +86,180 @@ public class ReportEngine {
         }
         sb.append("\n");
 
-        sb.append("## Details\n\n");
-        Map<String, List<Finding>> groups = new LinkedHashMap<>();
-        for (Finding f : findings) {
-            groups.computeIfAbsent(f.module() + "|" + f.title(), k -> new ArrayList<>()).add(f);
+        buildRootCauseSection(sb, findings);
+
+        if (!testedClean.isEmpty()) {
+            buildNegativeCompanions(sb, testedClean);
         }
-        for (List<Finding> group : groups.values()) {
+
+        return sb.toString();
+    }
+
+    // -------------------------------------------------------------------------
+    // Root cause grouping -- groups findings by module (shared vulnerability class)
+    // and generates unified analysis with one remediation per root cause.
+    // -------------------------------------------------------------------------
+
+    private void buildRootCauseSection(StringBuilder sb, List<Finding> findings) {
+        sb.append("## Root Cause Analysis\n\n");
+
+        Map<String, List<Finding>> byModule = groupByRootCause(findings);
+
+        Severity worstOverall = findings.stream().map(Finding::severity)
+                .min(Comparator.comparingInt(s -> ORDER.indexOf(s))).orElse(Severity.INFO);
+        Finding anchor = findings.stream().min(Comparator.comparingInt(f -> ORDER.indexOf(f.severity()))).orElse(null);
+
+        if (anchor != null) {
+            sb.append("**Severity anchor:** ").append(anchor.title()).append(" on `").append(anchor.endpoint())
+                    .append("` (").append(anchor.severity()).append(", CVSS ").append(anchor.cvssScore())
+                    .append(")  \n\n");
+        }
+
+        int rootCauseIdx = 1;
+        for (var entry : byModule.entrySet()) {
+            String module = entry.getKey();
+            List<Finding> group = entry.getValue();
             Finding rep = group.getFirst();
-            sb.append("### [").append(rep.severity()).append("] ").append(rep.title()).append("\n\n");
-            sb.append("**Module:** ").append(rep.module()).append("  \n");
+            KnowledgeEntry kbEntry = resolveKb(module);
+
+            sb.append("### Root Cause ").append(rootCauseIdx++).append(" -- ").append(module).append(" (")
+                    .append(group.size()).append(" finding");
+            if (group.size() != 1) {
+                sb.append("s");
+            }
+            sb.append(")\n\n");
+
+            String rootCauseDesc = kbEntry != null ? kbEntry.summary() : rep.impact();
+            sb.append("**Root cause:** ").append(rootCauseDesc).append("  \n");
+            sb.append("**CWE:** ").append(rep.cweId()).append(" -- ").append(rep.cweTitle()).append("  \n");
+            sb.append("**CVSS v3.1:** ").append(rep.cvssScore()).append(" (").append(rep.cvssVector())
+                    .append(")  \n\n");
+
             if (group.size() == 1) {
-                sb.append("**Endpoint:** ").append(rep.endpoint()).append("  \n");
+                sb.append("**Endpoint:** `").append(rep.endpoint()).append("`  \n");
                 sb.append("**Evidence:** ").append(rep.evidence()).append("  \n");
             } else {
-                sb.append("\n**Affected Endpoints (").append(group.size()).append("):**\n\n");
-                sb.append("| Endpoint | Evidence |\n");
-                sb.append("|----------|----------|\n");
+                sb.append("**Affected endpoints (").append(group.size()).append("):**\n\n");
+                sb.append("| # | Endpoint | Title | Severity | Evidence |\n");
+                sb.append("|---|----------|-------|----------|----------|\n");
+                int idx = 1;
                 for (Finding f : group) {
-                    sb.append("| ").append(escape(f.endpoint())).append(" | ").append(escape(f.evidence()))
-                            .append(" |\n");
+                    sb.append("| ").append(idx++).append(" | `").append(escape(f.endpoint())).append("` | ")
+                            .append(escape(f.title())).append(" | ").append(f.severity()).append(" | ")
+                            .append(escape(f.evidence())).append(" |\n");
                 }
                 sb.append("\n");
             }
-            sb.append("**Impact:** ").append(rep.impact()).append("  \n");
-            sb.append("**Reproduction:**\n```\n").append(rep.reproduction()).append("\n```\n");
-            sb.append("**Recommendation:** ").append(rep.recommendation()).append("  \n");
-            sb.append("**CWE:** ").append(rep.cweId()).append(" -- ").append(rep.cweTitle()).append("  \n");
-            sb.append("**CVSS v3.1:** ").append(rep.cvssScore()).append(" (").append(rep.cvssVector()).append(")  \n");
-            appendCves(sb, rep.module());
+
+            sb.append("**Impact:** ").append(kbEntry != null ? kbEntry.impact() : rep.impact()).append("  \n\n");
+
+            sb.append("**Reproduction:**\n```\n").append(rep.reproduction()).append("\n```\n\n");
+
+            sb.append("**Unified remediation:** ")
+                    .append(kbEntry != null ? kbEntry.recommendation() : rep.recommendation());
+            if (group.size() > 1) {
+                sb.append(" Apply this fix across all ").append(group.size())
+                        .append(" affected endpoints -- the root cause is shared.");
+            }
+            sb.append("  \n");
+
+            appendCves(sb, module);
             sb.append("\n---\n\n");
         }
-        return sb.toString();
+
+        if (byModule.size() > 1) {
+            buildCorrelationNotes(sb, byModule, worstOverall);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Cross-finding correlation -- notes on how findings chain together
+    // -------------------------------------------------------------------------
+
+    private void buildCorrelationNotes(StringBuilder sb, Map<String, List<Finding>> byModule, Severity worst) {
+        sb.append("### Cross-Finding Correlation\n\n");
+
+        List<String> chains = new ArrayList<>();
+
+        boolean hasIdor = byModule.containsKey("IDOR");
+        boolean hasAuth = byModule.containsKey("JWT") || byModule.containsKey("OAuth");
+        boolean hasSsrf = byModule.containsKey("SSRF");
+        boolean hasXss = byModule.containsKey("XSS");
+        boolean hasSqli = byModule.containsKey("SQLi");
+        boolean hasOpenRedirect = byModule.containsKey("OpenRedirect");
+        boolean hasCors = byModule.containsKey("CORS");
+        boolean hasSsti = byModule.containsKey("SSTI");
+        boolean hasSmuggling = byModule.containsKey("ReqSmuggling");
+        boolean hasCachePoisoning = byModule.containsKey("CachePoisoning");
+        boolean hasCrlf = byModule.containsKey("CRLF");
+
+        if (hasIdor && hasAuth) {
+            chains.add("IDOR + auth weakness: broken authentication compounds with IDOR "
+                    + "to enable full cross-account access without valid credentials");
+        }
+        if (hasSsrf && hasIdor) {
+            chains.add("SSRF + IDOR: server-side request forgery can be chained with "
+                    + "IDOR to access internal resources scoped to other users");
+        }
+        if (hasXss && hasCors) {
+            chains.add("XSS + CORS misconfiguration: reflected XSS from an allowed "
+                    + "origin can exfiltrate data cross-origin via the permissive CORS policy");
+        }
+        if (hasOpenRedirect && hasAuth) {
+            chains.add("Open Redirect + OAuth/JWT: redirect bypass can steal authorization "
+                    + "codes or tokens during OAuth flows");
+        }
+        if (hasSqli && hasIdor) {
+            chains.add("SQLi + IDOR: SQL injection can escalate an IDOR from read to "
+                    + "write, enabling data modification across accounts");
+        }
+        if (hasSsti) {
+            chains.add("SSTI with RCE: server-side template injection with confirmed "
+                    + "code execution -- this alone is full server compromise");
+        }
+        if (hasSmuggling && hasCachePoisoning) {
+            chains.add("Request Smuggling + Cache Poisoning: smuggling can poison "
+                    + "the cache for all users, turning a single request into mass exploitation");
+        }
+        if (hasCrlf && hasCachePoisoning) {
+            chains.add("CRLF + Cache Poisoning: header injection can poison cached "
+                    + "responses with injected headers or XSS payloads");
+        }
+        if (hasSmuggling && hasXss) {
+            chains.add("Request Smuggling + XSS: smuggled requests can inject XSS "
+                    + "payloads into other users' responses (stored XSS via smuggling)");
+        }
+
+        if (chains.isEmpty()) {
+            sb.append("No direct attack chains identified between the finding groups. "
+                    + "Each root cause should be remediated independently.\n\n");
+        } else {
+            sb.append("The following attack chains are possible by combining findings:\n\n");
+            for (String chain : chains) {
+                sb.append("- ").append(chain).append("\n");
+            }
+            sb.append("\n");
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Negative companions -- modules that tested clean
+    // -------------------------------------------------------------------------
+
+    private void buildNegativeCompanions(StringBuilder sb, List<String> testedClean) {
+        sb.append("## Tested and Secure\n\n");
+        sb.append("The following modules were executed against the target and found ")
+                .append("**no vulnerabilities**. This does not guarantee absence of issues, ")
+                .append("but confirms that standard detection techniques for these classes ")
+                .append("did not trigger.\n\n");
+        sb.append("| Module | Vulnerability Class | Status |\n");
+        sb.append("|--------|--------------------|---------|\n");
+        KnowledgeBase kb = KnowledgeBase.getInstance();
+        for (String moduleId : testedClean) {
+            String vulnClass = kb.byModule(moduleId).map(KnowledgeEntry::title).orElse(moduleId);
+            sb.append("| ").append(moduleId).append(" | ").append(escape(vulnClass)).append(" | Clean |\n");
+        }
+        sb.append("\n");
     }
 
     // -------------------------------------------------------------------------
@@ -115,35 +267,64 @@ public class ReportEngine {
     // -------------------------------------------------------------------------
 
     public String exportH1(List<Finding> findings, String targetUrl, String programName) throws IOException {
+        return exportH1(findings, targetUrl, programName, List.of(), List.of());
+    }
+
+    public String exportH1(List<Finding> findings, String targetUrl, String programName, List<String> testedModules,
+            List<String> testedClean) throws IOException {
         String date = LocalDate.now().toString();
         KnowledgeBase kb = KnowledgeBase.getInstance();
         StringBuilder sb = new StringBuilder();
 
-        for (Finding f : findings) {
-            KnowledgeEntry entry = kb.byModule(f.module()).orElse(null);
-            String kbSummary = entry != null ? entry.summary() : f.impact();
-            String kbDescription = entry != null ? entry.description() : "";
-            String kbImpact = entry != null ? entry.impact() : f.impact();
-            String kbRecommendation = entry != null ? entry.recommendation() : f.recommendation();
+        Map<String, List<Finding>> rootCauses = groupByRootCause(findings);
 
-            sb.append("# [").append(f.severity()).append("] ").append(f.title()).append("\n\n");
+        for (var entry : rootCauses.entrySet()) {
+            String module = entry.getKey();
+            List<Finding> group = entry.getValue();
+            Finding rep = group.getFirst();
+            KnowledgeEntry kbEntry = resolveKb(module);
+            String kbSummary = kbEntry != null ? kbEntry.summary() : rep.impact();
+            String kbDescription = kbEntry != null ? kbEntry.description() : "";
+            String kbImpact = kbEntry != null ? kbEntry.impact() : rep.impact();
+            String kbRecommendation = kbEntry != null ? kbEntry.recommendation() : rep.recommendation();
+
+            if (group.size() == 1) {
+                sb.append("# [").append(rep.severity()).append("] ").append(rep.title()).append("\n\n");
+            } else {
+                sb.append("# [").append(rep.severity()).append("] ").append(module).append(": ").append(group.size())
+                        .append(" findings, one root cause\n\n");
+            }
             sb.append("**Program:** ").append(programName).append("\n");
             sb.append("**Asset:** ").append(targetUrl).append("\n");
-            sb.append("**Severity:** ").append(h1SeverityLabel(f)).append(" (CVSS ")
-                    .append(String.format("%.1f", f.cvssScore())).append(" -- ").append(f.cvssVector()).append(")\n");
-            sb.append("**Weakness:** ").append(f.cweId()).append(" -- ").append(f.cweTitle()).append("\n\n");
+            sb.append("**Severity:** ").append(h1SeverityLabel(rep)).append(" (CVSS ")
+                    .append(String.format("%.1f", rep.cvssScore())).append(" -- ").append(rep.cvssVector())
+                    .append(")\n");
+            sb.append("**Weakness:** ").append(rep.cweId()).append(" -- ").append(rep.cweTitle()).append("\n\n");
 
             sb.append("## Summary\n\n");
             sb.append(kbSummary).append("\n\n");
 
             sb.append("## Description\n\n");
             sb.append(kbDescription).append("\n\n");
+
             sb.append("### Observed Evidence\n\n");
-            sb.append("```\n").append(safe(f.evidence())).append("\n```\n\n");
+            if (group.size() == 1) {
+                sb.append("**Endpoint:** `").append(rep.endpoint()).append("`\n\n");
+                sb.append("```\n").append(safe(rep.evidence())).append("\n```\n\n");
+            } else {
+                for (int i = 0; i < group.size(); i++) {
+                    Finding f = group.get(i);
+                    sb.append("**Finding ").append(i + 1).append("** -- `").append(f.endpoint()).append("`  \n");
+                    sb.append(f.title()).append("\n");
+                    sb.append("```\n").append(safe(f.evidence())).append("\n```\n\n");
+                }
+                sb.append("**Root cause:** One shared vulnerability class (").append(rep.cweId()).append(") across ")
+                        .append(group.size()).append(" endpoints. A single fix addresses all findings.\n\n");
+            }
 
             sb.append("## Steps to Reproduce\n\n");
             sb.append("1. Navigate to the target asset: `").append(targetUrl).append("`\n");
-            String[] reproLines = safe(f.reproduction()).split("\n");
+            String[] reproLines = safe(rep.reproduction()).split("\n");
             int step = 2;
             for (String line : reproLines) {
                 String trimmed = line.trim();
@@ -155,19 +336,36 @@ public class ReportEngine {
 
             sb.append("## Impact\n\n");
             sb.append(kbImpact).append("\n\n");
-            sb.append("**Affected endpoint:** `").append(f.endpoint()).append("`\n\n");
+            if (group.size() == 1) {
+                sb.append("**Affected endpoint:** `").append(rep.endpoint()).append("`\n\n");
+            } else {
+                sb.append("**Affected endpoints:** ")
+                        .append(group.stream().map(f -> "`" + f.endpoint() + "`").collect(Collectors.joining(", ")))
+                        .append("\n\n");
+            }
 
             sb.append("## Mitigation\n\n");
             sb.append(kbRecommendation).append("\n\n");
 
-            appendCvesH1(sb, f.module());
+            appendCvesH1(sb, module);
 
             sb.append("## Supporting Material\n\n");
             sb.append("- Scanner: AnarCry\n");
             sb.append("- Date: ").append(date).append("\n");
-            sb.append("- Module: ").append(f.module()).append("\n\n");
+            sb.append("- Module: ").append(module).append("\n\n");
 
             sb.append("---\n\n");
+        }
+
+        if (!testedClean.isEmpty()) {
+            sb.append("# Negative Companion -- Tested and Secure\n\n");
+            sb.append("The following vulnerability classes were tested ")
+                    .append("against the target and produced no findings:\n\n");
+            for (String clean : testedClean) {
+                String vulnClass = kb.byModule(clean).map(KnowledgeEntry::title).orElse(clean);
+                sb.append("- **").append(clean).append("** -- ").append(vulnClass).append("\n");
+            }
+            sb.append("\n");
         }
 
         String markdown = sb.toString();
@@ -193,34 +391,63 @@ public class ReportEngine {
     // -------------------------------------------------------------------------
 
     public String exportBugcrowd(List<Finding> findings, String targetUrl) throws IOException {
+        return exportBugcrowd(findings, targetUrl, List.of(), List.of());
+    }
+
+    public String exportBugcrowd(List<Finding> findings, String targetUrl, List<String> testedModules,
+            List<String> testedClean) throws IOException {
         KnowledgeBase kb = KnowledgeBase.getInstance();
         StringBuilder sb = new StringBuilder();
 
-        for (Finding f : findings) {
-            KnowledgeEntry entry = kb.byModule(f.module()).orElse(null);
-            String vrt = entry != null ? entry.vrtId() : "other";
-            String kbSummary = entry != null ? entry.summary() : f.impact();
-            String kbImpact = entry != null ? entry.impact() : f.impact();
-            String kbRecommendation = entry != null ? entry.recommendation() : f.recommendation();
+        Map<String, List<Finding>> rootCauses = groupByRootCause(findings);
 
-            sb.append("## ").append(f.title()).append("\n\n");
+        for (var entry : rootCauses.entrySet()) {
+            String module = entry.getKey();
+            List<Finding> group = entry.getValue();
+            Finding rep = group.getFirst();
+            KnowledgeEntry kbEntry = resolveKb(module);
+            String vrt = kbEntry != null ? kbEntry.vrtId() : "other";
+            String kbSummary = kbEntry != null ? kbEntry.summary() : rep.impact();
+            String kbImpact = kbEntry != null ? kbEntry.impact() : rep.impact();
+            String kbRecommendation = kbEntry != null ? kbEntry.recommendation() : rep.recommendation();
+
+            if (group.size() == 1) {
+                sb.append("## ").append(rep.title()).append("\n\n");
+            } else {
+                sb.append("## ").append(module).append(": ").append(group.size())
+                        .append(" findings, one root cause\n\n");
+            }
             sb.append("**Classification (VRT):** `").append(vrt).append("`\n");
-            sb.append("**Severity:** ").append(f.severity()).append(" (CVSS ")
-                    .append(String.format("%.1f", f.cvssScore())).append(")\n");
-            sb.append("**Weakness:** ").append(f.cweId()).append(" -- ").append(f.cweTitle()).append("\n");
-            sb.append("**Endpoint:** `").append(f.endpoint()).append("`\n\n");
+            sb.append("**Severity:** ").append(rep.severity()).append(" (CVSS ")
+                    .append(String.format("%.1f", rep.cvssScore())).append(")\n");
+            sb.append("**Weakness:** ").append(rep.cweId()).append(" -- ").append(rep.cweTitle()).append("\n");
+            if (group.size() == 1) {
+                sb.append("**Endpoint:** `").append(rep.endpoint()).append("`\n\n");
+            } else {
+                sb.append("**Endpoints:** ")
+                        .append(group.stream().map(f -> "`" + f.endpoint() + "`").collect(Collectors.joining(", ")))
+                        .append("\n\n");
+            }
 
             sb.append("### Summary\n\n");
             sb.append(kbSummary).append("\n\n");
 
             sb.append("### Proof of Concept\n\n");
-            sb.append("**Evidence:**\n");
-            sb.append("```\n").append(safe(f.evidence())).append("\n```\n\n");
+            if (group.size() == 1) {
+                sb.append("**Evidence:**\n");
+                sb.append("```\n").append(safe(rep.evidence())).append("\n```\n\n");
+            } else {
+                for (int i = 0; i < group.size(); i++) {
+                    Finding f = group.get(i);
+                    sb.append("**Finding ").append(i + 1).append("** -- `").append(f.endpoint()).append("`\n");
+                    sb.append("```\n").append(safe(f.evidence())).append("\n```\n\n");
+                }
+            }
             sb.append("**Reproduction:**\n");
-            sb.append("```\n").append(safe(f.reproduction())).append("\n```\n\n");
+            sb.append("```\n").append(safe(rep.reproduction())).append("\n```\n\n");
 
             sb.append("### Replication Steps\n\n");
-            String[] steps = safe(f.reproduction()).split("\n");
+            String[] steps = safe(rep.reproduction()).split("\n");
             int idx = 1;
             for (String line : steps) {
                 String trimmed = line.trim();
@@ -234,11 +461,25 @@ public class ReportEngine {
             sb.append(kbImpact).append("\n\n");
 
             sb.append("### Remediation\n\n");
-            sb.append(kbRecommendation).append("\n\n");
+            sb.append(kbRecommendation);
+            if (group.size() > 1) {
+                sb.append(" Apply this fix across all ").append(group.size())
+                        .append(" affected endpoints -- the root cause is shared.");
+            }
+            sb.append("\n\n");
 
-            appendCves(sb, f.module());
+            appendCves(sb, module);
 
             sb.append("---\n\n");
+        }
+
+        if (!testedClean.isEmpty()) {
+            sb.append("## Tested and Secure\n\n");
+            for (String clean : testedClean) {
+                String vulnClass = kb.byModule(clean).map(KnowledgeEntry::title).orElse(clean);
+                sb.append("- **").append(clean).append("** -- ").append(vulnClass).append(": no findings\n");
+            }
+            sb.append("\n");
         }
 
         String markdown = sb.toString();
@@ -255,9 +496,14 @@ public class ReportEngine {
 
     public String exportPlatform(List<Finding> findings, String targetUrl, String platform, String programName)
             throws IOException {
+        return exportPlatform(findings, targetUrl, platform, programName, List.of(), List.of());
+    }
+
+    public String exportPlatform(List<Finding> findings, String targetUrl, String platform, String programName,
+            List<String> testedModules, List<String> testedClean) throws IOException {
         return switch (platform.toLowerCase()) {
-            case "h1" -> exportH1(findings, targetUrl, programName);
-            case "bugcrowd" -> exportBugcrowd(findings, targetUrl);
+            case "h1" -> exportH1(findings, targetUrl, programName, testedModules, testedClean);
+            case "bugcrowd" -> exportBugcrowd(findings, targetUrl, testedModules, testedClean);
             default ->
                 throw new IllegalArgumentException("Unknown platform: " + platform + ". Use 'h1' or 'bugcrowd'.");
         };
@@ -266,6 +512,18 @@ public class ReportEngine {
     // -------------------------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------------------------
+
+    private static Map<String, List<Finding>> groupByRootCause(List<Finding> findings) {
+        Map<String, List<Finding>> groups = new LinkedHashMap<>();
+        for (Finding f : findings) {
+            groups.computeIfAbsent(f.module(), k -> new ArrayList<>()).add(f);
+        }
+        return groups;
+    }
+
+    private static KnowledgeEntry resolveKb(String module) {
+        return KnowledgeBase.getInstance().byModule(module).orElse(null);
+    }
 
     private void appendCves(StringBuilder sb, String module) {
         KnowledgeBase kb = KnowledgeBase.getInstance();

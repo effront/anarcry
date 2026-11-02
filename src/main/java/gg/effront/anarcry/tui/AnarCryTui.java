@@ -603,7 +603,8 @@ public class AnarCryTui {
     private void exportAnarCry(List<Finding> snapshot) {
         String target = modulesPanel.getTarget();
         try {
-            String mdFile = new ReportEngine().export(snapshot, target.isBlank() ? "unknown" : target);
+            String mdFile = new ReportEngine().export(snapshot, target.isBlank() ? "unknown" : target,
+                    scanRunner.testedModules(), scanRunner.testedClean());
             addToLog("[+] Exported: " + mdFile + " (+" + mdFile.replace(".md", ".json") + ")");
         } catch (Throwable t) {
             addToLog("[!] Export error: " + t.getClass().getSimpleName() + ": " + t.getMessage());
@@ -613,7 +614,8 @@ public class AnarCryTui {
     private void exportH1(List<Finding> snapshot, String programName) {
         String target = modulesPanel.getTarget();
         try {
-            String file = new ReportEngine().exportH1(snapshot, target.isBlank() ? "unknown" : target, programName);
+            String file = new ReportEngine().exportH1(snapshot, target.isBlank() ? "unknown" : target, programName,
+                    scanRunner.testedModules(), scanRunner.testedClean());
             addToLog("[+] HackerOne report: " + file);
         } catch (Throwable t) {
             addToLog("[!] H1 export error: " + t.getClass().getSimpleName() + ": " + t.getMessage());
@@ -623,7 +625,8 @@ public class AnarCryTui {
     private void exportBugcrowd(List<Finding> snapshot) {
         String target = modulesPanel.getTarget();
         try {
-            String file = new ReportEngine().exportBugcrowd(snapshot, target.isBlank() ? "unknown" : target);
+            String file = new ReportEngine().exportBugcrowd(snapshot, target.isBlank() ? "unknown" : target,
+                    scanRunner.testedModules(), scanRunner.testedClean());
             addToLog("[+] Bugcrowd report: " + file);
         } catch (Throwable t) {
             addToLog("[!] Bugcrowd export error: " + t.getClass().getSimpleName() + ": " + t.getMessage());
