@@ -2,6 +2,7 @@ package gg.effront.anarcry.scanner.web.idor;
 
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.Severity;
+import gg.effront.anarcry.scanner.ScanConfig;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
@@ -59,13 +60,23 @@ public class IdorModule implements Scanner {
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
         String token1 = ctx.jwtToken();
         String token2 = ctx.jwtToken2();
+        boolean hasBearerAuth = token1 != null && !token1.isBlank();
+        boolean hasCookieAuth = !ctx.config().sessionCookie().isBlank();
 
-        if (token1 == null || token1.isBlank()) {
-            log.accept("[*] IDOR: ignorado -- jwtToken não informado");
+        if (!hasBearerAuth && !hasCookieAuth) {
+            log.accept("[*] IDOR: ignorado -- nenhuma autenticação informada");
             return List.of();
         }
-        if (token2 == null || token2.isBlank()) {
-            log.accept("[*] IDOR: jwtToken2 não informado -- apenas probes DELETE e GraphQL");
+
+        if (hasCookieAuth && !hasBearerAuth) {
+            log.accept("[~] IDOR: usando autenticação via Cookie");
+        }
+
+        boolean canCrossUser = (hasBearerAuth && token2 != null && !token2.isBlank())
+                || (hasCookieAuth && !ctx.config().sessionCookie2().isBlank());
+        if (!canCrossUser) {
+            String reason = hasCookieAuth ? "sessionCookie2 não informado" : "jwtToken2 não informado";
+            log.accept("[*] IDOR: " + reason + " -- apenas probes DELETE e GraphQL");
         }
 
         List<Finding> findings = new ArrayList<>();
@@ -77,11 +88,8 @@ public class IdorModule implements Scanner {
 
         log.accept("[~] IDOR: iniciando probes em " + base);
 
-        // Discover real user ID from /api/me and similar endpoints
-        String discoveredId = (token1 != null && !token1.isBlank()) ? extractUserId(ctx, hc, base) : null;
+        String discoveredId = extractUserId(ctx, hc, base);
 
-        // Build effective probe paths: always prepend UUID-based paths if an ID was
-        // found
         List<String> effectivePaths;
         if (discoveredId != null) {
             List<String> uuidPaths = new ArrayList<>(List.of("/api/user/" + discoveredId, "/api/users/" + discoveredId,
@@ -105,60 +113,73 @@ public class IdorModule implements Scanner {
                     + " from Crawler)");
         }
 
-        // Phase 1: cross-user GET (requires two tokens)
-        if (token2 != null && !token2.isBlank()) {
+        // Phase 1: cross-user GET (requires two auth contexts)
+        if (canCrossUser) {
+            boolean cookieCrossUser = hasCookieAuth && !hasBearerAuth;
+            ScanContext ctx2 = cookieCrossUser ? swapCookie(ctx, ctx.config().sessionCookie2()) : ctx;
             for (String path : effectivePaths) {
-                String r1 = fetch(ctx, hc, base + path, token1);
+                String r1 = fetch(ctx, hc, base + path, hasBearerAuth ? token1 : null);
                 if (r1 == null || isHtml(r1)) {
                     continue;
                 }
 
-                String r2 = fetch(ctx, hc, base + path, token2);
+                String r2 = fetch(ctx2, hc, base + path, hasBearerAuth ? token2 : null);
                 if (r2 == null) {
                     continue;
                 }
 
                 if (isSimilar(r1, r2)) {
                     log.accept("[!!] IDOR: acesso cruzado detectado em " + path);
+                    String repro = cookieCrossUser
+                            ? "# Com cookie do usuário 1:\ncurl -b '<SESSION_COOKIE_1>' '" + base + path + "'\n"
+                                    + "# Com cookie do usuário 2 (não deve ter acesso):\ncurl -b '<SESSION_COOKIE_2>' '"
+                                    + base + path + "'"
+                            : "# Com token do usuário 1:\ncurl -H 'Authorization: Bearer <TOKEN_1>' '" + base + path
+                                    + "'\n"
+                                    + "# Com token do usuário 2 (não deve ter acesso):\ncurl -H 'Authorization: Bearer "
+                                    + "<TOKEN_2>' '" + base + path + "'";
+                    String evidence = (cookieCrossUser ? "Cookie1 e Cookie2" : "Token1 e Token2")
+                            + " recebem a mesma resposta em " + base + path + " | Similaridade: "
+                            + similarityPercent(r1, r2) + "%" + " | Body preview: "
+                            + r1.substring(0, Math.min(150, r1.length()));
                     findings.add(Finding.of("IDOR", path, "IDOR -- acesso não-autorizado ao recurso " + path,
-                            Severity.MEDIUM,
-                            "Token1 e Token2 recebem a mesma resposta em " + base + path + " | Similaridade: "
-                                    + similarityPercent(r1, r2) + "%" + " | Body preview: "
-                                    + r1.substring(0, Math.min(150, r1.length())),
+                            Severity.MEDIUM, evidence,
                             "Insecure Direct Object Reference -- outro usuário pode acessar recursos "
                                     + "que não lhe pertencem. Expõe dados pessoais, financeiros ou administrativos.",
-                            "# Com token do usuário 1:\ncurl -H 'Authorization: Bearer " + abbreviated(token1) + "' '"
-                                    + base + path + "'\n"
-                                    + "# Com token do usuário 2 (não deve ter acesso):\ncurl -H 'Authorization: Bearer "
-                                    + abbreviated(token2) + "' '" + base + path + "'",
+                            repro,
                             "Verificar autorização no nível de objeto (BOLA): validar que o usuário "
                                     + "autenticado é o dono do recurso. Use UUIDs aleatórios em vez de IDs sequenciais",
                             CWE_ID, CWE_TITLE, VECTOR_READ, SCORE_READ));
-                    // One confirmed GET IDOR is enough
                     break;
                 }
             }
         }
 
-        // Phase 2: DELETE IDOR -- token1 attempts to delete a resource owned by token2
-        // (ID=2)
-        // Expected: 403 or 404. If 200/204 → IDOR via DELETE
+        // Phase 2: DELETE IDOR -- authenticated user attempts to delete another user's
+        // resource (ID=2). Expected: 403 or 404. If 200/204 -> IDOR via DELETE.
         log.accept("[~] IDOR: testando DELETE cross-user em " + base);
         for (String path : DELETE_PATHS) {
             try {
-                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(base + path)).timeout(Duration.ofSeconds(5))
-                        .header("Authorization", "Bearer " + token1).DELETE().build();
+                HttpRequest.Builder rb = HttpRequest.newBuilder().uri(URI.create(base + path))
+                        .timeout(Duration.ofSeconds(5));
+                if (hasBearerAuth) {
+                    rb.header("Authorization", "Bearer " + token1);
+                }
+                HttpRequest req = rb.DELETE().build();
                 HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
                 int status = resp.statusCode();
                 String deleteBody = resp.body() != null ? resp.body() : "";
                 if ((status == 200 || status == 204) && !isHtml(deleteBody)) {
-                    log.accept("[!!] IDOR DELETE: " + path + " retornou " + status + " com token1");
+                    log.accept("[!!] IDOR DELETE: " + path + " retornou " + status);
+                    String repro = hasCookieAuth
+                            ? "curl -X DELETE -b '<SESSION_COOKIE>' '" + base + path + "'"
+                            : "curl -X DELETE -H 'Authorization: Bearer <TOKEN>' '" + base + path + "'";
                     findings.add(Finding.of("IDOR", path, "IDOR DELETE -- deleção cross-user possível em " + path,
                             Severity.MEDIUM,
-                            "DELETE " + base + path + " com token1 -> HTTP " + status
+                            "DELETE " + base + path + " -> HTTP " + status
                                     + " | Esperado: 403/404 | Recurso de outro usuário foi deletado",
                             "IDOR via DELETE -- usuário pode deletar recursos de outros usuários sem autorização",
-                            "curl -X DELETE -H 'Authorization: Bearer <TOKEN1>' '" + base + path + "'",
+                            repro,
                             "Validar ownership do recurso antes de deletar; verificar que o ID no path "
                                     + "pertence ao usuário autenticado; retornar 403 para acesso não autorizado",
                             CWE_ID, CWE_TITLE, VECTOR_DELETE, SCORE_DELETE));
@@ -174,14 +195,15 @@ public class IdorModule implements Scanner {
             boolean gqlFound = false;
             for (String mutation : GQL_MUTATIONS) {
                 try {
-                    HttpRequest req = HttpRequest.newBuilder().uri(URI.create(base + gqlPath))
-                            .timeout(Duration.ofSeconds(6)).header("Content-Type", "application/json")
-                            .header("Authorization", "Bearer " + token1)
-                            .POST(HttpRequest.BodyPublishers.ofString(mutation)).build();
+                    HttpRequest.Builder rb = HttpRequest.newBuilder().uri(URI.create(base + gqlPath))
+                            .timeout(Duration.ofSeconds(6)).header("Content-Type", "application/json");
+                    if (hasBearerAuth) {
+                        rb.header("Authorization", "Bearer " + token1);
+                    }
+                    HttpRequest req = rb.POST(HttpRequest.BodyPublishers.ofString(mutation)).build();
                     HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
                     String body = resp.body() != null ? resp.body() : "";
 
-                    // GraphQL success: 200 with "data" key and no "errors" key
                     boolean hasData = body.contains("\"data\"") && !body.contains("\"data\":null");
                     boolean hasErrors = body.contains("\"errors\"");
 
@@ -194,9 +216,12 @@ public class IdorModule implements Scanner {
                                         + " | Response (200 chars): " + body.substring(0, Math.min(200, body.length())),
                                 "GraphQL IDOR -- mutation ou query retorna dados de outro usuário sem "
                                         + "verificação de autorização no nível de objeto",
-                                "curl -X POST -H 'Content-Type: application/json' "
-                                        + "-H 'Authorization: Bearer <TOKEN>' '" + base + gqlPath + "' " + "-d '"
-                                        + mutation + "'",
+                                hasCookieAuth
+                                        ? "curl -X POST -H 'Content-Type: application/json' -b '<SESSION_COOKIE>' '"
+                                                + base + gqlPath + "' -d '" + mutation + "'"
+                                        : "curl -X POST -H 'Content-Type: application/json' "
+                                                + "-H 'Authorization: Bearer <TOKEN>' '" + base + gqlPath + "' -d '"
+                                                + mutation + "'",
                                 "Implementar autorização por campo e por resolver no GraphQL; "
                                         + "usar DataLoader com contexto do usuário; nunca confiar no ID enviado pelo"
                                         + " cliente",
@@ -221,12 +246,15 @@ public class IdorModule implements Scanner {
     String extractUserId(ScanContext ctx, HttpClient hc, String base) {
         String[] mePaths = {"/api/me", "/api/profile", "/api/user/me", "/api/account"};
         Pattern idPat = Pattern.compile("\"(?:id|userId|_id|uuid|user_id)\"\\s*:\\s*\"?([A-Za-z0-9\\-_]{1,200})\"?");
+        boolean hasBearerAuth = ctx.jwtToken() != null && !ctx.jwtToken().isBlank();
         for (String p : mePaths) {
             try {
-                var req = HttpRequest.newBuilder().uri(URI.create(base + p))
-                        .header("Authorization", "Bearer " + ctx.jwtToken()).timeout(Duration.ofSeconds(5)).GET()
-                        .build();
-                var resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
+                HttpRequest.Builder rb = HttpRequest.newBuilder().uri(URI.create(base + p))
+                        .timeout(Duration.ofSeconds(5));
+                if (hasBearerAuth) {
+                    rb.header("Authorization", "Bearer " + ctx.jwtToken());
+                }
+                var resp = Http.send(ctx, hc, rb.GET().build(), HttpResponse.BodyHandlers.ofString(), id());
                 if (resp.statusCode() == 200 && resp.body() != null) {
                     Matcher m = idPat.matcher(resp.body());
                     if (m.find()) {
@@ -241,9 +269,12 @@ public class IdorModule implements Scanner {
 
     private String fetch(ScanContext ctx, HttpClient hc, String url, String token) {
         try {
-            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6))
-                    .header("Authorization", "Bearer " + token).GET().build();
-            HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
+            HttpRequest.Builder rb = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6));
+            if (token != null && !token.isBlank()) {
+                rb.header("Authorization", "Bearer " + token);
+            }
+            HttpResponse<String> resp = Http.send(ctx, hc, rb.GET().build(), HttpResponse.BodyHandlers.ofString(),
+                    id());
             if (resp.statusCode() == 200 && resp.body() != null && !resp.body().isBlank()) {
                 return resp.body();
             }
@@ -289,5 +320,12 @@ public class IdorModule implements Scanner {
 
     private static String abbreviated(String token) {
         return token.substring(0, Math.min(20, token.length())) + "...";
+    }
+
+    private static ScanContext swapCookie(ScanContext ctx, String cookie) {
+        ScanConfig altCfg = new ScanConfig(ctx.config().delayMs(), cookie, "", ctx.config().inScopeHosts(),
+                ctx.config().suppressions(), ctx.config().redirectRelayUrl(), ctx.config().probeConcurrency());
+        return new ScanContext(ctx.targetUrl(), ctx.jwtToken(), ctx.jwtToken2(), ctx.enabledModules(), altCfg,
+                ctx.requestLog(), ctx.discoveredPaths(), ctx.wafState());
     }
 }
