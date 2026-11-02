@@ -344,6 +344,18 @@ ScanRunner.run(ScanContext)
 
 ## 09 - Changelog
 
+### v1.7.2
+
+- **Root cause analysis in reports**: findings grouped by vulnerability class with severity anchor, affected endpoints table, and unified remediation per root cause -- across AnarCry, HackerOne, and Bugcrowd export formats
+- **Negative companions**: "Tested and Secure" section lists modules that ran clean, with vulnerability class names from KB
+- **Cross-finding correlation**: automatic detection of 11 attack chain patterns (XSS+CORS, SSRF+IDOR, Smuggling+CachePoisoning, etc.)
+- **Codacy fixes**: H1 negative companions moved outside root-cause loop (was duplicating per group), extracted shared helpers (groupByRootCause, resolveKb, recordModuleResult)
+- **Launcher fixes**: suppressed Gradle OSC escape sequences causing Kitty notification spam, auto-cleanup of old versioned JARs after build
+- **README changelog**: collapsed to show only latest release
+
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
+
 ### v1.7.1
 
 - **Request Smuggling expansion**: 3 new detection phases -- Duplicate Content-Length (RFC 9112 violation), CL.0 desync (body-ignoring backend), Hop-by-hop TE stripping (Connection: Transfer-Encoding confusion)
@@ -351,9 +363,6 @@ ScanRunner.run(ScanContext)
 - **KB enrichment -- IDOR**: UI vs API authorization section, 3 real-world cases (0xdelta album, Mozilla account delete, Shopify privilege escalation), detection indicators, scoped query examples
 - **KB enrichment -- Request Smuggling**: comprehensive variant taxonomy (25+ techniques), 8 real-world cases (Pingora, HAProxy CVEs, Akamai, Google Cloud TE.0), PortSwigger research timeline, detection methodology, academic/vendor/tooling references
 - **6 new harness tests**: positive + negative tests for Duplicate CL, CL.0, and Hop-by-hop TE probes
-
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v1.7.0
 
