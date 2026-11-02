@@ -38,7 +38,9 @@ public enum AuthType {
             }
             case COOKIE -> {
                 String cookie = credential != null ? credential : "";
-                ScanConfig cfg = new ScanConfig(0, cookie, Set.of(), List.of(), "");
+                String cookie2 = credential2 != null ? credential2 : "";
+                ScanConfig cfg = new ScanConfig(0, cookie, cookie2, Set.of(), List.of(), "",
+                        ScanConfig.DEFAULT_PROBE_CONCURRENCY);
                 yield new ScanContext(target, "", "", modules, cfg, requestLog, new DiscoveredPaths(), new WafState());
             }
         };
