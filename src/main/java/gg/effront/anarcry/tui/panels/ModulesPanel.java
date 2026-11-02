@@ -414,8 +414,9 @@ public class ModulesPanel extends Panel {
         logPanel.log("[*] Iniciando scan em " + target + " (auth=" + selectedAuthType + ", concurrency=" + concurrency
                 + ") ...");
         ScanContext baseCtx = selectedAuthType.buildContext(target, modules, cred1, cred2, requestLogCb);
-        ScanConfig cfg = new ScanConfig(0, selectedAuthType.usesCookie() ? cred1 : "", java.util.Set.of(),
-                SuppressionLoader.loadFromCwd(), "", concurrency);
+        ScanConfig cfg = new ScanConfig(0, selectedAuthType.usesCookie() ? cred1 : "",
+                selectedAuthType.usesCookie() ? cred2 : "", java.util.Set.of(), SuppressionLoader.loadFromCwd(), "",
+                concurrency);
         scanRunner.run(new ScanContext(baseCtx.targetUrl(), baseCtx.jwtToken(), baseCtx.jwtToken2(), modules, cfg,
                 requestLogCb, baseCtx.discoveredPaths(), baseCtx.wafState()));
     }
