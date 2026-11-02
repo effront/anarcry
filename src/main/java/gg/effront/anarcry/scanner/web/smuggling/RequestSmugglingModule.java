@@ -75,23 +75,21 @@ public class RequestSmugglingModule implements Scanner {
         }
 
         // ── Phase 2: TE.CL ──
-        if (!clTeTimeout) {
-            boolean teCLTimeout = sendProbeAndCheckTimeout(ctx, host, port, buildTeCLProbe(host), PROBE_TIMEOUT_MS);
-            if (teCLTimeout) {
-                log.accept("[!!] ReqSmuggling: CRITICAL -- TE.CL desync confirmado");
-                findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(), "HTTP Request Smuggling -- TE.CL desync",
-                        Severity.CRITICAL,
-                        "TE.CL timing probe: POST com Transfer-Encoding=chunked e Content-Length=1 "
-                                + "causou timeout de " + PROBE_TIMEOUT_MS + "ms -- backend usa CL e ficou aguardando "
-                                + "dados que o frontend (usa TE) não repassou completamente",
-                        "Frontend e backend discordam sobre como interpretar Transfer-Encoding vs Content-Length. "
-                                + "Permite HTTP request smuggling com impacto equivalente ao CL.TE.",
-                        "# Probe TE.CL -- envia via socket raw:\n" + "printf 'POST / HTTP/1.1\\r\\nHost: " + host
-                                + "\\r\\n" + "Content-Length: 1\\r\\nTransfer-Encoding: chunked\\r\\n\\r\\n"
-                                + "1\\r\\nA\\r\\n0\\r\\n\\r\\n' | nc " + host + " " + port,
-                        "Normalizar requests ambíguos no proxy: rejeitar 400 para Content-Length + Transfer-Encoding",
-                        _cweId, _cweTitle, _cveVector, _score));
-            }
+        boolean teCLTimeout = sendProbeAndCheckTimeout(ctx, host, port, buildTeCLProbe(host), PROBE_TIMEOUT_MS);
+        if (teCLTimeout) {
+            log.accept("[!!] ReqSmuggling: CRITICAL -- TE.CL desync confirmado");
+            findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(), "HTTP Request Smuggling -- TE.CL desync",
+                    Severity.CRITICAL,
+                    "TE.CL timing probe: POST com Transfer-Encoding=chunked e Content-Length=1 " + "causou timeout de "
+                            + PROBE_TIMEOUT_MS + "ms -- backend usa CL e ficou aguardando "
+                            + "dados que o frontend (usa TE) não repassou completamente",
+                    "Frontend e backend discordam sobre como interpretar Transfer-Encoding vs Content-Length. "
+                            + "Permite HTTP request smuggling com impacto equivalente ao CL.TE.",
+                    "# Probe TE.CL -- envia via socket raw:\n" + "printf 'POST / HTTP/1.1\\r\\nHost: " + host + "\\r\\n"
+                            + "Content-Length: 1\\r\\nTransfer-Encoding: chunked\\r\\n\\r\\n"
+                            + "1\\r\\nA\\r\\n0\\r\\n\\r\\n' | nc " + host + " " + port,
+                    "Normalizar requests ambíguos no proxy: rejeitar 400 para Content-Length + Transfer-Encoding",
+                    _cweId, _cweTitle, _cveVector, _score));
         }
 
         // ── Phase 3: TE.TE obfuscation ──
@@ -276,9 +274,17 @@ public class RequestSmugglingModule implements Scanner {
             if (resp == null) {
                 return false;
             }
-            // RFC 9112: server MUST reject duplicate CL with different values (400)
-            // If we get 2xx/3xx, the server accepted the ambiguous request
-            return resp.startsWith("HTTP/") && !resp.contains(" 400 ");
+            // RFC 9112: server MUST reject duplicate CL with different values (400).
+            // Only flag on 2xx -- server successfully processed the ambiguous request.
+            // 3xx/4xx/5xx are not reliable indicators of parser acceptance.
+            if (!resp.startsWith("HTTP/")) {
+                return false;
+            }
+            int sp = resp.indexOf(' ');
+            if (sp < 0 || sp + 3 > resp.length()) {
+                return false;
+            }
+            return resp.charAt(sp + 1) == '2';
         } catch (Exception e) {
             return false;
         }
