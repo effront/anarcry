@@ -49,6 +49,8 @@ public class ScanRunner {
     private final Consumer<String> logCb;
     private final Consumer<Finding> findingCb;
     private final Set<String> seenFindings = Collections.synchronizedSet(new HashSet<>());
+    private final List<String> testedClean = Collections.synchronizedList(new ArrayList<>());
+    private final List<String> testedModules = Collections.synchronizedList(new ArrayList<>());
     private final List<Scanner> customModules = new ArrayList<>();
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "anarcry-scan");
@@ -91,9 +93,19 @@ public class ScanRunner {
         customModules.add(module);
     }
 
+    public List<String> testedClean() {
+        return List.copyOf(testedClean);
+    }
+
+    public List<String> testedModules() {
+        return List.copyOf(testedModules);
+    }
+
     public void run(ScanContext ctx) {
         executor.submit(() -> {
             try {
+                testedClean.clear();
+                testedModules.clear();
                 runScan(ctx);
             } catch (Exception e) {
                 logCb.accept("[!] Scan falhou: " + e.getMessage());
@@ -238,6 +250,10 @@ public class ScanRunner {
                         safeLog.accept("[~] dedup: ignorado finding duplicado -- " + f.module() + " " + f.title());
                     }
                 }
+                testedModules.add(enricher.id());
+                if (findings.isEmpty()) {
+                    testedClean.add(enricher.id());
+                }
                 safeLog.accept("[+] " + enricher.id() + ": " + findings.size() + " finding(s), "
                         + ctx.discoveredPaths().pathCount() + " paths, " + ctx.discoveredPaths().parameterCount()
                         + " params discovered");
@@ -365,6 +381,7 @@ public class ScanRunner {
                     if (ex != null) {
                         safeLog.accept("[!] " + module.id() + " erro: " + ex.getMessage());
                     } else {
+                        testedModules.add(module.id());
                         for (Finding f : findings) {
                             String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
                             if (seenFindings.add(dedupKey)) {
@@ -380,6 +397,9 @@ public class ScanRunner {
                                 safeLog.accept(
                                         "[~] dedup: ignorado finding duplicado -- " + f.module() + " " + f.title());
                             }
+                        }
+                        if (findings.isEmpty()) {
+                            testedClean.add(module.id());
                         }
                         safeLog.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
                     }
