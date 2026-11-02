@@ -67,12 +67,13 @@
 |  [x] CRLF            -- path injection + header injection (raw socket)    |
 |  [x] XXE             -- external entity, SSRF via XXE, blind XXE          |
 |  [x] SSTI            -- FreeMarker, Jinja2, Velocity, Thymeleaf           |
-|  [x] IDOR            -- cross-user, DELETE/PATCH tampering, UUID probing  |
+|  [x] IDOR            -- cross-user GET/DELETE, COOKIE auth, UUID probing  |
 |  [x] HostHeader      -- Host injection, cache poisoning via XFH           |
 |  [x] Actuator        -- Spring Boot /env /heapdump /mappings /beans       |
 |  [x] MassAssign      -- JSON mass assignment on REST endpoints            |
 |  [x] CachePoisoning  -- unkeyed headers reflected and cached              |
-|  [x] ReqSmuggling    -- CL.TE and TE.CL HTTP request smuggling            |
+|  [x] ReqSmuggling    -- CL.TE, TE.CL, TE.TE, Duplicate CL, CL.0,        |
+|                         Hop-by-hop TE stripping                           |
 +---------------------------------------------------------------------------+
 ```
 
@@ -103,7 +104,7 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.6.0.jar
+java -jar build/libs/anarcry-1.7.1.jar
 ```
 
 Or use the launcher (auto-builds if source changed):
@@ -251,11 +252,11 @@ Two operational modes: **Target** (main scan interface) and **Repeater** (HTTP r
 ## 06 - Testing
 
 ```bash
-./gradlew test              # unit + harness (no network) -- 125 tests
+./gradlew test              # unit + harness (no network)
 ./gradlew integrationTest   # tests with external hosts (badssl.com, etc.)
 ```
 
-Test suite covers: JWT probes (alg:none, weak secret, RS256->HS256, JKU, null signature, signature disclosure), CORS (origin reflection, wildcard, null origin), OAuth (well-known discovery, redirect_uri bypass), CRLF (path + header injection), SSRF, GraphQL introspection, Open Redirect, Cache Poisoning, Request Smuggling (CL.TE), SQLi (error-based + time-based), PQC, Headers, HSTS, ScanRunner orchestration (callbacks, module isolation, dedup, omnibus E2E), ReportEngine (MD+JSON export, JSON serialization), KnowledgeBase (loading, lookups, CweRegistry delegation), CvssCalculator, and a false-positive regression test on a clean server.
+Test suite covers: JWT probes (alg:none, weak secret, RS256->HS256, JKU, null signature, signature disclosure), CORS (origin reflection, wildcard, null origin), OAuth (well-known discovery, redirect_uri bypass), CRLF (path + header injection), SSRF, GraphQL introspection, Open Redirect, Cache Poisoning, Request Smuggling (CL.TE, TE.CL, Duplicate CL, CL.0, Hop-by-hop TE), SQLi (error-based + time-based), PQC, Headers, HSTS, IDOR (COOKIE auth, cross-user), ScanRunner orchestration (callbacks, module isolation, dedup, omnibus E2E), ReportEngine (MD+JSON export, JSON serialization), KnowledgeBase (loading, lookups, CweRegistry delegation), CvssCalculator, and a false-positive regression suite on a clean server.
 
 ---
 
@@ -342,6 +343,27 @@ ScanRunner.run(ScanContext)
 ---
 
 ## 09 - Changelog
+
+### v1.7.1
+
+- **Request Smuggling expansion**: 3 new detection phases -- Duplicate Content-Length (RFC 9112 violation), CL.0 desync (body-ignoring backend), Hop-by-hop TE stripping (Connection: Transfer-Encoding confusion)
+- **CL.TE/TE.CL refactor**: phases run independently instead of early-returning, so multiple desync types are detected in a single scan
+- **KB enrichment -- IDOR**: UI vs API authorization section, 3 real-world cases (0xdelta album, Mozilla account delete, Shopify privilege escalation), detection indicators, scoped query examples
+- **KB enrichment -- Request Smuggling**: comprehensive variant taxonomy (25+ techniques), 8 real-world cases (Pingora, HAProxy CVEs, Akamai, Google Cloud TE.0), PortSwigger research timeline, detection methodology, academic/vendor/tooling references
+- **6 new harness tests**: positive + negative tests for Duplicate CL, CL.0, and Hop-by-hop TE probes
+
+### v1.7.0
+
+- **IDOR COOKIE authentication**: IdorModule supports COOKIE auth type for cross-user testing with session cookies
+- **Constant placeholders in IDOR reproductions**: finding reproduction steps use constant placeholders instead of runtime tokens
+
+### v1.6.1
+
+- **False positive elimination**: severity inflation on clean servers, CDN header false positives (X-Cache, CF-Cache-Status), HSTS correlation with non-HTTPS targets
+- **Per-finding CVSS vectors**: JWT (6 finding types) and CORS (4 finding types) carry per-finding vectors instead of flat module-level severity
+- **PQC cleanup**: positive indicators (TLS 1.3 supported, X25519MLKEM768 supported) no longer reported as vulnerability findings
+- **XSS severity alignment**: log message matches CRITICAL severity
+- **6 regression tests**: false-positive regression suite on a clean server
 
 ### v1.6.0
 
