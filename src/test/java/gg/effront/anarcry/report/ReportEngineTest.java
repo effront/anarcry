@@ -219,10 +219,27 @@ class ReportEngineTest {
 
         String content = Files.readString(Path.of(file));
 
-        assertTrue(content.contains("## Negative Companion -- Tested and Secure"),
+        assertTrue(content.contains("# Negative Companion -- Tested and Secure"),
                 "H1 missing negative companion section");
         assertTrue(content.contains("**SQLi**"), "H1 missing SQLi in clean list");
         assertTrue(content.contains("**SSRF**"), "H1 missing SSRF in clean list");
+    }
+
+    @Test
+    void h1NegativeCompanionAppearsOnce() throws IOException {
+        Finding xss = xssFinding();
+        Finding sqli = Finding.of("SQLi", "https://target.com/api", "SQL injection", Severity.CRITICAL, "SQL error",
+                "Data breach", "curl ...", "Parameterized queries");
+        List<String> testedClean = List.of("CORS", "SSRF");
+
+        String file = engine.exportH1(List.of(xss, sqli), "https://target.com", "TestProgram",
+                List.of("XSS", "SQLi", "CORS", "SSRF"), testedClean);
+        cleanupPaths.add(Path.of(file));
+
+        String content = Files.readString(Path.of(file));
+
+        assertEquals(1, countOccurrences(content, "Negative Companion -- Tested and Secure"),
+                "H1 negative companion section should appear exactly once");
     }
 
     @Test

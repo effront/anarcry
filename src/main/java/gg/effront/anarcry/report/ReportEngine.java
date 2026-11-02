@@ -356,23 +356,23 @@ public class ReportEngine {
 
             appendCvesH1(sb, module);
 
-            if (!testedClean.isEmpty()) {
-                sb.append("## Negative Companion -- Tested and Secure\n\n");
-                sb.append("The following vulnerability classes were tested ")
-                        .append("against the target and produced no findings:\n\n");
-                for (String clean : testedClean) {
-                    String vulnClass = kb.byModule(clean).map(KnowledgeEntry::title).orElse(clean);
-                    sb.append("- **").append(clean).append("** -- ").append(vulnClass).append("\n");
-                }
-                sb.append("\n");
-            }
-
             sb.append("## Supporting Material\n\n");
             sb.append("- Scanner: AnarCry\n");
             sb.append("- Date: ").append(date).append("\n");
             sb.append("- Module: ").append(module).append("\n\n");
 
             sb.append("---\n\n");
+        }
+
+        if (!testedClean.isEmpty()) {
+            sb.append("# Negative Companion -- Tested and Secure\n\n");
+            sb.append("The following vulnerability classes were tested ")
+                    .append("against the target and produced no findings:\n\n");
+            for (String clean : testedClean) {
+                String vulnClass = kb.byModule(clean).map(KnowledgeEntry::title).orElse(clean);
+                sb.append("- **").append(clean).append("** -- ").append(vulnClass).append("\n");
+            }
+            sb.append("\n");
         }
 
         String markdown = sb.toString();
