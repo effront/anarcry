@@ -117,7 +117,11 @@ public class IdorModule implements Scanner {
         if (canCrossUser) {
             boolean cookieCrossUser = hasCookieAuth && !hasBearerAuth;
             ScanContext ctx2 = cookieCrossUser ? swapCookie(ctx, ctx.config().sessionCookie2()) : ctx;
+            int pathIdx = 0;
+            int totalPaths = effectivePaths.size();
             for (String path : effectivePaths) {
+                pathIdx++;
+                log.accept("[~] IDOR: [" + pathIdx + "/" + totalPaths + "] " + path);
                 String r1 = fetch(ctx, hc, base + path, hasBearerAuth ? token1 : null);
                 if (r1 == null || isHtml(r1)) {
                     continue;
