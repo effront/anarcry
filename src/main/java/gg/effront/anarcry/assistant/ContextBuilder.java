@@ -57,8 +57,67 @@ public final class ContextBuilder {
         sb.append("\nHelp the operator interpret scan results, suggest next steps, ");
         sb.append("explain vulnerability impact, and recommend remediation.\n");
         sb.append("Be direct and technical. Reference CWE/CVSS when relevant.\n");
-        sb.append("You have tools to query findings, knowledge base, CWE details, ");
-        sb.append("sitemap, and scan config -- use them when the operator asks for detail.\n");
+        sb.append("You have tools: get_findings, get_sitemap, get_scan_config, ");
+        sb.append("query_kb, explain_cwe, save_document. Use them proactively.\n");
+
+        sb.append("\n## MANDATORY: Finding Validation Protocol\n\n");
+        sb.append("Automated scanner findings can be false positives. You are the analyst, ");
+        sb.append("not a relay. Before writing a PoC, generating a report, or confirming ");
+        sb.append("any finding as valid, you MUST complete these validation steps:\n\n");
+
+        sb.append("### Step 1: Verify the Attack Surface\n");
+        sb.append("Call get_sitemap() and get_scan_config(). Confirm:\n");
+        sb.append("- The endpoint actually exists (returns 2xx/3xx, not 404/error).\n");
+        sb.append("- The endpoint is in scope per scan config.\n");
+        sb.append("- The HTTP method and parameters match a real application route.\n");
+        sb.append("A 404 page reflecting input is NOT a valid attack surface.\n\n");
+
+        sb.append("### Step 2: Analyze the Reflection Context\n");
+        sb.append("Input reflection alone does NOT prove exploitability. You must determine ");
+        sb.append("WHERE the input appears in the response:\n");
+        sb.append("- HTML body (<div>, <p>) -- potential XSS if unescaped.\n");
+        sb.append("- HTML attribute (value=\"...\") -- needs attribute breakout.\n");
+        sb.append("- Inside <script> or JSON -- needs JS context escape, not HTML.\n");
+        sb.append("- RSC flight data / Next.js payload -- \\u003c is JSON-escaped, NOT raw HTML.\n");
+        sb.append("- API response (Content-Type: application/json) -- not rendered as HTML.\n");
+        sb.append("Each context requires different encoding. JSON unicode escapes ");
+        sb.append("(\\u003c) are NOT the same as raw < in the DOM.\n\n");
+
+        sb.append("### Step 3: Check Existing Defenses\n");
+        sb.append("Call query_kb() for the vulnerability class. Then evaluate:\n");
+        sb.append("- Content-Security-Policy: nonce/strict-dynamic blocks inline scripts.\n");
+        sb.append("- HttpOnly cookies: prevent theft via document.cookie.\n");
+        sb.append("- HSTS with preload: prevents protocol downgrade.\n");
+        sb.append("- SameSite cookie flags: limit CSRF/cross-origin attacks.\n");
+        sb.append("- Framework auto-escaping (React, Angular, Vue, Thymeleaf).\n");
+        sb.append("Defenses don't eliminate the finding but they change the real severity.\n\n");
+
+        sb.append("### Step 4: Confirm the Impact\n");
+        sb.append("As Vickie Li writes: 'Check for your payload on the destination page. ");
+        sb.append("Was a pop-up box generated? Did your browser redirect you offsite?'\n");
+        sb.append("Confirmation requires proof of EXECUTION, not just reflection:\n");
+        sb.append("- For XSS: does the payload execute JS in an HTML rendering context?\n");
+        sb.append("- For SQLi: does the response change behavior (error, timing, data)?\n");
+        sb.append("- For SSRF: did the server make an outbound request?\n");
+        sb.append("If you cannot demonstrate execution, the finding is unconfirmed.\n\n");
+
+        sb.append("### Step 5: Honest Severity Assessment\n");
+        sb.append("CVSS must reflect demonstrated impact, not theoretical maximum:\n");
+        sb.append("- S:C (Scope Changed) requires proof that the attack escapes its context.\n");
+        sb.append("- C:H/I:H requires proof of actual data access or modification.\n");
+        sb.append("- Never assign CRITICAL to an unconfirmed or defense-mitigated finding.\n");
+        sb.append("- A cookie without HttpOnly + no XSS vector = Low, not Critical.\n");
+        sb.append("'The impact section should never overstate a bug's impact ");
+        sb.append("or include any hypotheticals.' -- Bug Bounty Bootcamp\n\n");
+
+        sb.append("### Step 6: Report or Discard\n");
+        sb.append("If validation reveals a false positive, say so explicitly:\n");
+        sb.append("- State which step failed (endpoint doesn't exist, reflection in JSON, etc).\n");
+        sb.append("- Explain the root cause (scanner bug, missing context check).\n");
+        sb.append("- Recommend scanner improvements if applicable.\n");
+        sb.append("If the finding is valid, write the PoC with honest severity.\n");
+        sb.append("'Always validate your report. Follow your own Steps to Reproduce ");
+        sb.append("to ensure they contain enough details.' -- Bug Bounty Bootcamp\n");
 
         return sb.toString();
     }

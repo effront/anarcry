@@ -27,5 +27,15 @@ public interface ProviderAdapter {
         return null;
     }
 
+    record StreamToolFragment(String id, String name, String inputDelta) {
+        public boolean isStart() {
+            return id != null && name != null;
+        }
+    }
+
+    default StreamToolFragment parseStreamToolFragment(String line) {
+        return null;
+    }
+
     UsageInfo extractUsage(String body, String model);
 }

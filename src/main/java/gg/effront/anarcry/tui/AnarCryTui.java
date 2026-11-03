@@ -55,6 +55,7 @@ import gg.effront.anarcry.assistant.tools.GetFindingsTool;
 import gg.effront.anarcry.assistant.tools.GetScanConfigTool;
 import gg.effront.anarcry.assistant.tools.GetSitemapTool;
 import gg.effront.anarcry.assistant.tools.QueryKbTool;
+import gg.effront.anarcry.assistant.tools.SaveDocTool;
 import gg.effront.anarcry.assistant.tools.ToolSchemaBuilder;
 import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.scanner.DiscoveredPaths;
@@ -433,7 +434,10 @@ public class AnarCryTui {
                         aiAssistant.sendStreaming(msg, systemPrompt, toolsJson, token -> {
                             gui.getGUIThread().invokeLater(() -> assistantPanel.appendToken(token));
                         });
-                        gui.getGUIThread().invokeLater(() -> assistantPanel.finishAssistantMessage());
+                        gui.getGUIThread().invokeLater(() -> {
+                            assistantPanel.finishAssistantMessage();
+                            assistantPanel.updateUsage(aiAssistant.getUsageTracker().summary());
+                        });
                     } catch (Exception e) {
                         gui.getGUIThread()
                                 .invokeLater(() -> assistantPanel.addSystemMessage("Error: " + e.getMessage()));
@@ -466,7 +470,10 @@ public class AnarCryTui {
                             aiAssistant.sendStreaming(cmd, enriched, buildToolsJson(), token -> {
                                 gui.getGUIThread().invokeLater(() -> assistantPanel.appendToken(token));
                             });
-                            gui.getGUIThread().invokeLater(() -> assistantPanel.finishAssistantMessage());
+                            gui.getGUIThread().invokeLater(() -> {
+                                assistantPanel.finishAssistantMessage();
+                                assistantPanel.updateUsage(aiAssistant.getUsageTracker().summary());
+                            });
                         } catch (Exception e) {
                             gui.getGUIThread()
                                     .invokeLater(() -> assistantPanel.addSystemMessage("Error: " + e.getMessage()));
@@ -528,12 +535,14 @@ public class AnarCryTui {
         ExplainCweTool cweTool = new ExplainCweTool(kb);
         GetSitemapTool sitemapTool = new GetSitemapTool(() -> discoveredPaths);
         GetScanConfigTool configTool = new GetScanConfigTool(() -> scanRunner.getLastContext());
+        SaveDocTool saveDocTool = new SaveDocTool();
 
         aiAssistant.registerTool(findingsTool.name(), findingsTool::call);
         aiAssistant.registerTool(kbTool.name(), kbTool::call);
         aiAssistant.registerTool(cweTool.name(), cweTool::call);
         aiAssistant.registerTool(sitemapTool.name(), sitemapTool::call);
         aiAssistant.registerTool(configTool.name(), configTool::call);
+        aiAssistant.registerTool(saveDocTool.name(), saveDocTool::call);
     }
 
     private void handleProviderCommand(String arg) {
@@ -588,7 +597,7 @@ public class AnarCryTui {
         KnowledgeBase kb = KnowledgeBase.getInstance();
         List<AssistantTool> toolDefs = List.of(new GetFindingsTool(() -> findingHistory), new QueryKbTool(kb),
                 new ExplainCweTool(kb), new GetSitemapTool(() -> discoveredPaths),
-                new GetScanConfigTool(() -> scanRunner.getLastContext()));
+                new GetScanConfigTool(() -> scanRunner.getLastContext()), new SaveDocTool());
         return ToolSchemaBuilder.buildJson(toolDefs);
     }
 
@@ -872,7 +881,7 @@ public class AnarCryTui {
             String json = new ReportEngine().toJson(snapshot);
             String timestamp = java.time.LocalDateTime.now()
                     .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
-            java.nio.file.Path reportsDir = java.nio.file.Path.of("docs", "reports");
+            java.nio.file.Path reportsDir = ReportEngine.REPORTS_DIR;
             java.nio.file.Files.createDirectories(reportsDir);
             java.nio.file.Path path = reportsDir.resolve("anarcry-findings-" + timestamp + ".json");
             java.nio.file.Files.writeString(path, json);
