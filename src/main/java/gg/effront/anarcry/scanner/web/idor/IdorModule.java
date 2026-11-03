@@ -190,10 +190,9 @@ public class IdorModule implements Scanner {
                             CWE_ID, CWE_TITLE, VECTOR_DELETE, SCORE_DELETE));
                     break;
                 }
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
             } catch (Exception ignored) {
-                if (ignored instanceof CircuitBreakerException) {
-                    throw (CircuitBreakerException) ignored;
-                }
             }
         }
 
@@ -237,10 +236,9 @@ public class IdorModule implements Scanner {
                         gqlFound = true;
                         break;
                     }
+                } catch (CircuitBreakerException cbe) {
+                    throw cbe;
                 } catch (Exception ignored) {
-                    if (ignored instanceof CircuitBreakerException) {
-                        throw (CircuitBreakerException) ignored;
-                    }
                 }
             }
             if (gqlFound) {
@@ -272,10 +270,9 @@ public class IdorModule implements Scanner {
                         return m.group(1);
                     }
                 }
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
             } catch (Exception ignored) {
-                if (ignored instanceof CircuitBreakerException) {
-                    throw (CircuitBreakerException) ignored;
-                }
             }
         }
         return null;
@@ -292,10 +289,9 @@ public class IdorModule implements Scanner {
             if (resp.statusCode() == 200 && resp.body() != null && !resp.body().isBlank()) {
                 return resp.body();
             }
+        } catch (CircuitBreakerException cbe) {
+            throw cbe;
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException) {
-                throw (CircuitBreakerException) ignored;
-            }
         }
         return null;
     }

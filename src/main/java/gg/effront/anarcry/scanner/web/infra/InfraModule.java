@@ -268,10 +268,9 @@ public class InfraModule implements Scanner {
                                 _cweId, _cweTitle, _cveVector, _score));
                         break;
                     }
+                } catch (CircuitBreakerException cbe) {
+                    throw cbe;
                 } catch (Exception ignored) {
-                    if (ignored instanceof CircuitBreakerException) {
-                        throw (CircuitBreakerException) ignored;
-                    }
                 }
             }
         }
@@ -402,10 +401,9 @@ public class InfraModule implements Scanner {
                     return "0".equals(line.split("\\s+")[1]);
                 }
             }
+        } catch (CircuitBreakerException cbe) {
+            throw cbe;
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException) {
-                throw (CircuitBreakerException) ignored;
-            }
         }
         return false;
     }
@@ -441,10 +439,9 @@ public class InfraModule implements Scanner {
             if (n > 0) {
                 return new String(buf, 0, n, StandardCharsets.UTF_8).trim();
             }
+        } catch (CircuitBreakerException cbe) {
+            throw cbe;
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException) {
-                throw (CircuitBreakerException) ignored;
-            }
         }
         return "unknown";
     }
@@ -463,10 +460,9 @@ public class InfraModule implements Scanner {
             if (start >= 0 && end > start) {
                 return out.substring(start + 1, end);
             }
+        } catch (CircuitBreakerException cbe) {
+            throw cbe;
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException) {
-                throw (CircuitBreakerException) ignored;
-            }
         }
         return "unknown";
     }
@@ -484,10 +480,9 @@ public class InfraModule implements Scanner {
             if (n > 0) {
                 return new String(buf, 0, n, StandardCharsets.UTF_8).trim();
             }
+        } catch (CircuitBreakerException cbe) {
+            throw cbe;
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException) {
-                throw (CircuitBreakerException) ignored;
-            }
         }
         return "";
     }

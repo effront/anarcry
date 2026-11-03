@@ -186,10 +186,9 @@ public class SstiModule implements Scanner {
                     log.accept("[!!!] SSTI RCE: " + rce.description() + " → '" + m.group() + "'");
                     return rce.description() + " → output: " + m.group();
                 }
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
             } catch (Exception ignored) {
-                if (ignored instanceof CircuitBreakerException) {
-                    throw (CircuitBreakerException) ignored;
-                }
             }
         }
         return null;
@@ -212,10 +211,9 @@ public class SstiModule implements Scanner {
                     return "Jinja2 (confirma)";
                 }
             }
+        } catch (CircuitBreakerException cbe) {
+            throw cbe;
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException) {
-                throw (CircuitBreakerException) ignored;
-            }
         }
         return null;
     }

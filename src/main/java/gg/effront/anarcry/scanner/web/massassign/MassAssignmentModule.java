@@ -146,10 +146,9 @@ public class MassAssignmentModule implements Scanner {
                         persistedAdmin = true;
                         log.accept("[!!] MassAssign: CRITICAL -- campo admin persistiu após GET em " + verifyUrl);
                     }
+                } catch (CircuitBreakerException cbe) {
+                    throw cbe;
                 } catch (Exception ignored) {
-                    if (ignored instanceof CircuitBreakerException) {
-                        throw (CircuitBreakerException) ignored;
-                    }
                 }
 
                 if (persistedAdmin) {
@@ -192,6 +191,8 @@ public class MassAssignmentModule implements Scanner {
                     log.accept("[+] MassAssign: sem evidência de mass assignment em " + ep.method() + " " + ep.path());
                 }
 
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
             } catch (Exception e) {
                 // Unreachable endpoint -- expected
             }

@@ -106,13 +106,14 @@ public class GraphQLModule implements Scanner {
                                             + "considerar persisted queries para reduzir superfície de ataque",
                                     _cweId, _cweTitle, _cveVector, _score));
                         }
+                    } catch (CircuitBreakerException cbe) {
+                        throw cbe;
                     } catch (Exception ignored) {
-                        if (ignored instanceof CircuitBreakerException) {
-                            throw (CircuitBreakerException) ignored;
-                        }
                     }
                 }
 
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
             } catch (Exception e) {
                 log.accept("[~] GraphQL: " + url + " -- " + e.getMessage());
             }

@@ -69,10 +69,9 @@ public class OAuthModule implements Scanner {
                         if (json.has("authorization_endpoint")) {
                             authorizeEndpoint = json.get("authorization_endpoint").getAsString();
                         }
+                    } catch (CircuitBreakerException cbe) {
+                        throw cbe;
                     } catch (Exception ignored) {
-                        if (ignored instanceof CircuitBreakerException) {
-                            throw (CircuitBreakerException) ignored;
-                        }
                     }
                     findings.add(Finding.of("OAuth", baseUrl + wk, "OAuth / OpenID Connect endpoint descoberto",
                             Severity.INFO, "Well-known: " + baseUrl + wk + " | authorize: " + authorizeEndpoint,
@@ -82,6 +81,8 @@ public class OAuthModule implements Scanner {
                             _cweTitle, _cveVector, _score));
                     break;
                 }
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
             } catch (Exception e) {
                 log.accept("[~] OAuth: " + wk + " -- " + e.getMessage());
             }
@@ -114,6 +115,8 @@ public class OAuthModule implements Scanner {
                             "Exigir state e PKCE; validar redirect_uri contra whitelist estrita", _cweId, _cweTitle,
                             _cveVector, _score));
                     break;
+                } catch (CircuitBreakerException cbe) {
+                    throw cbe;
                 } catch (Exception e) {
                     log.accept("[~] OAuth: " + path + " -- " + e.getMessage());
                 }

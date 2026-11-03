@@ -179,10 +179,9 @@ public class CommandInjectionModule implements Scanner {
                                     return local;
                                 }
                             }
+                        } catch (CircuitBreakerException cbe) {
+                            throw cbe;
                         } catch (Exception ignored) {
-                            if (ignored instanceof CircuitBreakerException) {
-                                throw (CircuitBreakerException) ignored;
-                            }
                             // Connection errors / timeouts are not findings in Phase 1
                         }
                     }

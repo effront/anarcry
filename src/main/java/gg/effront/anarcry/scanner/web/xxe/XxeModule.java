@@ -159,10 +159,9 @@ public class XxeModule implements Scanner {
             if (resp.statusCode() == 200 && resp.body() != null) {
                 return resp.body();
             }
+        } catch (CircuitBreakerException cbe) {
+            throw cbe;
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException) {
-                throw (CircuitBreakerException) ignored;
-            }
         }
         return null;
     }

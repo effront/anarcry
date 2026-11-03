@@ -211,10 +211,9 @@ public class LfiModule implements Scanner {
                     if (!srv.isBlank()) {
                         serverRef.compareAndSet("", srv);
                     }
+                } catch (CircuitBreakerException cbe) {
+                    throw cbe;
                 } catch (Exception ignored) {
-                    if (ignored instanceof CircuitBreakerException) {
-                        throw (CircuitBreakerException) ignored;
-                    }
                 }
 
                 for (String param : FILE_PARAM_KEYWORDS) {
@@ -271,10 +270,9 @@ public class LfiModule implements Scanner {
                                 cancelLinux.set(true);
                                 return local;
                             }
+                        } catch (CircuitBreakerException cbe) {
+                            throw cbe;
                         } catch (Exception ignored) {
-                            if (ignored instanceof CircuitBreakerException) {
-                                throw (CircuitBreakerException) ignored;
-                            }
                         }
                     }
                 }
@@ -347,10 +345,9 @@ public class LfiModule implements Scanner {
                                     cancelWindows.set(true);
                                     return local;
                                 }
+                            } catch (CircuitBreakerException cbe) {
+                                throw cbe;
                             } catch (Exception ignored) {
-                                if (ignored instanceof CircuitBreakerException) {
-                                    throw (CircuitBreakerException) ignored;
-                                }
                             }
                         }
                     }
@@ -399,10 +396,9 @@ public class LfiModule implements Scanner {
                                     String text = new String(decoded);
                                     confirmedPhp = text.contains("<?php") || text.contains("<?")
                                             || text.contains("require") || text.contains("$_");
+                                } catch (CircuitBreakerException cbe) {
+                                    throw cbe;
                                 } catch (Exception ignored) {
-                                    if (ignored instanceof CircuitBreakerException) {
-                                        throw (CircuitBreakerException) ignored;
-                                    }
                                 }
 
                                 if (confirmedPhp) {
@@ -427,10 +423,9 @@ public class LfiModule implements Scanner {
                                     return local;
                                 }
                             }
+                        } catch (CircuitBreakerException cbe) {
+                            throw cbe;
                         } catch (Exception ignored) {
-                            if (ignored instanceof CircuitBreakerException) {
-                                throw (CircuitBreakerException) ignored;
-                            }
                         }
                     }
                     return local;
@@ -520,10 +515,9 @@ public class LfiModule implements Scanner {
             Http.send(ctx, hc,
                     HttpRequest.newBuilder().uri(URI.create(base + "/")).timeout(Duration.ofSeconds(5)).GET().build(),
                     HttpResponse.BodyHandlers.ofString(), id());
+        } catch (CircuitBreakerException cbe) {
+            throw cbe;
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException) {
-                throw (CircuitBreakerException) ignored;
-            }
         }
 
         // Wait for the log write to be flushed to disk before inclusion
@@ -548,10 +542,9 @@ public class LfiModule implements Scanner {
                     log.accept("[!!!] LFI RCE via log poisoning em " + logPath + " → output: '" + m.group() + "'");
                     return logPath + " → output: " + m.group();
                 }
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
             } catch (Exception ignored) {
-                if (ignored instanceof CircuitBreakerException) {
-                    throw (CircuitBreakerException) ignored;
-                }
             }
         }
         return null;

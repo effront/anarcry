@@ -76,10 +76,9 @@ public class CachePoisoningModule implements Scanner {
                             String cleanBody = cleanResp.body() != null ? cleanResp.body() : "";
                             String cleanLoc = cleanResp.headers().firstValue("location").orElse("");
                             poisonPersisted = cleanBody.contains(PROBE_VALUE) || cleanLoc.contains(PROBE_VALUE);
+                        } catch (CircuitBreakerException cbe) {
+                            throw cbe;
                         } catch (Exception ignored) {
-                            if (ignored instanceof CircuitBreakerException) {
-                                throw (CircuitBreakerException) ignored;
-                            }
                         }
 
                         Severity sev = Severity.HIGH;
@@ -102,6 +101,8 @@ public class CachePoisoningModule implements Scanner {
                                 _cweId, _cweTitle, _cveVector, _score));
                         break outer;
                     }
+                } catch (CircuitBreakerException cbe) {
+                    throw cbe;
                 } catch (Exception e) {
                     // Skip connection errors -- continue
                 }
