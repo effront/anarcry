@@ -11,6 +11,7 @@ import gg.effront.anarcry.assistant.tools.GetFindingsTool;
 import gg.effront.anarcry.assistant.tools.GetScanConfigTool;
 import gg.effront.anarcry.assistant.tools.GetSitemapTool;
 import gg.effront.anarcry.assistant.tools.QueryKbTool;
+import gg.effront.anarcry.assistant.tools.SaveDocTool;
 import gg.effront.anarcry.assistant.tools.ToolSchemaBuilder;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.KnowledgeBase;
@@ -299,12 +300,14 @@ public class AssistantView extends JPanel {
             ExplainCweTool cweTool = new ExplainCweTool(kb);
             GetSitemapTool sitemapTool = new GetSitemapTool(discoveredPathsSupplier);
             GetScanConfigTool configTool = new GetScanConfigTool(contextSupplier);
+            SaveDocTool saveDocTool = new SaveDocTool();
 
             aiAssistant.registerTool(findingsTool.name(), findingsTool::call);
             aiAssistant.registerTool(kbTool.name(), kbTool::call);
             aiAssistant.registerTool(cweTool.name(), cweTool::call);
             aiAssistant.registerTool(sitemapTool.name(), sitemapTool::call);
             aiAssistant.registerTool(configTool.name(), configTool::call);
+            aiAssistant.registerTool(saveDocTool.name(), saveDocTool::call);
 
             appendSystem("AI Assistant ready (" + config.provider() + "/" + config.model()
                     + "). Type your question or use a slash command.");
@@ -455,7 +458,7 @@ public class AssistantView extends JPanel {
         KnowledgeBase kb = KnowledgeBase.getInstance();
         List<AssistantTool> toolDefs = List.of(new GetFindingsTool(findingsSupplier), new QueryKbTool(kb),
                 new ExplainCweTool(kb), new GetSitemapTool(discoveredPathsSupplier),
-                new GetScanConfigTool(contextSupplier));
+                new GetScanConfigTool(contextSupplier), new SaveDocTool());
         return ToolSchemaBuilder.buildJson(toolDefs);
     }
 }

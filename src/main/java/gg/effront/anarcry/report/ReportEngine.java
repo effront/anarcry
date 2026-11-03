@@ -26,7 +26,7 @@ public class ReportEngine {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final List<Severity> ORDER = List.of(Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW,
             Severity.INFO);
-    private static final Path REPORTS_DIR = Path.of("docs", "reports");
+    public static final Path REPORTS_DIR = Path.of(System.getProperty("user.home"), ".anarcry", "reports");
 
     public String export(List<Finding> findings, String targetUrl) throws IOException {
         return export(findings, targetUrl, List.of(), List.of());
