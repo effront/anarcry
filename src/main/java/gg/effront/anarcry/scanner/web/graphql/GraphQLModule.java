@@ -107,8 +107,9 @@ public class GraphQLModule implements Scanner {
                                     _cweId, _cweTitle, _cveVector, _score));
                         }
                     } catch (Exception ignored) {
-                        if (ignored instanceof CircuitBreakerException)
+                        if (ignored instanceof CircuitBreakerException) {
                             throw (CircuitBreakerException) ignored;
+                        }
                     }
                 }
 

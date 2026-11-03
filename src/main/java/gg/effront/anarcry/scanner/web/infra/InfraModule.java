@@ -269,8 +269,9 @@ public class InfraModule implements Scanner {
                         break;
                     }
                 } catch (Exception ignored) {
-                    if (ignored instanceof CircuitBreakerException)
+                    if (ignored instanceof CircuitBreakerException) {
                         throw (CircuitBreakerException) ignored;
+                    }
                 }
             }
         }
@@ -402,8 +403,9 @@ public class InfraModule implements Scanner {
                 }
             }
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException)
+            if (ignored instanceof CircuitBreakerException) {
                 throw (CircuitBreakerException) ignored;
+            }
         }
         return false;
     }
@@ -440,8 +442,9 @@ public class InfraModule implements Scanner {
                 return new String(buf, 0, n, StandardCharsets.UTF_8).trim();
             }
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException)
+            if (ignored instanceof CircuitBreakerException) {
                 throw (CircuitBreakerException) ignored;
+            }
         }
         return "unknown";
     }
@@ -461,8 +464,9 @@ public class InfraModule implements Scanner {
                 return out.substring(start + 1, end);
             }
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException)
+            if (ignored instanceof CircuitBreakerException) {
                 throw (CircuitBreakerException) ignored;
+            }
         }
         return "unknown";
     }
@@ -481,8 +485,9 @@ public class InfraModule implements Scanner {
                 return new String(buf, 0, n, StandardCharsets.UTF_8).trim();
             }
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException)
+            if (ignored instanceof CircuitBreakerException) {
                 throw (CircuitBreakerException) ignored;
+            }
         }
         return "";
     }

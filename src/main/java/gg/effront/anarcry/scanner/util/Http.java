@@ -91,10 +91,10 @@ public class Http {
                     ctx.wafState().markBlockType(WafState.WafBlockType.RULE_BLOCK);
                 }
             }
-            cb.lowerThreshold(ctx.wafState().effectiveThreshold());
+            cb.adjustThreshold(ctx.wafState().effectiveThreshold());
             cb.recordBlock(log);
             cb.checkAndThrow();
-        } else if (status >= 200 && status < 400) {
+        } else {
             cb.recordSuccess();
         }
 

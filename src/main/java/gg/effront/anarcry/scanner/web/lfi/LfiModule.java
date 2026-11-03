@@ -212,8 +212,9 @@ public class LfiModule implements Scanner {
                         serverRef.compareAndSet("", srv);
                     }
                 } catch (Exception ignored) {
-                    if (ignored instanceof CircuitBreakerException)
+                    if (ignored instanceof CircuitBreakerException) {
                         throw (CircuitBreakerException) ignored;
+                    }
                 }
 
                 for (String param : FILE_PARAM_KEYWORDS) {
@@ -271,8 +272,9 @@ public class LfiModule implements Scanner {
                                 return local;
                             }
                         } catch (Exception ignored) {
-                            if (ignored instanceof CircuitBreakerException)
+                            if (ignored instanceof CircuitBreakerException) {
                                 throw (CircuitBreakerException) ignored;
+                            }
                         }
                     }
                 }
@@ -346,8 +348,9 @@ public class LfiModule implements Scanner {
                                     return local;
                                 }
                             } catch (Exception ignored) {
-                                if (ignored instanceof CircuitBreakerException)
+                                if (ignored instanceof CircuitBreakerException) {
                                     throw (CircuitBreakerException) ignored;
+                                }
                             }
                         }
                     }
@@ -397,8 +400,9 @@ public class LfiModule implements Scanner {
                                     confirmedPhp = text.contains("<?php") || text.contains("<?")
                                             || text.contains("require") || text.contains("$_");
                                 } catch (Exception ignored) {
-                                    if (ignored instanceof CircuitBreakerException)
+                                    if (ignored instanceof CircuitBreakerException) {
                                         throw (CircuitBreakerException) ignored;
+                                    }
                                 }
 
                                 if (confirmedPhp) {
@@ -424,8 +428,9 @@ public class LfiModule implements Scanner {
                                 }
                             }
                         } catch (Exception ignored) {
-                            if (ignored instanceof CircuitBreakerException)
+                            if (ignored instanceof CircuitBreakerException) {
                                 throw (CircuitBreakerException) ignored;
+                            }
                         }
                     }
                     return local;
@@ -516,8 +521,9 @@ public class LfiModule implements Scanner {
                     HttpRequest.newBuilder().uri(URI.create(base + "/")).timeout(Duration.ofSeconds(5)).GET().build(),
                     HttpResponse.BodyHandlers.ofString(), id());
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException)
+            if (ignored instanceof CircuitBreakerException) {
                 throw (CircuitBreakerException) ignored;
+            }
         }
 
         // Wait for the log write to be flushed to disk before inclusion
@@ -543,8 +549,9 @@ public class LfiModule implements Scanner {
                     return logPath + " → output: " + m.group();
                 }
             } catch (Exception ignored) {
-                if (ignored instanceof CircuitBreakerException)
+                if (ignored instanceof CircuitBreakerException) {
                     throw (CircuitBreakerException) ignored;
+                }
             }
         }
         return null;

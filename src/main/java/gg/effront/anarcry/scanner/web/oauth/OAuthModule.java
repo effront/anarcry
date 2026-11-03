@@ -70,8 +70,9 @@ public class OAuthModule implements Scanner {
                             authorizeEndpoint = json.get("authorization_endpoint").getAsString();
                         }
                     } catch (Exception ignored) {
-                        if (ignored instanceof CircuitBreakerException)
+                        if (ignored instanceof CircuitBreakerException) {
                             throw (CircuitBreakerException) ignored;
+                        }
                     }
                     findings.add(Finding.of("OAuth", baseUrl + wk, "OAuth / OpenID Connect endpoint descoberto",
                             Severity.INFO, "Well-known: " + baseUrl + wk + " | authorize: " + authorizeEndpoint,

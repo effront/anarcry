@@ -77,8 +77,9 @@ public class CachePoisoningModule implements Scanner {
                             String cleanLoc = cleanResp.headers().firstValue("location").orElse("");
                             poisonPersisted = cleanBody.contains(PROBE_VALUE) || cleanLoc.contains(PROBE_VALUE);
                         } catch (Exception ignored) {
-                            if (ignored instanceof CircuitBreakerException)
+                            if (ignored instanceof CircuitBreakerException) {
                                 throw (CircuitBreakerException) ignored;
+                            }
                         }
 
                         Severity sev = Severity.HIGH;

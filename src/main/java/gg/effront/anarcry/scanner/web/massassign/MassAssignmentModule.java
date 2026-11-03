@@ -147,8 +147,9 @@ public class MassAssignmentModule implements Scanner {
                         log.accept("[!!] MassAssign: CRITICAL -- campo admin persistiu após GET em " + verifyUrl);
                     }
                 } catch (Exception ignored) {
-                    if (ignored instanceof CircuitBreakerException)
+                    if (ignored instanceof CircuitBreakerException) {
                         throw (CircuitBreakerException) ignored;
+                    }
                 }
 
                 if (persistedAdmin) {

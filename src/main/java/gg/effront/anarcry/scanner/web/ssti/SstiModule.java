@@ -187,8 +187,9 @@ public class SstiModule implements Scanner {
                     return rce.description() + " → output: " + m.group();
                 }
             } catch (Exception ignored) {
-                if (ignored instanceof CircuitBreakerException)
+                if (ignored instanceof CircuitBreakerException) {
                     throw (CircuitBreakerException) ignored;
+                }
             }
         }
         return null;
@@ -212,8 +213,9 @@ public class SstiModule implements Scanner {
                 }
             }
         } catch (Exception ignored) {
-            if (ignored instanceof CircuitBreakerException)
+            if (ignored instanceof CircuitBreakerException) {
                 throw (CircuitBreakerException) ignored;
+            }
         }
         return null;
     }

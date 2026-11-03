@@ -139,8 +139,9 @@ public class SqlInjectionModule implements Scanner {
                                 return local;
                             }
                         } catch (Exception ignored) {
-                            if (ignored instanceof CircuitBreakerException)
+                            if (ignored instanceof CircuitBreakerException) {
                                 throw (CircuitBreakerException) ignored;
+                            }
                         }
                     }
 
@@ -220,8 +221,9 @@ public class SqlInjectionModule implements Scanner {
                                 return local;
                             }
                         } catch (Exception ignored) {
-                            if (ignored instanceof CircuitBreakerException)
+                            if (ignored instanceof CircuitBreakerException) {
                                 throw (CircuitBreakerException) ignored;
+                            }
                         }
                     }
                 }
