@@ -40,11 +40,18 @@ public final class GeminiProvider implements ProviderAdapter {
         JsonObject body = new JsonObject();
 
         JsonArray contents = new JsonArray();
+        String lastFunctionName = null;
         for (ChatMessage msg : messages) {
             if ("system".equals(msg.role())) {
                 continue;
             }
-            contents.add(formatMessage(msg));
+            if ("assistant".equals(msg.role()) && msg.toolCallPayload() != null) {
+                lastFunctionName = parseFunctionName(msg.toolCallPayload());
+            }
+            contents.add(formatMessage(msg, lastFunctionName));
+            if ("tool".equals(msg.role())) {
+                lastFunctionName = null;
+            }
         }
         body.add("contents", contents);
 
@@ -145,7 +152,7 @@ public final class GeminiProvider implements ProviderAdapter {
         }
     }
 
-    private static JsonObject formatMessage(ChatMessage msg) {
+    private static JsonObject formatMessage(ChatMessage msg, String functionName) {
         JsonObject content = new JsonObject();
         JsonArray parts = new JsonArray();
 
@@ -162,7 +169,7 @@ public final class GeminiProvider implements ProviderAdapter {
             content.addProperty("role", "function");
             JsonObject frPart = new JsonObject();
             JsonObject funcResponse = new JsonObject();
-            funcResponse.addProperty("name", extractToolName(msg));
+            funcResponse.addProperty("name", functionName != null ? functionName : "tool");
             JsonObject responseObj = new JsonObject();
             responseObj.addProperty("result", msg.content());
             funcResponse.add("response", responseObj);
@@ -180,10 +187,15 @@ public final class GeminiProvider implements ProviderAdapter {
         return content;
     }
 
-    private static String extractToolName(ChatMessage toolMsg) {
-        // Gemini tool results don't carry an ID -- they reference the function by name.
-        // The tool call payload is on the preceding assistant message, not on the tool
-        // result itself, so we fall back to "tool" as a safe default.
+    private static String parseFunctionName(String toolCallPayload) {
+        try {
+            JsonObject call = GSON.fromJson(toolCallPayload, JsonObject.class);
+            if (call.has("name")) {
+                return call.get("name").getAsString();
+            }
+        } catch (Exception e) {
+            // malformed payload
+        }
         return "tool";
     }
 

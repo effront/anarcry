@@ -11,6 +11,7 @@ import gg.effront.anarcry.assistant.tools.GetFindingsTool;
 import gg.effront.anarcry.assistant.tools.GetScanConfigTool;
 import gg.effront.anarcry.assistant.tools.GetSitemapTool;
 import gg.effront.anarcry.assistant.tools.QueryKbTool;
+import gg.effront.anarcry.assistant.tools.ToolSchemaBuilder;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.scanner.DiscoveredPaths;
@@ -212,6 +213,10 @@ public class AssistantView extends JPanel {
         if (!availableProviders.isEmpty()) {
             providerCombo.setSelectedIndex(selectIndex);
             populateModels(availableProviders.get(selectIndex));
+            String envModel = envMap.getOrDefault("assistant_model", "");
+            if (!envModel.isEmpty()) {
+                modelCombo.setSelectedItem(envModel);
+            }
         }
         suppressComboEvents = false;
 
@@ -451,14 +456,6 @@ public class AssistantView extends JPanel {
         List<AssistantTool> toolDefs = List.of(new GetFindingsTool(findingsSupplier), new QueryKbTool(kb),
                 new ExplainCweTool(kb), new GetSitemapTool(discoveredPathsSupplier),
                 new GetScanConfigTool(contextSupplier));
-        var tools = new com.google.gson.JsonArray();
-        for (AssistantTool tool : toolDefs) {
-            var fn = new com.google.gson.JsonObject();
-            fn.addProperty("name", tool.name());
-            fn.addProperty("description", tool.description());
-            fn.add("parameters", com.google.gson.JsonParser.parseString(tool.paramsSchema()));
-            tools.add(fn);
-        }
-        return tools.toString();
+        return ToolSchemaBuilder.buildJson(toolDefs);
     }
 }

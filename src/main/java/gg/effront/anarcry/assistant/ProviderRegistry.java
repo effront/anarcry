@@ -11,7 +11,8 @@ public final class ProviderRegistry {
     }
 
     private static final List<String> GEMINI_MODELS = List.of("gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash");
-    private static final List<String> CLAUDE_MODELS = List.of("claude-sonnet-4-20250514", "claude-haiku-4-20250514");
+    private static final List<String> CLAUDE_MODELS = List.of("claude-sonnet-4-20250514", "claude-sonnet-4-6",
+            "claude-haiku-4-20250514", "claude-opus-4-20250514");
     private static final List<String> OPENAI_MODELS = List.of("gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini", "o4-mini");
     private static final List<String> OLLAMA_MODELS = List.of("llama3.1", "llama3.2", "mistral", "codellama",
             "deepseek-coder-v2", "qwen2.5-coder");
@@ -41,7 +42,9 @@ public final class ProviderRegistry {
         addLegacyIfMissing(env, providers);
 
         String ollamaUrl = env.getOrDefault("ollama_url", "");
-        providers.add(new ProviderInfo("ollama", "Ollama", ollamaUrl, OLLAMA_MODELS, "llama3.1"));
+        if (!ollamaUrl.isEmpty()) {
+            providers.add(new ProviderInfo("ollama", "Ollama", ollamaUrl, OLLAMA_MODELS, "llama3.1"));
+        }
 
         return Collections.unmodifiableList(providers);
     }
@@ -49,8 +52,11 @@ public final class ProviderRegistry {
     private static void addLegacyIfMissing(Map<String, String> env, List<ProviderInfo> providers) {
         String legacyProvider = env.getOrDefault("assistant_provider", "").toLowerCase();
         String legacyKey = env.getOrDefault("assistant_api_key", "");
-        if (legacyProvider.isEmpty() || legacyKey.isEmpty()) {
+        if (legacyKey.isEmpty()) {
             return;
+        }
+        if (legacyProvider.isEmpty()) {
+            legacyProvider = inferProvider(legacyKey);
         }
         String resolvedId = "anthropic".equals(legacyProvider) ? "claude" : legacyProvider;
         boolean alreadyPresent = providers.stream().anyMatch(p -> p.id().equals(resolvedId));
@@ -67,6 +73,19 @@ public final class ProviderRegistry {
             default -> {
             }
         }
+    }
+
+    private static String inferProvider(String apiKey) {
+        if (apiKey.startsWith("sk-ant-")) {
+            return "claude";
+        }
+        if (apiKey.startsWith("sk-")) {
+            return "openai";
+        }
+        if (apiKey.startsWith("AI")) {
+            return "gemini";
+        }
+        return "";
     }
 
     private static String firstNonEmpty(Map<String, String> env, String... keys) {

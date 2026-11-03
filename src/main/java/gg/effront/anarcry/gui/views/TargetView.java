@@ -1,5 +1,7 @@
 package gg.effront.anarcry.gui.views;
 
+import gg.effront.anarcry.gui.PrivacyFilter;
+
 import java.awt.Component;
 import java.awt.Dimension;
 import java.util.Arrays;
@@ -16,6 +18,7 @@ import javax.swing.JSpinner;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
+import javax.swing.SwingUtilities;
 
 /** Target configuration view: URL, JWT tokens, scope rules, and scan delay. */
 public class TargetView extends JPanel {
@@ -27,6 +30,12 @@ public class TargetView extends JPanel {
     private final JTextField sessionCookieField;
     private final JSpinner delaySpinner;
     private final JButton applyButton;
+
+    private String rawTarget = "https://";
+    private String rawJwt = "";
+    private String rawJwt2 = "";
+    private String rawScope = "";
+    private String rawCookie = "";
 
     private Runnable onApply = () -> {
     };
@@ -83,6 +92,8 @@ public class TargetView extends JPanel {
         add(applyButton);
 
         add(Box.createVerticalGlue());
+
+        PrivacyFilter.addListener(() -> SwingUtilities.invokeLater(this::onPrivacyChanged));
     }
 
     // -------------------------------------------------------------------------
@@ -90,24 +101,36 @@ public class TargetView extends JPanel {
     // -------------------------------------------------------------------------
 
     public String getTarget() {
-        return targetField.getText().trim();
+        if (!PrivacyFilter.isEnabled()) {
+            rawTarget = targetField.getText();
+        }
+        return rawTarget.trim();
     }
 
     public String getJwt() {
-        return jwtField.getText().trim();
+        if (!PrivacyFilter.isEnabled()) {
+            rawJwt = jwtField.getText();
+        }
+        return rawJwt.trim();
     }
 
     public String getJwt2() {
-        return jwt2Field.getText().trim();
+        if (!PrivacyFilter.isEnabled()) {
+            rawJwt2 = jwt2Field.getText();
+        }
+        return rawJwt2.trim();
     }
 
     public Set<String> getScopeHosts() {
-        return Arrays.stream(scopeField.getText().split("\\n")).map(String::trim).filter(s -> !s.isEmpty())
-                .collect(Collectors.toSet());
+        String text = PrivacyFilter.isEnabled() ? rawScope : scopeField.getText();
+        return Arrays.stream(text.split("\\n")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
     }
 
     public String getSessionCookie() {
-        return sessionCookieField.getText().trim();
+        if (!PrivacyFilter.isEnabled()) {
+            rawCookie = sessionCookieField.getText();
+        }
+        return rawCookie.trim();
     }
 
     public int getDelayMs() {
@@ -115,28 +138,68 @@ public class TargetView extends JPanel {
     }
 
     public void setTarget(String t) {
-        targetField.setText(t);
+        rawTarget = t != null ? t : "";
+        targetField.setText(PrivacyFilter.isEnabled() ? PrivacyFilter.apply(rawTarget) : rawTarget);
     }
 
     public void setJwt(String j) {
-        jwtField.setText(j);
+        rawJwt = j != null ? j : "";
+        jwtField.setText(PrivacyFilter.isEnabled() ? PrivacyFilter.apply(rawJwt) : rawJwt);
     }
 
     public void setJwt2(String j) {
-        jwt2Field.setText(j);
+        rawJwt2 = j != null ? j : "";
+        jwt2Field.setText(PrivacyFilter.isEnabled() ? PrivacyFilter.apply(rawJwt2) : rawJwt2);
     }
 
     public void setScopeHosts(String hosts) {
-        scopeField.setText(hosts);
+        rawScope = hosts != null ? hosts : "";
+        scopeField.setText(PrivacyFilter.isEnabled() ? PrivacyFilter.apply(rawScope) : rawScope);
     }
 
     public void setSessionCookie(String cookie) {
-        sessionCookieField.setText(cookie);
+        rawCookie = cookie != null ? cookie : "";
+        sessionCookieField.setText(PrivacyFilter.isEnabled() ? PrivacyFilter.apply(rawCookie) : rawCookie);
     }
 
     public void setOnApply(Runnable r) {
         this.onApply = r != null ? r : () -> {
         };
+    }
+
+    // -------------------------------------------------------------------------
+    // Privacy
+    // -------------------------------------------------------------------------
+
+    private void onPrivacyChanged() {
+        if (PrivacyFilter.isEnabled()) {
+            rawTarget = targetField.getText();
+            rawJwt = jwtField.getText();
+            rawJwt2 = jwt2Field.getText();
+            rawScope = scopeField.getText();
+            rawCookie = sessionCookieField.getText();
+            targetField.setText(PrivacyFilter.apply(rawTarget));
+            jwtField.setText(PrivacyFilter.apply(rawJwt));
+            jwt2Field.setText(PrivacyFilter.apply(rawJwt2));
+            scopeField.setText(PrivacyFilter.apply(rawScope));
+            sessionCookieField.setText(PrivacyFilter.apply(rawCookie));
+            targetField.setEditable(false);
+            jwtField.setEditable(false);
+            jwt2Field.setEditable(false);
+            scopeField.setEditable(false);
+            sessionCookieField.setEditable(false);
+        } else {
+            targetField.setText(rawTarget);
+            jwtField.setText(rawJwt);
+            jwt2Field.setText(rawJwt2);
+            scopeField.setText(rawScope);
+            sessionCookieField.setText(rawCookie);
+            targetField.setEditable(true);
+            jwtField.setEditable(true);
+            jwt2Field.setEditable(true);
+            scopeField.setEditable(true);
+            sessionCookieField.setEditable(true);
+        }
     }
 
     // -------------------------------------------------------------------------

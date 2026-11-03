@@ -49,11 +49,13 @@ import gg.effront.anarcry.assistant.AiAssistant;
 import gg.effront.anarcry.assistant.AssistantConfig;
 import gg.effront.anarcry.assistant.ContextBuilder;
 import gg.effront.anarcry.assistant.ProviderRegistry;
+import gg.effront.anarcry.assistant.tools.AssistantTool;
 import gg.effront.anarcry.assistant.tools.ExplainCweTool;
 import gg.effront.anarcry.assistant.tools.GetFindingsTool;
 import gg.effront.anarcry.assistant.tools.GetScanConfigTool;
 import gg.effront.anarcry.assistant.tools.GetSitemapTool;
 import gg.effront.anarcry.assistant.tools.QueryKbTool;
+import gg.effront.anarcry.assistant.tools.ToolSchemaBuilder;
 import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.scanner.DiscoveredPaths;
 
@@ -584,17 +586,10 @@ public class AnarCryTui {
             return "[]";
         }
         KnowledgeBase kb = KnowledgeBase.getInstance();
-        var toolDefs = List.of(new GetFindingsTool(() -> findingHistory), new QueryKbTool(kb), new ExplainCweTool(kb),
-                new GetSitemapTool(() -> discoveredPaths), new GetScanConfigTool(() -> scanRunner.getLastContext()));
-        var tools = new com.google.gson.JsonArray();
-        for (var tool : toolDefs) {
-            var fn = new com.google.gson.JsonObject();
-            fn.addProperty("name", tool.name());
-            fn.addProperty("description", tool.description());
-            fn.add("parameters", com.google.gson.JsonParser.parseString(tool.paramsSchema()));
-            tools.add(fn);
-        }
-        return tools.toString();
+        List<AssistantTool> toolDefs = List.of(new GetFindingsTool(() -> findingHistory), new QueryKbTool(kb),
+                new ExplainCweTool(kb), new GetSitemapTool(() -> discoveredPaths),
+                new GetScanConfigTool(() -> scanRunner.getLastContext()));
+        return ToolSchemaBuilder.buildJson(toolDefs);
     }
 
     private Component buildDashboardContent() {

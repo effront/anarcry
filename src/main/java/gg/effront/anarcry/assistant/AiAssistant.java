@@ -84,6 +84,12 @@ public final class AiAssistant {
 
     public void sendStreaming(String userMessage, String systemPrompt, String toolsJson, Consumer<String> tokenCallback)
             throws Exception {
+        if (!tools.isEmpty()) {
+            String result = send(userMessage, systemPrompt, toolsJson);
+            tokenCallback.accept(result);
+            return;
+        }
+
         conversationHistory.add(ChatMessage.user(userMessage));
 
         List<ChatMessage> snapshot;
