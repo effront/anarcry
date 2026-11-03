@@ -10,7 +10,9 @@ import java.net.http.HttpResponse;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
@@ -24,12 +26,72 @@ public final class WafEvasion {
     public static final List<Strategy> PROBE_ORDER = List.of(Strategy.DOUBLE_ENCODE, Strategy.CASE_MUTATION,
             Strategy.UNICODE_NORMALIZE, Strategy.CHARSET_EBCDIC, Strategy.HPP);
 
+    public enum SignalType {
+        COOKIE, HEADER, URL, CONTENT
+    }
+
+    public record WafSignal(SignalType type, String pattern, int confidence) {
+    }
+
+    public record WafSignature(String id, String name, String category, List<WafSignal> signals) {
+    }
+
+    public record WafDetection(String id, String name, String category, int confidence, List<String> hits) {
+    }
+
     private static final Pattern WAF_SERVER = Pattern
             .compile("(?i)(cloudflare|akamai|incapsula|sucuri|ddos-guard|awselb|imperva|f5|barracuda)");
 
     private static final Pattern WAF_BODY = Pattern
             .compile("(?i)(blocked|access denied|attention required|request blocked|"
                     + "web application firewall|security policy|not acceptable)");
+
+    @SuppressWarnings("checkstyle:LineLengthCheck")
+    private static final List<WafSignature> SIGNATURES = List.of(new WafSignature("akamai", "Akamai", "waf",
+            List.of(new WafSignal(SignalType.COOKIE, "_abck", 100), new WafSignal(SignalType.COOKIE, "ak_bmsc", 90),
+                    new WafSignal(SignalType.URL, "/akam/", 80), new WafSignal(SignalType.CONTENT, "sensor_data", 70))),
+            new WafSignature("aws-waf", "AWS WAF", "waf",
+                    List.of(new WafSignal(SignalType.COOKIE, "aws-waf-token", 100),
+                            new WafSignal(SignalType.URL, "/challenge.js", 80),
+                            new WafSignal(SignalType.CONTENT, "awswaf", 90))),
+            new WafSignature("cloudflare", "Cloudflare", "waf",
+                    List.of(new WafSignal(SignalType.COOKIE, "__cf_bm", 90),
+                            new WafSignal(SignalType.COOKIE, "cf_clearance", 100),
+                            new WafSignal(SignalType.URL, "cdn-cgi/challenge-platform", 95),
+                            new WafSignal(SignalType.HEADER, "cf-mitigated", 100),
+                            new WafSignal(SignalType.HEADER, "cf-ray", 80))),
+            new WafSignature("datadome", "DataDome", "waf",
+                    List.of(new WafSignal(SignalType.COOKIE, "datadome", 100),
+                            new WafSignal(SignalType.HEADER, "x-datadome-cid", 100))),
+            new WafSignature("imperva", "Imperva", "waf",
+                    List.of(new WafSignal(SignalType.COOKIE, "incap_ses_", 100),
+                            new WafSignal(SignalType.COOKIE, "reese84", 90),
+                            new WafSignal(SignalType.COOKIE, "visid_incap_", 90),
+                            new WafSignal(SignalType.URL, "/_Incapsula_Resource", 80))),
+            new WafSignature("perimeterx", "PerimeterX", "waf", List.of(new WafSignal(SignalType.COOKIE, "_px2", 100),
+                    new WafSignal(SignalType.COOKIE, "_px3", 100), new WafSignal(SignalType.COOKIE, "_pxhd", 90),
+                    new WafSignal(SignalType.CONTENT, "_pxAction", 80))),
+            new WafSignature("kasada", "Kasada", "waf",
+                    List.of(new WafSignal(SignalType.URL, "ips.js", 80),
+                            new WafSignal(SignalType.CONTENT, "kasada", 95))),
+            new WafSignature("reblaze", "Reblaze", "waf",
+                    List.of(new WafSignal(SignalType.COOKIE, "rbzid", 100),
+                            new WafSignal(SignalType.COOKIE, "rbzsessionid", 90))),
+            new WafSignature("hcaptcha", "hCaptcha", "captcha",
+                    List.of(new WafSignal(SignalType.URL, "hcaptcha.com", 100),
+                            new WafSignal(SignalType.CONTENT, "h-captcha", 90))),
+            new WafSignature("recaptcha", "reCAPTCHA", "captcha",
+                    List.of(new WafSignal(SignalType.URL, "recaptcha/api", 100),
+                            new WafSignal(SignalType.CONTENT, "grecaptcha", 90))),
+            new WafSignature("funcaptcha", "FunCaptcha", "captcha",
+                    List.of(new WafSignal(SignalType.URL, "arkoselabs.com", 100),
+                            new WafSignal(SignalType.CONTENT, "ArkoseEnforce", 90))),
+            new WafSignature("geetest", "GeeTest", "captcha",
+                    List.of(new WafSignal(SignalType.URL, "api.geetest.com", 100),
+                            new WafSignal(SignalType.CONTENT, "initGeetest", 90))),
+            new WafSignature("shape", "Shape Security", "waf",
+                    List.of(new WafSignal(SignalType.CONTENT, "shapesecurity", 50))),
+            new WafSignature("sucuri", "Sucuri", "waf", List.of(new WafSignal(SignalType.CONTENT, "sucuri", 50))));
 
     private WafEvasion() {
     }
@@ -136,6 +198,58 @@ public final class WafEvasion {
         }
         var m = WAF_SERVER.matcher(serverHeader);
         return m.find() ? m.group(1) : "";
+    }
+
+    // -- Multi-vendor WAF/captcha signature detection --
+
+    public static List<WafDetection> detectProviders(int status, Map<String, List<String>> headers, String body,
+            String url) {
+        List<WafDetection> detections = new ArrayList<>();
+
+        // Collect Set-Cookie values for cookie signal matching
+        List<String> setCookies = new ArrayList<>();
+        for (var entry : headers.entrySet()) {
+            if ("set-cookie".equalsIgnoreCase(entry.getKey())) {
+                setCookies.addAll(entry.getValue());
+            }
+        }
+
+        String bodyLower = (body != null) ? body.toLowerCase(Locale.ROOT) : "";
+        String urlSafe = (url != null) ? url : "";
+
+        for (WafSignature sig : SIGNATURES) {
+            int maxConfidence = 0;
+            List<String> hits = new ArrayList<>();
+
+            for (WafSignal signal : sig.signals()) {
+                boolean matched = switch (signal.type()) {
+                    case COOKIE -> matchesCookie(setCookies, signal.pattern());
+                    case HEADER -> !firstHeader(headers, signal.pattern()).isEmpty();
+                    case URL -> urlSafe.contains(signal.pattern());
+                    case CONTENT -> bodyLower.contains(signal.pattern().toLowerCase(Locale.ROOT));
+                };
+
+                if (matched) {
+                    hits.add(signal.type() + ":" + signal.pattern());
+                    maxConfidence = Math.max(maxConfidence, signal.confidence());
+                }
+            }
+
+            if (!hits.isEmpty()) {
+                detections
+                        .add(new WafDetection(sig.id(), sig.name(), sig.category(), maxConfidence, List.copyOf(hits)));
+            }
+        }
+        return detections;
+    }
+
+    private static boolean matchesCookie(List<String> setCookies, String cookieName) {
+        for (String sc : setCookies) {
+            if (sc.startsWith(cookieName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // -- JS Challenge detection (Vercel / Cloudflare managed challenge) --
