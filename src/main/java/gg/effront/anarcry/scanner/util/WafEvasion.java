@@ -93,6 +93,8 @@ public final class WafEvasion {
                     List.of(new WafSignal(SignalType.CONTENT, "shapesecurity", 50))),
             new WafSignature("sucuri", "Sucuri", "waf", List.of(new WafSignal(SignalType.CONTENT, "sucuri", 50))));
 
+    private static final Pattern CF_CTYPE_PATTERN = Pattern.compile("cType['\"]?\\s*[:=]\\s*['\"]([A-Za-z_-]+)['\"]");
+
     private WafEvasion() {
     }
 
@@ -146,7 +148,7 @@ public final class WafEvasion {
     // -- Convenience: return evasion-transformed payload if WAF detected --
 
     public static String evasionPayload(ScanContext ctx, String payload) {
-        if (!ctx.wafState().isWafDetected()) {
+        if (!ctx.wafState().isWafDetected() || ctx.wafState().isManaged()) {
             return payload;
         }
         Strategy s = ctx.wafState().effectiveStrategy();
@@ -250,6 +252,36 @@ public final class WafEvasion {
             }
         }
         return false;
+    }
+
+    // -- Cloudflare challenge type classification --
+
+    public static String parseCfChallengeType(String body, Map<String, List<String>> headers, String url) {
+        // 1. cf-mitigated header -- strongest signal
+        String cfMitigated = firstHeader(headers, "cf-mitigated");
+        if ("challenge".equalsIgnoreCase(cfMitigated)) {
+            return "managed";
+        }
+
+        // 2. _cf_chl_opt block in body -- extract cType value
+        if (body != null && body.contains("_cf_chl_opt")) {
+            var matcher = CF_CTYPE_PATTERN.matcher(body);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+        }
+
+        // 3. Challenge platform URL path
+        if (url != null && url.contains("cdn-cgi/challenge-platform")) {
+            return "managed";
+        }
+
+        // 4. Turnstile markers in body
+        if (body != null && (body.contains("turnstile.js") || body.contains("cf-turnstile"))) {
+            return "turnstile";
+        }
+
+        return "";
     }
 
     // -- JS Challenge detection (Vercel / Cloudflare managed challenge) --

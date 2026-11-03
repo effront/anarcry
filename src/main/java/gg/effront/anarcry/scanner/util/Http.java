@@ -59,8 +59,13 @@ public class Http {
         if (wafBlock || challenge) {
             Consumer<String> log = ctx.wafState().runtimeLog();
             if (!ctx.wafState().isWafDetected()) {
-                String product = WafEvasion.detectWafProduct(serverHdr);
-                ctx.wafState().markWafDetected(product.isEmpty() ? serverHdr : product);
+                var providers = WafEvasion.detectProviders(status, resp.headers().map(), bodyStr, req.uri().toString());
+                if (!providers.isEmpty()) {
+                    ctx.wafState().markWafDetected(providers.get(0).name());
+                } else {
+                    String product = WafEvasion.detectWafProduct(serverHdr);
+                    ctx.wafState().markWafDetected(product.isEmpty() ? serverHdr : product);
+                }
                 if (log != null) {
                     log.accept("[!] Runtime WAF detectado via " + moduleId + " -- " + ctx.wafState().wafProduct()
                             + " (HTTP " + status + ")");
@@ -70,6 +75,19 @@ public class Http {
                     if (log != null) {
                         log.accept("[*] Runtime: ativando StealthHttpClient (Chrome JA3+H2)");
                     }
+                }
+            }
+            // Classify block type at runtime if not already set
+            if (ctx.wafState().blockType() == WafState.WafBlockType.NONE) {
+                String cfType = WafEvasion.parseCfChallengeType(bodyStr, resp.headers().map(), req.uri().toString());
+                if ("managed".equals(cfType) || "interactive".equals(cfType)) {
+                    ctx.wafState().markBlockType(WafState.WafBlockType.MANAGED_CHALLENGE);
+                } else if ("turnstile".equals(cfType)) {
+                    ctx.wafState().markBlockType(WafState.WafBlockType.TURNSTILE);
+                } else if ("jsd".equals(cfType) || challenge) {
+                    ctx.wafState().markBlockType(WafState.WafBlockType.JS_CHALLENGE);
+                } else {
+                    ctx.wafState().markBlockType(WafState.WafBlockType.RULE_BLOCK);
                 }
             }
             cb.recordBlock(log);
