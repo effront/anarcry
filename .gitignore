@@ -5,11 +5,9 @@ build/
 # Gradle wrapper JAR must be committed for CI
 !gradle/wrapper/gradle-wrapper.jar
 
-# Scan reports (generated output)
-docs/reports/anarcry-report-*
-docs/reports/anarcry-findings-*
-docs/reports/h1-report-*
-docs/reports/bugcrowd-report-*
+# Scan reports and internal docs (may contain target data)
+docs/reports/
+docs/archive/
 
 # IDE
 .idea/
