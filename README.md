@@ -30,8 +30,8 @@
 |  ANARCRY -- Java 27 Security Scanner                                      |
 +===========================================================================+
 |  Security scanner for bug bounty. 25 attack modules, parallel execution,  |
-|  CVSS v3.1 auto-scoring, knowledge base with 26 entries, export to        |
-|  HackerOne and Bugcrowd. TUI + Swing GUI + AI Assistant.                  |
+|  CVSS v3.1 auto-scoring, knowledge base with 26 entries, WAF detection    |
+|  (14 providers) + circuit breaker. TUI + Swing GUI + AI Assistant.        |
 +===========================================================================+
 ```
 
@@ -47,7 +47,7 @@
 |  [ ] Infra           -- port scan, SSH/Redis/Docker/panel fingerprint     |
 |                                                                           |
 |  CRYPTO / INFRASTRUCTURE                                                  |
-|  [x] TLS             -- version, weak cipher suites, expired cert, SHA-1  |
+|  [x] TLS             -- version, weak ciphers (raw TLS probe), cert, SHA-1|
 |  [x] Headers         -- CSP, X-Frame-Options, cookies, CORP/CORB          |
 |  [x] HSTS            -- missing HSTS, weak max-age, includeSubDomains     |
 |  [x] JWT             -- alg:none, RS256->HS256, JWK injection, kid,       |
@@ -105,7 +105,7 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.8.0.jar
+java -jar build/libs/anarcry-1.9.0.jar
 ```
 
 Or use the launcher (auto-builds if source changed):
@@ -123,7 +123,7 @@ With `.env.local` for pre-configured targets:
 Launch in GUI mode (Swing + FlatLaf):
 
 ```bash
-java -jar build/libs/anarcry-1.8.0.jar --gui
+java -jar build/libs/anarcry-1.9.0.jar --gui
 ```
 
 ---
@@ -329,10 +329,14 @@ src/main/java/gg/effront/anarcry/
 |   +-- ScanEvent.java             Progress events
 |   +-- SuppressionLoader.java     Loads .anarcry-ignore.json
 |   +-- util/
-|   |   +-- Http.java              HTTP send wrapper with request logging
+|   |   +-- Http.java              HTTP send wrapper with request logging, WAF detection
 |   |   +-- HttpClientFactory.java Shared HttpClient (HTTP/2, no-redirect, follow-one)
 |   |   +-- TlsUtil.java           BouncyCastle TLS context setup
-|   +-- crypto/                    5 modules: TLS, Headers, HSTS, JWT (5 probes), PQC
+|   |   +-- WafState.java          WAF/CDN state: block type, circuit breakers, stealth
+|   |   +-- WafEvasion.java        5 bypass strategies + 14-vendor signature detection
+|   |   +-- CircuitBreaker.java    Per-module WAF block counter with dynamic threshold
+|   +-- crypto/                    5 modules: TLS (+ RawTlsProbe), Headers, HSTS,
+|   |                               JWT (5 probes), PQC
 |   +-- web/                       20 modules: SQLi, XSS, LFI, CmdInject, CORS, OAuth,
 |                                   OpenRedirect, SSRF, GraphQL, CRLF, XXE, SSTI, IDOR,
 |                                   HostHeader, Actuator, MassAssign, CachePoisoning,
@@ -387,7 +391,14 @@ src/main/java/gg/effront/anarcry/
 ```
 ScanRunner.run(ScanContext)
   -> Phase 1: run Crawler (blocking) to populate DiscoveredPaths
+  -> Phase 1.5: WAF detection -- baseline GET + canary probe
+     -> multi-vendor signature detection (14 providers)
+     -> classify block type: RULE_BLOCK / MANAGED_CHALLENGE / JS_CHALLENGE / TURNSTILE
+     -> probe evasion strategies (skip for managed challenges)
   -> Phase 2: submit remaining modules to thread pool (parallelism=4)
+     -> per-module timeout (180s via CompletableFuture.orTimeout)
+     -> per-module circuit breaker (8 blocks, 3 for managed challenges)
+     -> runtime WAF detection + stealth auto-activation in Http.send()
      -> modules consume Crawler-discovered paths for smarter probing
   -> each module: Scanner.scan() -> List<Finding>
   -> deduplicate by module|endpoint|title
@@ -447,6 +458,21 @@ Built-in LLM-powered security analyst available in both TUI and GUI. Supports fo
 
 ## 10 - Changelog
 
+### v1.9.0
+
+- **Per-module timeout**: 180s timeout via `CompletableFuture.orTimeout()` -- stuck modules no longer block the entire scan
+- **Circuit breaker**: per-module consecutive WAF block counter (threshold 8, or 3 for managed challenges) -- aborts module when WAF is persistently blocking
+- **Multi-vendor WAF signature detection**: 14 providers (Akamai, AWS WAF, Cloudflare, DataDome, Imperva, PerimeterX, Kasada, Reblaze, Sucuri, Shape, hCaptcha, reCAPTCHA, FunCaptcha, GeeTest) detected via cookie/header/URL/content signals with confidence scores
+- **CF challenge classification**: distinguishes RULE_BLOCK vs MANAGED_CHALLENGE vs JS_CHALLENGE vs TURNSTILE -- evasion strategies skipped for managed challenges (per-session, not per-payload)
+- **CDN vs WAF separation**: passive CDN detection (cf-ray) no longer marks WAF as active -- WAF only marked on confirmed blocking, preventing false positive stealth activation on Cloudflare CDN sites
+- **Raw TLS ClientHello probe**: tests weak cipher suites (RC4, NULL, ANON, 3DES, EXPORT) by building raw TLS packets with hardcoded cipher IDs -- bypasses JVM and OpenSSL 3.0 cipher removal
+- **Runtime WAF detection**: `Http.send()` detects WAF mid-scan and auto-activates stealth mode, classifies block type, and adjusts circuit breaker threshold dynamically
+- **Future recovery**: timed-out or circuit-broken modules no longer abort the entire scan -- `.handle()` recovers failed futures so remaining modules complete normally
+- **RawTlsProbe scope validation**: private/link-local/loopback IP check before raw socket connection (defense-in-depth against SSRF)
+
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
+
 ### v1.8.0
 
 - **AI Assistant integration**: multi-provider LLM assistant (Claude, OpenAI, Gemini, Ollama) with SSE streaming, tool use, and conversation history -- available in both TUI (AssistantPanel) and GUI (AssistantView)
@@ -459,9 +485,6 @@ Built-in LLM-powered security analyst available in both TUI and GUI. Supports fo
 - **IDOR/Crawler progress logging**: progress messages added to silent loops in IDOR and Crawler modules
 - **Knowledge base enrichment**: Escalation Techniques, Hunting Methodology, and False Positive Indicators sections added to KB entries from Bug Bounty Bootcamp
 - **WAF evasion KB**: new knowledge-base entry for WAF bypass techniques with Cloudflare-specific strategies
-
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v1.7.2
 
