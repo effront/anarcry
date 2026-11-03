@@ -56,7 +56,6 @@ import gg.effront.anarcry.assistant.tools.GetSitemapTool;
 import gg.effront.anarcry.assistant.tools.QueryKbTool;
 import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.scanner.DiscoveredPaths;
-import gg.effront.anarcry.scanner.ScanContext;
 
 import java.io.IOException;
 import java.util.ArrayList;
