@@ -63,6 +63,8 @@ public class ScanRunner {
         return t;
     });
 
+    private volatile ScanContext lastScanContext;
+
     private Runnable onScanStart = () -> {
     };
     private Runnable onScanFinish = () -> {
@@ -101,7 +103,12 @@ public class ScanRunner {
         return List.copyOf(testedModules);
     }
 
+    public ScanContext getLastContext() {
+        return lastScanContext;
+    }
+
     public void run(ScanContext ctx) {
+        lastScanContext = ctx;
         executor.submit(() -> {
             try {
                 testedClean.clear();
@@ -254,7 +261,7 @@ public class ScanRunner {
                 safeLog.accept("[+] " + enricher.id() + ": " + findings.size() + " finding(s), "
                         + ctx.discoveredPaths().pathCount() + " paths, " + ctx.discoveredPaths().parameterCount()
                         + " params discovered");
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 safeLog.accept("[!] " + enricher.id() + " erro: " + e.getMessage());
             }
             eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, enricher.id(), moduleIndex, moduleCount));
@@ -369,7 +376,7 @@ public class ScanRunner {
                 CompletableFuture<List<Finding>> future = CompletableFuture.supplyAsync(() -> {
                     try {
                         return module.scan(ctx, safeLog);
-                    } catch (Exception e) {
+                    } catch (Throwable e) {
                         throw new RuntimeException(e);
                     }
                 }, modulePool);
