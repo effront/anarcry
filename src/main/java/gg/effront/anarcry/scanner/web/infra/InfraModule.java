@@ -107,12 +107,17 @@ public class InfraModule implements Scanner {
         List<Integer> openPorts;
         NmapScan nmapScan = null;
 
+        boolean wafActive = ctx.wafState().isWafDetected();
+        if (wafActive) {
+            log.accept("[~] Infra: WAF/CDN detectado -- host pode estar atras de proxy, scan reduzido");
+        }
+
         if (nmapAvailable()) {
             boolean root = isRoot();
             log.accept("[~] Infra: nmap detectado"
                     + (root ? " (root -- SYN scan + OS detection)" : " (connect scan + service detection)"));
             try {
-                nmapScan = runNmap(host, portList, root, log);
+                nmapScan = runNmap(host, portList, root, wafActive, log);
                 openPorts = nmapScan.openPorts();
                 log.accept("[~] Infra: nmap encontrou " + openPorts.size() + " porta(s) abertas");
                 if (!nmapScan.osGuess().isBlank()) {
@@ -283,7 +288,8 @@ public class InfraModule implements Scanner {
 
     // --- nmap integration ---
 
-    private NmapScan runNmap(String host, String portList, boolean root, Consumer<String> log) throws Exception {
+    private NmapScan runNmap(String host, String portList, boolean root, boolean wafActive, Consumer<String> log)
+            throws Exception {
         List<String> cmd = new ArrayList<>();
         cmd.add("nmap");
         cmd.add("-Pn");
@@ -295,7 +301,7 @@ public class InfraModule implements Scanner {
         cmd.add("-sV");
         cmd.add("--script=ssh-auth-methods,banner");
         cmd.add("--host-timeout");
-        cmd.add("90s");
+        cmd.add(wafActive ? "45s" : "90s");
         cmd.add("-p");
         cmd.add(portList);
         cmd.add("-oX");

@@ -68,6 +68,9 @@ public class LfiModule implements Scanner {
     private static final List<String> FILE_PARAM_KEYWORDS = List.of("file", "page", "include", "path", "template",
             "load", "read", "dir", "folder", "view", "doc", "document", "resource");
 
+    /** High-signal subset for WAF-detected targets. */
+    private static final List<String> WAF_FILE_PARAMS = List.of("file", "page", "include", "path", "template");
+
     // -------------------------------------------------------------------------
     // Payload records
     // -------------------------------------------------------------------------
@@ -168,15 +171,14 @@ public class LfiModule implements Scanner {
         AtomicReference<String> confirmedParamRef = new AtomicReference<>();
         AtomicReference<String> confirmedPayloadRef = new AtomicReference<>();
 
-        List<Payload> linuxPayloads = mergeKbPayloads(false);
+        List<Payload> allLinux = mergeKbPayloads(false);
         List<Payload> windowsPayloads = mergeKbPayloads(true);
         int concurrency = ctx.config().probeConcurrency();
 
         // -----------------------------------------------------------------------
         // Phase 1: Linux traversal (parallel by path)
         // -----------------------------------------------------------------------
-        log.accept("[~] LFI: fase 1 -- " + linuxPayloads.size() + " Linux payloads (" + PROBE_PATHS.size() + " paths × "
-                + FILE_PARAM_KEYWORDS.size() + " params)");
+        log.accept("[~] LFI: fase 1 -- Linux payloads (" + PROBE_PATHS.size() + " paths)");
 
         AtomicBoolean cancelLinux = new AtomicBoolean(false);
         List<Callable<List<Finding>>> linuxTasks = new ArrayList<>();
@@ -189,7 +191,11 @@ public class LfiModule implements Scanner {
                 if (cancelLinux.get()) {
                     return local;
                 }
-                log.accept("[~] LFI: [" + (idx + 1) + "/" + PROBE_PATHS.size() + "] " + path);
+                boolean waf = ctx.wafState().isWafDetected();
+                List<String> fp = waf ? WAF_FILE_PARAMS : FILE_PARAM_KEYWORDS;
+                List<Payload> lp = waf && allLinux.size() > 3 ? allLinux.subList(0, 3) : allLinux;
+                log.accept("[~] LFI: [" + (idx + 1) + "/" + PROBE_PATHS.size() + "] " + path + " -- " + fp.size()
+                        + " params x " + lp.size() + " payloads" + (waf ? " (WAF mode)" : ""));
 
                 // Probe the path without params to fingerprint PHP and Server header
                 try {
@@ -216,7 +222,7 @@ public class LfiModule implements Scanner {
                 } catch (Exception ignored) {
                 }
 
-                for (String param : FILE_PARAM_KEYWORDS) {
+                for (String param : fp) {
                     if (cancelLinux.get()) {
                         return local;
                     }
@@ -228,7 +234,7 @@ public class LfiModule implements Scanner {
                         continue;
                     }
 
-                    for (Payload payload : linuxPayloads) {
+                    for (Payload payload : lp) {
                         if (cancelLinux.get()) {
                             return local;
                         }
@@ -286,9 +292,8 @@ public class LfiModule implements Scanner {
         // -----------------------------------------------------------------------
         // Phase 2: Windows traversal (only if Linux not confirmed -- parallel by path)
         // -----------------------------------------------------------------------
-        if (!linuxConfirmed) {
-            log.accept("[~] LFI: fase 2 -- " + windowsPayloads.size() + " Windows payloads (" + PROBE_PATHS.size()
-                    + " paths × " + FILE_PARAM_KEYWORDS.size() + " params)");
+        if (!linuxConfirmed && !ctx.wafState().isWafDetected()) {
+            log.accept("[~] LFI: fase 2 -- Windows payloads (" + PROBE_PATHS.size() + " paths)");
 
             AtomicBoolean cancelWindows = new AtomicBoolean(false);
             List<Callable<List<Finding>>> windowsTasks = new ArrayList<>();
@@ -298,12 +303,13 @@ public class LfiModule implements Scanner {
                 final String path = PROBE_PATHS.get(wi);
                 windowsTasks.add(() -> {
                     List<Finding> local = new ArrayList<>();
-                    if (cancelWindows.get()) {
+                    if (cancelWindows.get() || ctx.wafState().isWafDetected()) {
                         return local;
                     }
                     log.accept("[~] LFI win: [" + (idx + 1) + "/" + PROBE_PATHS.size() + "] " + path);
 
-                    for (String param : FILE_PARAM_KEYWORDS) {
+                    List<String> wfp = ctx.wafState().isWafDetected() ? WAF_FILE_PARAMS : FILE_PARAM_KEYWORDS;
+                    for (String param : wfp) {
                         if (cancelWindows.get()) {
                             return local;
                         }
@@ -374,7 +380,8 @@ public class LfiModule implements Scanner {
                         return local;
                     }
 
-                    for (String param : FILE_PARAM_KEYWORDS) {
+                    List<String> pfp = ctx.wafState().isWafDetected() ? WAF_FILE_PARAMS : FILE_PARAM_KEYWORDS;
+                    for (String param : pfp) {
                         if (cancelPhp.get()) {
                             return local;
                         }

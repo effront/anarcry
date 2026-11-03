@@ -51,7 +51,7 @@ import java.util.function.Consumer;
 public class ScanRunner {
 
     private static final int DEFAULT_PARALLELISM = 4;
-    private static final long MODULE_TIMEOUT_SECONDS = 180;
+    private static final long MODULE_TIMEOUT_SECONDS = 300;
 
     private final Consumer<String> logCb;
     private final Consumer<Finding> findingCb;

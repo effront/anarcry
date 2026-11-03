@@ -36,6 +36,9 @@ public class SqlInjectionModule implements Scanner {
     private static final List<String> PARAMS = List.of("q", "query", "id", "user", "username", "email", "search",
             "sort", "order", "filter", "page");
 
+    // High-signal subset for WAF-detected targets
+    private static final List<String> WAF_PARAMS = List.of("q", "id", "username", "search", "filter");
+
     // Phase 1 -- error-based payloads
     private static final List<String> ERROR_PAYLOADS = List.of("'", "\"", "')", "' AND 1=1--", "' AND 1=2--");
 
@@ -76,11 +79,8 @@ public class SqlInjectionModule implements Scanner {
         String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
         List<String> errorPayloads = mergeKbErrorPayloads();
-        log.accept("[~] SQLi: iniciando error-based e time-based em " + base + " (" + PATHS.size() + " paths x "
-                + PARAMS.size() + " params, " + errorPayloads.size() + " error payloads)");
-        if (ctx.wafState().browserTransport() != null) {
-            log.accept("[~] SQLi: BrowserTransport ativo -- phase 2 (time-based blind) desabilitada");
-        }
+        log.accept("[~] SQLi: iniciando em " + base + " (" + PATHS.size() + " paths, " + errorPayloads.size()
+                + " error payloads)");
 
         AtomicBoolean cancel = new AtomicBoolean(false);
         List<Callable<List<Finding>>> tasks = new ArrayList<>();
@@ -90,8 +90,16 @@ public class SqlInjectionModule implements Scanner {
             final int pathIdx = pi;
             tasks.add(() -> {
                 List<Finding> local = new ArrayList<>();
-                log.accept("[~] SQLi: [" + (pathIdx + 1) + "/" + PATHS.size() + "] " + path);
-                for (String param : PARAMS) {
+                boolean waf = ctx.wafState().isWafDetected();
+                boolean noTimeBased = waf || ctx.wafState().browserTransport() != null;
+                List<String> effectiveParams = waf ? WAF_PARAMS : PARAMS;
+                log.accept("[~] SQLi: [" + (pathIdx + 1) + "/" + PATHS.size() + "] " + path + " -- "
+                        + effectiveParams.size() + " params" + (waf ? " (WAF mode)" : ""));
+                if (noTimeBased && pathIdx == 0) {
+                    log.accept("[~] SQLi: time-based phase desabilitada"
+                            + (waf ? " (WAF mode)" : " -- BrowserTransport ativo"));
+                }
+                for (String param : effectiveParams) {
                     if (cancel.get()) {
                         return local;
                     }
@@ -150,7 +158,7 @@ public class SqlInjectionModule implements Scanner {
                     }
 
                     // -- Phase 2: Time-Based Blind --
-                    if (ctx.wafState().browserTransport() != null) {
+                    if (noTimeBased) {
                         return local;
                     }
                     long b1 = measureRtt(ctx, hc, base + path + "?" + param + "=1", log);

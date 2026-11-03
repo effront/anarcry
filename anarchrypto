@@ -17,8 +17,22 @@ elif [ -n "$(find "$DIR" -maxdepth 1 -newer "$JAR" \( -name '*.gradle' -o -name 
 fi
 
 if [ "$NEEDS_BUILD" = true ]; then
-    echo "AnarCry: building v${VERSION:-?} ..."
-    (cd "$DIR" && ./gradlew shadowJar --quiet --console=plain) || { echo "Build failed"; exit 1; }
+    printf "AnarCry: building v${VERSION:-?} "
+    (cd "$DIR" && ./gradlew shadowJar --quiet --console=plain) &
+    BUILD_PID=$!
+    SPIN='|/-\'
+    i=0
+    while kill -0 "$BUILD_PID" 2>/dev/null; do
+        printf "\rAnarCry: building v${VERSION:-?} [${SPIN:i++%4:1}]"
+        sleep 0.15
+    done
+    wait "$BUILD_PID"
+    BUILD_RC=$?
+    printf "\r\033[K"
+    if [ $BUILD_RC -ne 0 ]; then
+        echo "AnarCry: build failed"; exit 1
+    fi
+    echo "AnarCry: v${VERSION} built"
     # Remove old versioned JARs that don't match the current version
     for old in "$DIR"/build/libs/anarcry-*.jar; do
         [ "$old" != "$JAR" ] && rm -f "$old"

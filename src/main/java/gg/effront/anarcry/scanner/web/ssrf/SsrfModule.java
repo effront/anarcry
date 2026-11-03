@@ -27,6 +27,7 @@ import java.util.regex.Pattern;
 public class SsrfModule implements Scanner {
 
     private static final int MAX_ACTIVE_PATHS = 20;
+    private static final int WAF_MAX_ACTIVE_PATHS = 8;
 
     private static final java.util.regex.Pattern STATIC_ASSET = java.util.regex.Pattern
             .compile("(?i)\\.(js|css|png|jpe?g|gif|svg|ico|woff2?|ttf|eot|map|webp|avif|mp[34]|webm)$");
@@ -38,6 +39,10 @@ public class SsrfModule implements Scanner {
     private static final List<String> URL_PARAMS = List.of("url", "uri", "link", "src", "source", "fetch", "path",
             "proxy", "redirect", "resource", "dest", "target", "page", "html", "load", "document", "webhook_url",
             "callback_url", "ping_url", "imageUrl", "avatarUrl", "import_url", "icon_url", "logo_url");
+
+    // High-signal subset for WAF-detected targets (reduce request volume)
+    private static final List<String> WAF_URL_PARAMS = List.of("url", "uri", "src", "fetch", "proxy", "redirect",
+            "resource");
 
     // Paths commonly associated with URL-fetching functionality
     private static final List<String> PROBE_PATHS = List.of("/", "/api/", "/api/v1/", "/api/fetch", "/api/proxy",
@@ -84,6 +89,13 @@ public class SsrfModule implements Scanner {
     public String id() {
         return "SSRF";
     }
+
+    // High-signal subset for WAF-detected targets
+    private static final List<SsrfProbe> WAF_SSRF_PROBES = List.of(
+            new SsrfProbe("http://127.0.0.1/", "localhost", Severity.HIGH),
+            new SsrfProbe("http://169.254.169.254/latest/meta-data/", "AWS metadata", Severity.CRITICAL),
+            new SsrfProbe("http://169.254.169.254/metadata/instance", "Azure metadata", Severity.CRITICAL),
+            new SsrfProbe("http://metadata.google.internal/computeMetadata/v1/", "GCP metadata", Severity.CRITICAL));
 
     // Redirect bypass only tests the most distinctive probes to avoid re-running
     // all 4k+ combos
@@ -161,8 +173,9 @@ public class SsrfModule implements Scanner {
             } catch (Exception e) {
                 // Unreachable path -- skip
             }
-            if (activePaths.size() >= MAX_ACTIVE_PATHS) {
-                log.accept("[~] SSRF: cap de " + MAX_ACTIVE_PATHS + " paths ativos atingido, pulando restantes");
+            int cap = ctx.wafState().isWafDetected() ? WAF_MAX_ACTIVE_PATHS : MAX_ACTIVE_PATHS;
+            if (activePaths.size() >= cap) {
+                log.accept("[~] SSRF: cap de " + cap + " paths ativos atingido, pulando restantes");
                 break;
             }
         }
@@ -171,9 +184,7 @@ public class SsrfModule implements Scanner {
             log.accept("[+] SSRF: nenhum path acessível encontrado");
             return findings;
         }
-        long totalProbes = (long) activePaths.size() * urlParams.size() * SSRF_PROBES.size();
-        log.accept("[~] SSRF: " + activePaths.size() + "/" + probePaths.size() + " paths ativos -- " + totalProbes
-                + " probes");
+        log.accept("[~] SSRF: " + activePaths.size() + "/" + probePaths.size() + " paths ativos");
 
         int concurrency = ctx.config().probeConcurrency();
 
@@ -185,13 +196,16 @@ public class SsrfModule implements Scanner {
             final int pathIdx = pi;
             mainTasks.add(() -> {
                 List<Finding> local = new ArrayList<>();
+                boolean waf = ctx.wafState().isWafDetected();
+                List<String> params = waf ? WAF_URL_PARAMS : urlParams;
+                List<SsrfProbe> probes = waf ? WAF_SSRF_PROBES : SSRF_PROBES;
                 log.accept("[~] SSRF: [" + (pathIdx + 1) + "/" + activePaths.size() + "] " + path + " -- "
-                        + urlParams.size() + " params x " + SSRF_PROBES.size() + " probes");
-                for (String param : urlParams) {
+                        + params.size() + " params x " + probes.size() + " probes" + (waf ? " (WAF mode)" : ""));
+                for (String param : params) {
                     if (cancelMain.get()) {
                         return local;
                     }
-                    for (SsrfProbe probe : SSRF_PROBES) {
+                    for (SsrfProbe probe : probes) {
                         if (cancelMain.get()) {
                             return local;
                         }
