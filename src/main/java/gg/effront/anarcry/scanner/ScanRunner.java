@@ -3,6 +3,7 @@ package gg.effront.anarcry.scanner;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.RequestRecord;
 import gg.effront.anarcry.scanner.util.BrowserTransport;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.StealthHttpClient;
 import gg.effront.anarcry.scanner.util.WafEvasion;
@@ -40,11 +41,14 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 public class ScanRunner {
 
     private static final int DEFAULT_PARALLELISM = 4;
+    private static final long MODULE_TIMEOUT_SECONDS = 180;
 
     private final Consumer<String> logCb;
     private final Consumer<Finding> findingCb;
@@ -143,6 +147,7 @@ public class ScanRunner {
         };
         ScanContext ctx = new ScanContext(origCtx.targetUrl(), origCtx.jwtToken(), origCtx.jwtToken2(),
                 origCtx.enabledModules(), origCtx.config(), safeReqLog, origCtx.discoveredPaths(), origCtx.wafState());
+        ctx.wafState().setRuntimeLog(safeLog);
         List<Scanner> modules = new ArrayList<>();
         if (ctx.has("TLS")) {
             modules.add(new TlsModule());
@@ -272,6 +277,16 @@ public class ScanRunner {
             safeLog.accept("[*] Phase 1.5: WAF detection probe em " + ctx.targetUrl());
             try {
                 java.net.http.HttpClient probeHc = HttpClientFactory.http2();
+
+                // Baseline: clean GET to detect CF/WAF headers on normal traffic
+                java.net.http.HttpRequest cleanReq = java.net.http.HttpRequest.newBuilder()
+                        .uri(java.net.URI.create(ctx.targetUrl())).timeout(java.time.Duration.ofSeconds(6)).GET()
+                        .build();
+                java.net.http.HttpResponse<String> cleanResp = probeHc.send(cleanReq,
+                        java.net.http.HttpResponse.BodyHandlers.ofString());
+                boolean cfPresent = WafEvasion.isCloudflarePresent(cleanResp.headers().map());
+
+                // Probe: inject XSS canary to trigger WAF rules
                 String canary = java.net.URLEncoder.encode("<script>alert(1)</script>",
                         java.nio.charset.StandardCharsets.UTF_8);
                 String probeUrl = ctx.targetUrl() + "?wafprobe=" + canary;
@@ -282,7 +297,6 @@ public class ScanRunner {
                 String serverHdr = probeResp.headers().firstValue("Server").orElse("");
                 String probeBody = probeResp.body() != null ? probeResp.body() : "";
 
-                // Check JS challenge first (Vercel/Cloudflare managed challenge)
                 if (WafEvasion.isJsChallenge(probeResp.statusCode(), probeResp.headers().map(), probeBody)) {
                     String challengeType = WafEvasion.detectChallengeType(probeResp.statusCode(),
                             probeResp.headers().map(), probeBody);
@@ -296,6 +310,10 @@ public class ScanRunner {
                     ctx.wafState().markWafDetected(product.isEmpty() ? serverHdr : product);
                     safeLog.accept("[!] Phase 1.5: WAF detectado -- " + ctx.wafState().wafProduct() + " (HTTP "
                             + probeResp.statusCode() + ")");
+                } else if (cfPresent) {
+                    ctx.wafState().markWafDetected("cloudflare");
+                    safeLog.accept("[!] Phase 1.5: Cloudflare detectado via cf-ray/Server (HTTP "
+                            + probeResp.statusCode() + ") -- ativando stealth proativo");
                 } else {
                     safeLog.accept("[+] Phase 1.5: nenhum WAF detectado");
                 }
@@ -379,11 +397,19 @@ public class ScanRunner {
                     } catch (Throwable e) {
                         throw new RuntimeException(e);
                     }
-                }, modulePool);
+                }, modulePool).orTimeout(MODULE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
                 futures.add(future.whenComplete((findings, ex) -> {
                     if (ex != null) {
-                        safeLog.accept("[!] " + module.id() + " erro: " + ex.getMessage());
+                        Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                        if (cause instanceof TimeoutException) {
+                            safeLog.accept("[!] " + module.id() + " timeout apos " + MODULE_TIMEOUT_SECONDS
+                                    + "s -- abortando modulo");
+                        } else if (cause instanceof CircuitBreakerException) {
+                            safeLog.accept("[!] " + cause.getMessage());
+                        } else {
+                            safeLog.accept("[!] " + module.id() + " erro: " + ex.getMessage());
+                        }
                     } else {
                         recordModuleResult(module.id(), findings);
                         for (Finding f : findings) {

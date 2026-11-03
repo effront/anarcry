@@ -1,7 +1,9 @@
 package gg.effront.anarcry.scanner.util;
 
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 public final class WafState {
 
@@ -13,6 +15,8 @@ public final class WafState {
     private final AtomicReference<String> challengeType = new AtomicReference<>("");
     private final AtomicReference<String> challengeCookies = new AtomicReference<>("");
     private volatile BrowserTransport browserTransport;
+    private final ConcurrentHashMap<String, CircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
+    private volatile Consumer<String> runtimeLog;
 
     public void markWafDetected(String product) {
         wafDetected.set(true);
@@ -88,5 +92,22 @@ public final class WafState {
             browserTransport = null;
             bt.close();
         }
+    }
+
+    public void setRuntimeLog(Consumer<String> log) {
+        this.runtimeLog = log;
+    }
+
+    public Consumer<String> runtimeLog() {
+        return runtimeLog;
+    }
+
+    public CircuitBreaker circuitBreaker(String moduleId) {
+        return circuitBreakers.computeIfAbsent(moduleId, CircuitBreaker::new);
+    }
+
+    public boolean isCircuitOpen(String moduleId) {
+        CircuitBreaker cb = circuitBreakers.get(moduleId);
+        return cb != null && cb.isTripped();
     }
 }

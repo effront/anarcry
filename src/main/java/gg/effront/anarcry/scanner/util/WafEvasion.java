@@ -122,6 +122,14 @@ public final class WafEvasion {
         return body != null && WAF_BODY.matcher(body).find();
     }
 
+    public static boolean isCloudflarePresent(Map<String, List<String>> headers) {
+        String server = firstHeader(headers, "Server");
+        if (server.toLowerCase().contains("cloudflare")) {
+            return true;
+        }
+        return !firstHeader(headers, "cf-ray").isEmpty();
+    }
+
     public static String detectWafProduct(String serverHeader) {
         if (serverHeader == null) {
             return "";

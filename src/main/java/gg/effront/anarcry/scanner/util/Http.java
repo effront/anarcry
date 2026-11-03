@@ -6,6 +6,7 @@ import gg.effront.anarcry.scanner.ScanContext;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.function.Consumer;
 
 public class Http {
 
@@ -23,6 +24,10 @@ public class Http {
         if (!cookies.isEmpty()) {
             req = HttpRequest.newBuilder(req, (n, v) -> true).header("Cookie", cookies).build();
         }
+
+        CircuitBreaker cb = ctx.wafState().circuitBreaker(moduleId);
+        cb.checkAndThrow();
+
         HttpResponse<T> resp;
         BrowserTransport bt = ctx.wafState().browserTransport();
         if (bt != null && bt.isTargetHost(req.uri().toString())) {
@@ -39,14 +44,57 @@ public class Http {
                 Thread.currentThread().interrupt();
             }
         }
-        long bodySize = resp.headers().firstValueAsLong("content-length").orElse(0);
-        if (bodySize == 0) {
-            Object b = resp.body();
-            if (b instanceof String s) {
-                bodySize = s.length();
+
+        int status = resp.statusCode();
+        String serverHdr = resp.headers().firstValue("Server").orElse("");
+        String bodyStr = "";
+        Object rawBody = resp.body();
+        if (rawBody instanceof String s) {
+            bodyStr = s;
+        }
+
+        boolean wafBlock = WafEvasion.isWafBlocked(status, serverHdr, bodyStr);
+        boolean challenge = WafEvasion.isJsChallenge(status, resp.headers().map(), bodyStr);
+
+        if (wafBlock || challenge) {
+            Consumer<String> log = ctx.wafState().runtimeLog();
+            if (!ctx.wafState().isWafDetected()) {
+                String product = WafEvasion.detectWafProduct(serverHdr);
+                ctx.wafState().markWafDetected(product.isEmpty() ? serverHdr : product);
+                if (log != null) {
+                    log.accept("[!] Runtime WAF detectado via " + moduleId + " -- " + ctx.wafState().wafProduct()
+                            + " (HTTP " + status + ")");
+                }
+                if (!ctx.wafState().isStealthActive() && bt == null) {
+                    ctx.wafState().markStealthActive();
+                    if (log != null) {
+                        log.accept("[*] Runtime: ativando StealthHttpClient (Chrome JA3+H2)");
+                    }
+                }
+            }
+            cb.recordBlock(log);
+            cb.checkAndThrow();
+        } else if (status >= 200 && status < 400) {
+            cb.recordSuccess();
+        }
+
+        if (!ctx.wafState().isWafDetected() && WafEvasion.isCloudflarePresent(resp.headers().map())) {
+            ctx.wafState().markWafDetected("cloudflare");
+            Consumer<String> log = ctx.wafState().runtimeLog();
+            if (log != null) {
+                log.accept(
+                        "[!] Runtime: Cloudflare detectado via cf-ray/Server em " + moduleId + " -- ativando stealth");
+            }
+            if (!ctx.wafState().isStealthActive() && bt == null) {
+                ctx.wafState().markStealthActive();
             }
         }
-        ctx.requestLog().accept(new RequestRecord(req.method(), req.uri().toString(), resp.statusCode(), bodySize,
+
+        long bodySize = resp.headers().firstValueAsLong("content-length").orElse(0);
+        if (bodySize == 0 && !bodyStr.isEmpty()) {
+            bodySize = bodyStr.length();
+        }
+        ctx.requestLog().accept(new RequestRecord(req.method(), req.uri().toString(), status, bodySize,
                 System.currentTimeMillis(), moduleId));
         return resp;
     }
