@@ -98,6 +98,27 @@ Casos reais e mentalidade de ataque (RWBH): Twitter (`next`), Shopify (`return_u
 - **Paths comuns:** `/login`, `/logout`, `/auth`, `/oauth/authorize`, `/sso`, `/redirect`, `/out`, `/r`, `/go`, `/link`, `/checkout`, `/payment/return`.
 - **Sinais:** parâmetro de URL refletido em `Location`; `Location` contém entrada do usuário; allowlist por prefixo; `302` para host externo.
 
+## Escalation Techniques
+- **Phishing com credibilidade:** redirect a partir do dominio legitimo aumenta a confianca do usuario no destino malicioso.
+- **Token theft via OAuth:** open redirect no dominio do client OAuth permite redirecionar authorization codes para dominio do atacante.
+- **SSRF relay:** open redirect em dominio na allowlist do servidor permite pivotar SSRF para destinos internos.
+- **Header injection:** em alguns frameworks, o parametro de redirect e inserido no header `Location` sem sanitizacao, permitindo CRLF injection.
+- **Chaining com XSS:** redirect para `javascript:` ou `data:` URI pode executar JS no contexto do dominio de origem.
+
+## Hunting Methodology
+1. Identificar parametros de redirect: `url`, `next`, `return`, `redirect`, `redirect_uri`, `dest`, `continue`, `goto`, `callback`.
+2. Testar com dominio externo: `?next=https://evil.com`. Se redireciona, e open redirect.
+3. Testar bypasses: `//evil.com`, `/\evil.com`, `https://legitimate.com@evil.com`, `https://evil.com/.legitimate.com`.
+4. Testar schema bypass: `javascript:alert(1)`, `data:text/html,...`.
+5. Verificar se o redirect e client-side ou server-side -- vetores diferentes.
+6. Mapear fluxos de login, logout, OAuth e payment return que usam redirects.
+
+## False Positive Indicators
+- Redirect para URL externa e intencional (ex.: link de parceiro, share para rede social).
+- Parametro aceita apenas paths relativos internos e rejeita URLs absolutas -- nao e open redirect.
+- Redirect usa mapa server-side de chaves sem aceitar URLs arbitrarias -- seguro.
+- `Location` header contem o parametro mas servidor retorna `200 OK` em vez de `3xx`.
+
 ## Recommendation
 1. Não aceitar URLs arbitrárias. Usar allowlist de destinos exatos ou um mapa server-side de chaves (`?next=dashboard`, `?next=billing`).
 2. Se for inevitável aceitar URL, parsear com biblioteca de URL, exigir esquema `https`, host exato na allowlist e rejeitar userinfo, fragmento e portas não previstas.

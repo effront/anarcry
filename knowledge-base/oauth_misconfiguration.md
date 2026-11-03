@@ -89,6 +89,28 @@ Casos reais e mentalidade de ataque (RWBH): Facebook, Uber e Twitter ilustram os
 - **Paths comuns:** `/oauth/authorize`, `/oauth/token`, `/oauth/introspect`, `/oauth/revoke`, `/login/oauth`, `/.well-known/openid-configuration`, `/.well-known/jwks.json`, `/callback`.
 - **Sinais:** `state` ausente; `redirect_uri` com wildcard; `response_type=token`; `scope` amplo; `nonce` não validado; tokens em URL.
 
+## Escalation Techniques
+- **Account takeover via redirect_uri:** se `redirect_uri` aceita wildcards ou subdominios, atacante redireciona authorization code para dominio controlado e troca por access token.
+- **Token leak via Referer:** se `response_type=token`, o access token aparece no fragment da URL e pode vazar via Referer para recursos carregados na callback page.
+- **CSRF no login:** sem `state`, atacante forca vitima a logar com conta do atacante (login CSRF) para capturar dados inseridos pela vitima.
+- **Scope escalation:** testar se o authorization server permite ampliar `scope` alem do permitido pelo client registration.
+- **Token reuse:** access tokens sem audience (`aud`) restriction podem ser usados em outros servicos que confiam no mesmo IdP.
+- **Chaining com open redirect:** open redirect no dominio do client permite bypass de redirect_uri validation para exfiltrar codes/tokens.
+
+## Hunting Methodology
+1. Testar `redirect_uri` manipulation: subdomains (`sub.attacker.com`), path traversal (`/../attacker`), userinfo (`attacker.com@legitimate.com`), schema (`http` vs `https`).
+2. Verificar se `state` esta presente e e validado -- remover `state` do request e verificar se o fluxo prossegue.
+3. Testar implicit flow (`response_type=token`) -- verificar se tokens aparecem na URL.
+4. Verificar PKCE: enviar `code_verifier` diferente do `code_challenge` e verificar se o token endpoint rejeita.
+5. Testar token leaks: carregar recursos de terceiros na callback page e verificar Referer.
+6. Inspecionar `.well-known/openid-configuration` para client registration e endpoints expostos.
+
+## False Positive Indicators
+- `redirect_uri` validado por correspondencia exata contra allowlist -- manipulacao falha.
+- `state` presente e vinculado a sessao -- CSRF no OAuth esta protegido.
+- PKCE habilitado com `S256` -- code interception nao e viavel.
+- Implicit flow desabilitado e todos os tokens sao entregues via backend (authorization code flow) -- token nao vaza para browser.
+
 ## Recommendation
 1. Exigir `state` criptograficamente aleatório, vinculado à sessão e de uso único; rejeitar requisições sem `state`.
 2. Validar `redirect_uri` por correspondência exata contra allowlist registrada; não usar prefixo, regex ou wildcard. Normalizar e rejeitar userinfo, fragmentos e path traversal.

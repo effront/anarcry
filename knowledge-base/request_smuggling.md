@@ -424,6 +424,46 @@ Monitorar headers `Age`, `X-Cache` (HIT/MISS), `Cache-Control`. Se uma requisiç
 - **Paths comuns:** qualquer endpoint atrás de proxy/CDN, especialmente `/`, `/login`, `/api/*`, `/graphql`, `/admin`.
 - **Sinais:** respostas 400/501 inconsistentes; `Age`/`X-Cache`; proxy/backend diferentes; conexões keep-alive reutilizadas; comportamento divergente com TE ofuscado.
 
+## Escalation Techniques
+Request smuggling e uma primitiva de ataque poderosa -- o desync em si nao e o objetivo, mas sim o que ele permite:
+
+- **Hijack de sessao via response queue poisoning:** apos desalinhar a fila de respostas, a resposta destinada a vitima (contendo Set-Cookie, tokens, dados) e entregue ao atacante, e vice-versa. Permite account takeover sem interacao da vitima.
+- **Bypass de WAF e ACL:** o WAF analisa uma interpretacao da requisicao, o backend processa outra. Payloads de SQLi, XSS ou command injection bloqueados pelo WAF passam na requisicao smuggled.
+- **Cache poisoning via desync:** requisicao smuggled envenena cache CDN com conteudo malicioso (XSS, redirect). A resposta envenenada e servida a todos os usuarios que acessam o path via cache HIT -- impacto massivo.
+- **Acesso a endpoints internos:** requisicao smuggled com `Host: internal-app.local` ou path `/admin` acessa virtual hosts e rotas internas que nao sao expostos ao frontend.
+- **Roubo de headers internos via TRACE:** se TRACE esta habilitado, request tunnelling combinado com TRACE revela headers adicionados pelo proxy (ex: `X-Forwarded-For`, `X-Real-IP`, tokens internos).
+- **Bypass de autenticacao:** frontend adiciona headers de autenticacao/autorizacao; requisicao smuggled bypassa o frontend e atinge o backend sem esses headers, ou com headers controlados pelo atacante.
+- **Encadeamento com XSS stored via cache:** desync que envenena cache com XSS refletido transforma um XSS refletido em stored, afetando todos os usuarios do path.
+- **Client-side desync para ataques direcionados:** desync compativel com browser permite atacar um usuario especifico sem necessidade de acesso ao servidor -- apenas induzindo a vitima a visitar pagina controlada pelo atacante.
+
+A mentalidade geral do livro Bug Bounty Bootcamp (Cap. 1-5) se aplica: ao encontrar um desync, o proximo passo e sempre encadear com outros bugs para maximizar impacto. Um CL.TE sozinho e tecnico; CL.TE + cache poisoning + XSS e CRITICAL.
+
+## Hunting Methodology
+Processo passo a passo para identificar request smuggling:
+
+1. **Mapear a arquitetura:** identificar a cadeia de componentes (CDN, proxy reverso, backend). Coletar evidencias via headers `Server`, `Via`, `X-Cache`, `X-Served-By`, fingerprinting de paginas de erro. Cada transicao de hop e uma fronteira de parser candidata.
+2. **Estabelecer baseline:** enviar requisicao normal e medir round-trip time. O baseline confirma que o servidor responde em tempo razoavel e que timeouts nos probes sao anomalias reais.
+3. **Testar timing differential (CL.TE):** enviar requisicao com `Content-Length` e `Transfer-Encoding: chunked` simultaneos, onde o chunked body termina prematuramente. Se o backend usa TE e espera mais dados, o timeout sera significativamente maior que o baseline.
+4. **Testar timing differential (TE.CL):** inverter -- `Content-Length` curto e chunked body completo. Se o backend usa CL e ignora o restante, a resposta e rapida; se o frontend usa TE, o timing diverge.
+5. **Testar ofuscacao de TE:** experimentar variantes como `Transfer-Encoding: xchunked`, `Transfer-Encoding:	chunked`, TE duplicado, `Transfer-Encoding: chunked, identity`. Parsers diferentes reagem de forma diferente a ofuscacao.
+6. **Testar CL.0:** enviar POST com `Content-Length` valido em endpoint que ignora body (GET-like). Se o body residual e tratado como proxima requisicao na conexao reutilizada, ha desync.
+7. **Testar H2.CL e H2.TE:** se o frontend aceita HTTP/2, testar smuggling via downgrade -- manipular pseudo-headers e `content-length`/`transfer-encoding` no frame HTTP/2.
+8. **Response counting:** enviar unica requisicao com body contendo segunda requisicao embutida. Se o servidor retorna duas respostas HTTP, ha desync confirmado.
+9. **Verificar impacto:** apos confirmar desync, testar response queue poisoning, cache poisoning e acesso a endpoints internos para determinar severidade real.
+10. **Automatizar com ferramentas:** usar HTTP Request Smuggler (Burp), Turbo Intruder para timing probes, e h2cSmuggler para h2c upgrade. A abordagem de fuzzing (Cap. 25 do livro) se aplica -- gerar probes automaticamente e monitorar anomalias de timing/resposta.
+
+## False Positive Indicators
+Sinais de que o probe de smuggling do scanner **nao indica desync real**:
+
+- **Path direto ao backend (sem proxy):** se a requisicao vai direto ao backend sem passar por proxy/CDN, timeouts podem ser comportamento normal do servidor, nao desync. Verificar a presenca de intermediarios antes de reportar.
+- **Servidor fecha conexao (no keep-alive):** se o servidor fecha a conexao apos cada resposta (`Connection: close`), o body residual e descartado e nao ha desync. Smuggling requer conexoes persistentes.
+- **Pipelining normal confundido com queue poisoning:** HTTP pipelining legitimo (multiplas requisicoes na mesma conexao pelo mesmo cliente) pode parecer queue poisoning. Distinguir: pipelining e controlado pelo cliente; queue poisoning afeta requisicoes de outros clientes.
+- **Artefato do scanner:** scanners automatizados podem gerar pipelining ou respostas multiplas que parecem desync mas sao comportamento normal do protocolo HTTP/1.1. Validar manualmente com probe isolado.
+- **Timeout por lentidao do servidor:** servidor com alta latencia ou rate limiting pode causar timeouts que parecem timing differential. Comparar com baseline em horarios diferentes.
+- **Backend rejeita CL+TE simultaneo (RFC 7230 compliant):** se o backend retorna 400 para requisicoes com ambos os headers, o servidor esta implementando a RFC corretamente e nao e vulneravel.
+- **Edge strip de Transfer-Encoding:** se o CDN/proxy remove `Transfer-Encoding` antes de repassar ao backend, as variantes CL.TE e TE.CL nao se aplicam -- o backend recebe apenas `Content-Length`.
+
+
 ## Recommendation
 1. Usar HTTP/2 de ponta a ponta e rejeitar downgrades ambíguos; se houver conversão H2→H1, normalizar headers.
 2. Rejeitar requisições com `Content-Length` e `Transfer-Encoding` simultâneos, ou com TE duplicado/ofuscado.
