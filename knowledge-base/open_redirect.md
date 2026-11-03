@@ -99,25 +99,35 @@ Casos reais e mentalidade de ataque (RWBH): Twitter (`next`), Shopify (`return_u
 - **Sinais:** parâmetro de URL refletido em `Location`; `Location` contém entrada do usuário; allowlist por prefixo; `302` para host externo.
 
 ## Escalation Techniques
-- **Phishing com credibilidade:** redirect a partir do dominio legitimo aumenta a confianca do usuario no destino malicioso.
-- **Token theft via OAuth:** open redirect no dominio do client OAuth permite redirecionar authorization codes para dominio do atacante.
-- **SSRF relay:** open redirect em dominio na allowlist do servidor permite pivotar SSRF para destinos internos.
-- **Header injection:** em alguns frameworks, o parametro de redirect e inserido no header `Location` sem sanitizacao, permitindo CRLF injection.
-- **Chaining com XSS:** redirect para `javascript:` ou `data:` URI pode executar JS no contexto do dominio de origem.
+Open redirect isolado e frequentemente classificado como baixo impacto, mas pode ser escalado significativamente:
+
+- **Phishing de alta credibilidade:** o atacante envia link no dominio legitimo (ex: `https://example.com/login?next=https://attacker.com/fake_login.html`). Apos login real, a vitima e redirecionada para pagina falsa que imita o login e pede credenciais novamente ("senha incorreta, tente de novo"). O atacante pode ate redirecionar de volta para o site real para esconder o roubo.
+- **Bypass de allowlist/blocklist em SSRF:** um open redirect em pagina do dominio permitido pode ser usado para redirecionar requests SSRF para enderecos internos, contornando validacoes que aceitam apenas URLs do proprio dominio.
+- **Roubo de tokens OAuth:** quando a pagina redireciona, o browser inclui a URL de origem no header `Referer`. Se a URL original contiver tokens de autenticacao (access tokens, authorization codes), o atacante pode captura-los via Referer no servidor de destino.
+- **Encadeamento com redirect chains:** mesmo sem open redirect direto no endpoint sensivel, cadeias de redirecionamento podem ser usadas para vazar tokens para fora do dominio.
+- **Bypass de controles baseados em dominio:** webhooks, integracoes e validacoes que confiam em "redirect interno" podem ser abusados se existir um open redirect no dominio confiavel.
+
+Ao avaliar impacto, considere: o redirect pode ser encadeado com OAuth, SSRF ou outra vuln? Tokens sensiveis estao presentes na URL de origem? O dominio e de alta confianca (banco, e-mail)?
 
 ## Hunting Methodology
-1. Identificar parametros de redirect: `url`, `next`, `return`, `redirect`, `redirect_uri`, `dest`, `continue`, `goto`, `callback`.
-2. Testar com dominio externo: `?next=https://evil.com`. Se redireciona, e open redirect.
-3. Testar bypasses: `//evil.com`, `/\evil.com`, `https://legitimate.com@evil.com`, `https://evil.com/.legitimate.com`.
-4. Testar schema bypass: `javascript:alert(1)`, `data:text/html,...`.
-5. Verificar se o redirect e client-side ou server-side -- vetores diferentes.
-6. Mapear fluxos de login, logout, OAuth e payment return que usam redirects.
+Processo passo a passo para identificar Open Redirects:
+
+1. **Buscar parametros de redirect:** navegar pelo site com proxy e identificar parametros que contem URLs absolutas ou relativas -- nomes comuns: `redirect`, `redir`, `next`, `u`, `n`, `forward`, `return`, `RelayState`, `dest`, `url`, `continue`.
+2. **Usar Google Dorks:** buscar parametros de redirect indexados com `inurl:%3Dhttp site:example.com` (encontra `=http` em parametros) e `inurl:%3D%2F site:example.com` (encontra `=/` para URLs relativas). Testar tambem `inurl:redir`, `inurl:redirect`, `inurl:returnurl`, `inurl:next` etc.
+3. **Identificar redirects por Referer:** anotar paginas que redirecionam automaticamente (3XX) sem parametro de redirect na URL -- elas podem usar o header Referer para determinar o destino. Testar hospedando pagina HTML com link para o alvo e verificando se o redirect volta para o atacante.
+4. **Testar parameter-based redirect:** inserir hostname externo no parametro de redirect e verificar se o site redireciona para ele. Algumas paginas so redirecionam apos acao do usuario (login, logout) -- executar a acao completa.
+5. **Bypassar protecoes:** se o redirect e bloqueado, tentar: autocorrecao do browser (`https:attacker.com`, `https;attacker.com`, `https:\/\/attacker.com`); subdominio falso (`http://example.com.attacker.com`); `@` no userinfo (`https://example.com@attacker.com`); double encoding (`%252f`); data URL (`data:text/html;base64,...`); caracteres non-ASCII e Unicode lookalikes.
+6. **Encadear com outros bugs:** usar o open redirect para escalar impacto -- tentar bypass de SSRF allowlist, roubo de token OAuth via Referer, ou phishing sofisticado.
 
 ## False Positive Indicators
-- Redirect para URL externa e intencional (ex.: link de parceiro, share para rede social).
-- Parametro aceita apenas paths relativos internos e rejeita URLs absolutas -- nao e open redirect.
-- Redirect usa mapa server-side de chaves sem aceitar URLs arbitrarias -- seguro.
-- `Location` header contem o parametro mas servidor retorna `200 OK` em vez de `3xx`.
+Sinais de que o redirect detectado pelo scanner **nao e Open Redirect exploravel**:
+
+- **Redirect para path relativo interno:** se o parametro aceita apenas paths relativos (`/dashboard`, `/settings`) e o servidor prefixa o proprio dominio, nao e possivel redirecionar para site externo.
+- **Allowlist por host exato:** se o servidor valida o hostname contra lista exata (nao por substring/prefixo), payloads como `example.com.attacker.com` e `example.com@attacker.com` serao bloqueados.
+- **Pagina de aviso intermediaria:** se o servidor exibe pagina "Voce esta saindo de example.com" antes de redirecionar, o impacto e reduzido significativamente -- o usuario tem chance de perceber o destino.
+- **Redirect apenas em 3XX sem dados sensiveis:** um redirect 301/302 puro sem tokens na URL ou Referer tem impacto limitado a phishing basico, que muitos programas consideram fora de escopo.
+- **Bypass nao funciona no browser real:** alguns bypasses de URL (double encoding, unicode) podem funcionar no parser do servidor mas nao no browser, ou vice-versa. Confirmar sempre no browser.
+- **Parametro nao e usado para redirect:** o scanner pode detectar URL em parametro que e usada para outro fim (ex: `?url=` que carrega conteudo em iframe sem redirecionar a pagina inteira). Isso pode ser outro tipo de vuln (SSRF), mas nao e open redirect.
 
 ## Recommendation
 1. Não aceitar URLs arbitrárias. Usar allowlist de destinos exatos ou um mapa server-side de chaves (`?next=dashboard`, `?next=billing`).

@@ -90,26 +90,35 @@ Casos reais e mentalidade de ataque (RWBH): Uber e GitHub (perfis/roles) mostram
 - **Sinais:** OpenAPI/GraphQL revela campos internos; PATCH aceita body completo; frontend envia menos campos que o backend aceita; respostas incluem `role`/`isAdmin`.
 
 ## Escalation Techniques
-- **Mass assignment + privilege escalation:** enviar `{"role":"admin"}` ou `{"isAdmin":true}` em endpoint de criacao/atualizacao de usuario para obter acesso administrativo; a partir dai, acessar dados de todos os usuarios, alterar configuracoes e criar backdoors.
-- **Mass assignment + account takeover:** alterar campos como `email`, `emailVerified:true` ou `resetToken` via mass assignment para sequestrar contas -- o atacante muda o e-mail para o seu, marca como verificado e redefine a senha.
-- **Mass assignment + fraude financeira:** modificar campos como `balance`, `credits`, `price`, `discount` ou `plan` para obter recursos financeiros indevidos -- o impacto e direto em aplicacoes de e-commerce, fintech e SaaS.
-- **Mass assignment + IDOR chain:** combinar mass assignment com IDOR enviando `{"ownerId":"ID_DO_ATACANTE"}` para transferir ownership de recursos de outros usuarios, ou `{"tenantId":"outro-tenant"}` para acessar dados cross-tenant.
-- **Mass assignment via GraphQL mutation:** quando a mutation GraphQL aceita `input` com campos nao documentados, enviar campos extras descobertos via introspection para escalar privilegios -- o vetor e o mesmo, mas a superficie de ataque e diferente da REST.
+Mass assignment e frequentemente o vetor para escalada de privilegios e fraude -- o impacto depende de quais campos o backend aceita:
+
+- **Privilege escalation:** enviar `{"role":"admin"}` ou `{"isAdmin":true}` junto de dados legitimos para elevar privilegios. O livro (Bug Bounty Bootcamp, Cap. 17) descreve como broken access control permite atacantes interferirem com logica de autorizacao via requests sintaticamente validos.
+- **Account takeover via IDOR + mass assignment:** o livro (Cap. 10) detalha como combinar IDOR (trocar `user_id`) com mass assignment (enviar campos extras) para alterar email/password de outro usuario. Write-based IDORs em endpoints de password change sao os de maior impacto.
+- **Self-XSS para stored XSS:** o livro (Cap. 10) orienta combinar write-based IDOR com self-XSS -- mass assignment que permite alterar campos de perfil de outro usuario transforma self-XSS em stored XSS exploravel.
+- **Bypass de verificacao:** setar `verified: true`, `email_confirmed: true`, `2fa_enabled: false` para pular fluxos de verificacao que a aplicacao impoe. Analogo ao "skippable authentication step" descrito no Cap. 17.
+- **Manipulacao financeira:** alterar `balance`, `credits`, `discount`, `price`, `plan` se o modelo expoe esses campos. O livro (Cap. 17) ilustra como logica de pagamento pode ser contornada manipulando parametros de request.
+- **Ownership hijack:** alterar `owner_id`, `tenant_id`, `created_by` para tomar controle de recursos de outros usuarios ou tenants -- combina mass assignment com broken access control.
 
 ## Hunting Methodology
-1. **Mapear o modelo de dados:** usar documentacao OpenAPI/Swagger, introspection GraphQL, ou respostas da API para identificar todos os campos do objeto (especialmente `role`, `isAdmin`, `verified`, `balance`, `status`, `ownerId`). Comparar o que o frontend envia com o que a API retorna -- campos extras na resposta que nao sao enviados pelo frontend sao candidatos.
-2. **Testar campos extras em criacao:** em endpoints de registro/criacao (`POST /api/users`, `POST /api/register`), adicionar campos sensiveis ao body (`"role":"admin"`, `"isAdmin":true`, `"verified":true`). Verificar se o objeto criado reflete os valores injetados.
-3. **Testar campos extras em atualizacao:** em endpoints de atualizacao (`PUT /api/users/{id}`, `PATCH /api/profile`), enviar campos que nao fazem parte do formulario visivel. Testar variantes de nome (`role`, `roles`, `roleId`, `Role`, `is_admin`, `IS_ADMIN`).
-4. **Testar formatos alternativos:** repetir os testes com diferentes Content-Types (`application/json`, `application/x-www-form-urlencoded`, `multipart/form-data`, `application/xml`) e com objetos aninhados (`{"user":{"role":"admin"}}`). Parsers diferentes podem aceitar campos que outros rejeitam.
-5. **Verificar resposta e persistencia:** apos enviar o payload, verificar se a resposta da API reflete o campo alterado. Fazer um GET subsequente para confirmar que a alteracao persistiu no banco. Checar se o novo privilegio/valor e efetivo (ex.: acessar painel admin).
-6. **Testar PATCH parcial:** endpoints PATCH frequentemente aceitam subsets de campos sem validacao completa do DTO; enviar apenas o campo sensivel (`{"role":"admin"}`) em PATCH pode funcionar mesmo quando PUT rejeita.
+Processo passo a passo para identificar mass assignment, baseado nos Cap. 10, 17 e 24 (Bug Bounty Bootcamp):
+
+1. **Criar duas contas com niveis de privilegio diferentes:** o livro (Cap. 10) recomenda criar uma conta atacante e uma vitima, alem de contas em cada nivel de permissao (admin, user, membro de grupo). Isso permite testar tanto escalada horizontal quanto vertical.
+2. **Mapear endpoints de criacao e atualizacao:** usando o proxy, capturar todos os requests de register, profile update, settings, billing, e qualquer POST/PUT/PATCH que aceite body JSON ou form-data. O livro (Cap. 24) orienta enumerar APIs via documentacao publica, Swagger, e interceptacao de trafego.
+3. **Inspecionar schema da API:** consultar OpenAPI/Swagger, GraphQL introspection, ou documentacao para descobrir campos ocultos no modelo. O livro (Cap. 24) destaca que APIs muitas vezes retornam mais dados que o necessario, revelando campos internos como `role`, `permissions`, `verified`.
+4. **Adicionar campos extras nao presentes no formulario:** ao request capturado, adicionar campos como `role`, `is_admin`, `verified`, `balance`, `permissions`, `group_id`. Testar variantes de case e alias (`Role`, `IS_ADMIN`, `roleId`). O livro (Cap. 10) recomenda prestar atencao a parametros em todas as posicoes -- URL, body, headers, cookies.
+5. **Comparar resposta antes e depois:** enviar o request com campos extras e verificar se o valor foi aceito. Fazer GET na conta para confirmar se o campo mudou. O livro (Cap. 10) alerta para blind IDORs -- o efeito pode aparecer em exports, emails ou relatorios futuros, nao na resposta imediata.
+6. **Testar diferentes metodos HTTP:** o livro (Cap. 10) destaca que "applications often enable multiple request methods on the same endpoint but fail to implement the same access control for each method." Se POST nao aceita o campo extra, testar PUT, PATCH e DELETE.
+7. **Testar em APIs de versao antiga:** o livro (Cap. 24) orienta testar versoes anteriores da API (`/api/v1/` vs `/api/v2/`) -- versoes mais antigas frequentemente tem menos protecoes contra mass assignment.
 
 ## False Positive Indicators
-- **Campo enviado mas ignorado silenciosamente:** o servidor aceita o request sem erro (200 OK), mas o campo extra nao e persistido -- a resposta e o GET subsequente mostram o valor original inalterado. Isso indica que o framework ignora campos desconhecidos sem aplica-los.
-- **Campo aceito mas sem efeito de privilegio:** o servidor persiste o campo (ex.: `role` aparece na resposta), mas a logica de autorizacao usa uma fonte diferente (ex.: tabela de permissoes separada, claim do JWT) -- a alteracao do campo nao concede acesso real.
-- **Endpoint requer privilegio admin:** o endpoint que aceita mass assignment so e acessivel por administradores autenticados (ex.: `PUT /api/admin/users/{id}`) -- um admin alterando roles de outros usuarios e comportamento esperado, nao uma vulnerabilidade.
-- **Validacao rejeita com 400:** o servidor retorna `400 Bad Request` ou `422 Unprocessable Entity` com mensagem explicita sobre campos nao permitidos -- a protecao contra mass assignment esta funcionando.
-- **DTO especifico por operacao:** a API usa records/DTOs diferentes para criacao e atualizacao, com allowlist explicita de campos; campos nao declarados no DTO sao rejeitados na deserializacao -- o risco e mitigado por design.
+Sinais de que o mass assignment detectado pelo scanner **nao e exploravel**:
+
+- **Servidor aceita campos extras mas ignora silenciosamente:** o request retorna `200 OK` mas o campo sensivel (`role`, `isAdmin`) nao mudou no objeto persistido -- o framework esta filtrando via allowlist ou DTO. Confirmar com GET subsequente.
+- **Campo `role` aparece no response mas e populado pelo servidor:** o backend inclui `role` na resposta por conveniencia de leitura, mas o valor e derivado internamente (ex.: do token JWT ou sessao), nao do input do usuario.
+- **Endpoint retorna 400/422 para campos desconhecidos:** o framework esta configurado com `FAIL_ON_UNKNOWN_PROPERTIES` ou equivalente e rejeita explicitamente campos nao permitidos -- a protecao esta funcionando.
+- **Campo alteravel e intencional:** alguns campos que parecem sensiveis (ex.: `locale`, `timezone`, `theme`) sao projetados para serem alterados pelo usuario -- mass assignment aqui e o comportamento esperado, nao uma vulnerabilidade.
+- **Teste feito com admin logado:** se o testador usou credenciais de admin, a alteracao de `role` pode ser funcionalidade normal do painel admin. Repetir o teste com conta de privilegio inferior para confirmar.
+
 ## Recommendation
 1. Usar DTOs específicos por operação (Create/Update) com allowlist explícita de campos; nunca vincular entidade de domínio diretamente ao body.
 2. Em Spring, usar `@JsonIgnoreProperties(ignoreUnknown = false)` ou `FAIL_ON_UNKNOWN_PROPERTIES` para rejeitar campos desconhecidos; evitar `@ModelAttribute` em entidades.

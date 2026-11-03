@@ -121,28 +121,38 @@ Casos reais e mentalidade de ataque (RWBH): Uber (templates de e-mail/notificaç
 - **Sinais:** entrada refletida após avaliação; erros de template com stack trace; parâmetro `template`; funcionalidades de e-mail/report/PDF; expressões matemáticas avaliadas.
 
 ## Escalation Techniques
-- **RCE via cadeia de classes (Python/Jinja2):** `{{''.__class__.__mro__[1].__subclasses__()}}` enumera classes disponiveis; encontrar `subprocess.Popen` ou `os.system` permite execucao de comandos.
-- **RCE via Velocity/Freemarker (Java):** reflexao via `#set($rt=$x.class.forName("java.lang.Runtime"))` ou `${"freemarker.template.utility.Execute"?new()("id")}`.
-- **File read sem RCE:** Jinja2 `{{config}}` ou Freemarker `<#include "/etc/passwd">` permite ler arquivos sensiveis.
-- **Sandbox escape:** engines com sandbox podem ser contornados via gadgets especificos da versao ou objetos nao restritos.
-- **Pivot para XSS:** se o template renderiza HTML, injecao de `<script>` via template funciona como stored XSS.
-- **Exfiltracao de segredos:** acesso a variaveis de ambiente e configuracoes via contexto do template (`{{settings.SECRET_KEY}}` em Django).
-- **DoS:** loops infinitos ou operacoes custosas via template (`{% for i in range(999999999) %}`) podem derrubar o servidor.
+SSTI raramente se limita a avaliar expressoes matematicas -- o objetivo e escalar para execucao de comandos:
+
+- **Execucao de comandos via sandbox escape:** em Jinja2, o atacante navega a hierarquia de classes Python (`[].__class__.__bases__[0].__subclasses__()`) para encontrar classes como `catch_warnings`, acessar `__builtins__` e importar `os` para executar `system()`. Cada engine tem sua cadeia de escape.
+- **Leitura de arquivos sensiveis:** comandos como `cat /etc/shadow` permitem ler senhas criptografadas do sistema, que podem ser quebradas offline para obter acesso de admin.
+- **Alteracao de configuracoes:** com RCE, o atacante pode modificar configuracoes do sistema, criar usuarios, instalar backdoors e garantir persistencia.
+- **Escalacao de privilegios:** a partir da execucao de comandos, o atacante pode escalar privilegios no host e pivotar para outras maquinas na rede interna.
+- **Identificacao do engine para payload correto:** a resposta a `{{7*'7'}}` diferencia Jinja2 (retorna `7777777`) de Twig (retorna `49`). Mensagens de erro frequentemente revelam o engine (ex: `jinja2.exceptions.UndefinedError`). O payload de escalacao depende inteiramente do engine e da linguagem.
+- **Automacao com tplmap:** a ferramenta tplmap automatiza deteccao, identificacao do engine e construcao de exploits para os engines mais populares.
+- **PoC nao destrutivo:** para demonstrar impacto sem causar dano, criar um arquivo com nome distinto no servidor (ex: `touch template_injection_by_NOME.txt`) em vez de executar comandos destrutivos.
+
+Ao avaliar impacto, considere: qual engine e linguagem? O sandbox esta ativo? Existem gadgets conhecidos para essa versao? O processo roda com privilegios elevados?
 
 ## Hunting Methodology
-1. Identificar funcionalidades que renderizam templates dinamicamente: previews de email, gerador de PDF/relatorio, personalizacao de notificacao, temas customizaveis.
-2. Injetar probes matematicos: `{{7*7}}`, `${7*7}`, `<%= 7*7 %>`, `#{7*7}`. Se a resposta contem `49`, o engine avaliou a expressao.
-3. Identificar o engine: `{{7*'7'}}` = `7777777` -> Jinja2 (Python); `49` -> Twig (PHP). `${7*7}` -> Freemarker, Velocity, Thymeleaf. `<%= 7*7 %>` -> ERB (Ruby) ou EJS (Node).
-4. Escalar para RCE com cadeias especificas do engine identificado.
-5. Para blind SSTI: usar side-channels (delay via `sleep`, OOB via DNS/HTTP, erros distintos).
-6. Verificar sandbox e testar gadgets de escape conhecidos para a versao do engine.
+Processo passo a passo para identificar SSTI:
+
+1. **Identificar pontos de entrada:** mapear todos os locais que aceitam input do usuario -- URL paths, parametros, fragmentos, headers HTTP, body e uploads. Focar em funcionalidades que geram conteudo dinamico: e-mails, previews, relatorios, PDFs, paginas de perfil e notificacoes.
+2. **Injetar payload de deteccao generico:** submeter a string `{{1+abcxx}}${1+abcxx}<%1+abcxx%>[abcxx]` nos pontos de entrada. Esse payload e projetado para provocar erro em engines populares (Jinja2, Twig, FreeMarker, ERB). Um erro de aplicacao e forte indicador de template injection.
+3. **Testar expressoes matematicas:** se erros sao suprimidos, submeter `${7*7}`, `{{7*7}}` e `<%= 7*7 %>`. Se alguma resposta contiver `49`, o input esta sendo avaliado como codigo.
+4. **Verificar input embutido em expressao:** se o input ja e inserido dentro de tags de expressao (`{{...}}`), nao e necessario adicionar delimitadores extras -- submeter apenas `7*7` e verificar se `49` aparece na resposta.
+5. **Determinar o engine:** usar a mensagem de erro (que frequentemente nomeia o engine), ou submeter payloads especificos -- `{{7*'7'}}` retorna `7777777` em Jinja2 e `49` em Twig; `${7*7}` funciona em FreeMarker e Thymeleaf; `<%= 7*7 %>` funciona em ERB.
+6. **Verificar reflexao atrasada:** alguns inputs so sao renderizados em outro contexto (e-mail futuro, relatorio gerado, pagina de admin). Monitorar esses canais apos submissao do payload.
+7. **Escalar para RCE:** com o engine identificado, pesquisar gadgets e cadeias de sandbox escape. Construir payload de execucao de comando especifico para o engine/linguagem.
 
 ## False Positive Indicators
-- Expressao avaliada client-side (Angular, Vue) -- e CSTI, nao SSTI. Impacto e XSS, nao RCE.
-- `{{7*7}}` aparece como texto literal na resposta -- input nao e interpretado pelo engine.
-- Engine com sandbox robusto bloqueia acesso a `__class__`, `Runtime`, `ProcessBuilder` -- sem impacto alem de information disclosure.
-- Erro generico apos injetar payload, nao erro de template engine -- pode ser validacao de input.
-- Input sanitizado antes do template: `{{}}` aparece como texto escapado.
+Sinais de que a deteccao pelo scanner **nao e SSTI exploravel**:
+
+- **Expressao avaliada no client-side:** frameworks JavaScript como Angular e Vue usam `{{...}}` para template binding no frontend. Isso e client-side template injection (CSTI), nao SSTI -- o impacto e diferente e geralmente menor.
+- **Reflexao sem avaliacao:** se `{{7*7}}` aparece literalmente na resposta como `{{7*7}}` em vez de `49`, o input nao esta sendo interpretado pelo engine. O scanner pode confundir reflexao com avaliacao.
+- **Engine com sandbox robusto:** mesmo que a expressao matematica seja avaliada, engines com sandbox ativo podem bloquear acesso a classes, metodos e modulos perigosos. O 7*7 funciona, mas escalar para RCE pode ser impossivel.
+- **Erro generico nao relacionado:** um erro 500 apos injetar payload pode ser causado por input malformado, nao por processamento de template. Verificar se a mensagem de erro referencia o engine ou se e um erro generico de validacao.
+- **Input sanitizado antes do template:** se o input passa por HTML encoding antes de ser inserido no template, os caracteres especiais (`{`, `}`, `$`, `%`) podem ser neutralizados.
+- **Avaliacao matematica fora de template:** algumas aplicacoes avaliam expressoes matematicas por design (ex: calculadoras, campos de formula). Isso nao e template injection.
 
 ## Recommendation
 1. Nunca concatenar entrada do usuário no template. Passar dados como variáveis e usar autoescape.

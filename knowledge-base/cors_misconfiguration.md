@@ -121,6 +121,7 @@ Sinais de que a misconfiguracao CORS detectada pelo scanner **nao e exploravel**
 - **Autenticacao por token em header (nao cookie):** se o site usa `Authorization: Bearer <token>` ao inves de cookies, a misconfiguracao CORS nao permite ao atacante enviar o token automaticamente.
 - **Preflight bloqueado:** o servidor responde ao `OPTIONS` com `403` ou sem headers CORS para origens nao confiaveis, bloqueando requests com headers custom ou metodos nao simples.
 - **Ambiente de staging/dev:** a misconfiguracao existe apenas em ambientes nao produtivos sem dados reais e sem acesso de usuarios finais.
+
 ## Recommendation
 1. Usar allowlist explícita de origens exatas (esquema + host + porta), nunca reflexão crua ou regex permissiva.
 2. Não combinar `Access-Control-Allow-Origin: *` com credenciais; para APIs públicas sem credenciais, `*` é aceitável.
