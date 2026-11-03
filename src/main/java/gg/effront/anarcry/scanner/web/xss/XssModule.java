@@ -142,9 +142,20 @@ public class XssModule implements Scanner {
                         }
                         String htmlPayload = xp.template();
                         String marker = xp.marker();
-                        String encodedHtml = URLEncoder.encode(WafEvasion.evasionPayload(ctx, htmlPayload), "UTF-8");
+                        List<String> variants = WafEvasion.bypassPayloads(ctx, htmlPayload);
+                        String encodedHtml = URLEncoder.encode(variants.getFirst(), "UTF-8");
                         String payloadUrl = base + path + "?" + param + "=" + encodedHtml;
                         ProbeResult payloadProbe = probe(ctx, hc, payloadUrl);
+                        if (!payloadProbe.isUsable() && variants.size() > 1) {
+                            for (int vi = 1; vi < variants.size(); vi++) {
+                                encodedHtml = URLEncoder.encode(variants.get(vi), "UTF-8");
+                                payloadUrl = base + path + "?" + param + "=" + encodedHtml;
+                                payloadProbe = probe(ctx, hc, payloadUrl);
+                                if (payloadProbe.isUsable()) {
+                                    break;
+                                }
+                            }
+                        }
                         String endpoint = path + "?" + param + "=" + encodedHtml;
 
                         if (!payloadProbe.isUsable()) {

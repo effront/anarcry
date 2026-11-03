@@ -108,7 +108,8 @@ public class SqlInjectionModule implements Scanner {
                         if (cancel.get()) {
                             return local;
                         }
-                        String encoded = URLEncoder.encode(WafEvasion.evasionPayload(ctx, payload), "UTF-8");
+                        List<String> variants = WafEvasion.bypassPayloads(ctx, payload);
+                        String encoded = URLEncoder.encode(variants.getFirst(), "UTF-8");
                         String url = base + path + "?" + param + "=" + encoded;
                         try {
                             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))

