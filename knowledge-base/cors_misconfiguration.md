@@ -90,30 +90,6 @@ Casos reais e mentalidade de ataque (RWBH): programas como Uber e Yahoo já tive
 - **Paths comuns:** `/api/*`, `/api/v1/user`, `/api/me`, `/graphql`, `/oauth/token`, `/admin/api/*`.
 - **Sinais:** `ACAO` refletindo `Origin`; `ACAC: true`; `ACAO: *` em endpoint autenticado; `Vary: Origin` ausente; métodos `PUT/DELETE` liberados.
 
-## Recommendation
-1. Usar allowlist explícita de origens exatas (esquema + host + porta), nunca reflexão crua ou regex permissiva.
-2. Não combinar `Access-Control-Allow-Origin: *` com credenciais; para APIs públicas sem credenciais, `*` é aceitável.
-3. Rejeitar `Origin: null` e origens desconhecidas com resposta sem cabeçalhos CORS.
-4. Validar a origem no servidor após parse completo da URL, comparando host exato; não usar `startsWith`/`endsWith`.
-5. Enviar `Vary: Origin` para evitar cache poisoning de respostas CORS.
-6. Limitar métodos e headers ao necessário; não liberar `Authorization` para origens não confiáveis.
-7. Preferir tokens no header `Authorization` a cookies para APIs cross-origin; se usar cookies, exigir `SameSite=Lax/Strict` e CSRF token.
-8. Exemplo Spring:
-```java
-@Bean
-CorsConfigurationSource corsConfigurationSource() {
-    CorsConfiguration c = new CorsConfiguration();
-    c.setAllowedOrigins(List.of("https://app.alvo.com", "https://admin.alvo.com"));
-    c.setAllowedMethods(List.of("GET", "POST"));
-    c.setAllowedHeaders(List.of("Content-Type", "Authorization"));
-    c.setAllowCredentials(true);
-    UrlBasedCorsConfigurationSource s = new UrlBasedCorsConfigurationSource();
-    s.registerCorsConfiguration("/api/**", c);
-    return s;
-}
-```
-9. Monitorar subdomínios e remover registros DNS órfãos para evitar bypass via subdomain takeover.
-
 ## Escalation Techniques
 CORS misconfiguration raramente e o objetivo final -- e o mecanismo que permite ao atacante ler dados cross-origin e pivotar para ataques de maior impacto:
 
@@ -145,3 +121,27 @@ Sinais de que a misconfiguracao CORS detectada pelo scanner **nao e exploravel**
 - **Autenticacao por token em header (nao cookie):** se o site usa `Authorization: Bearer <token>` ao inves de cookies, a misconfiguracao CORS nao permite ao atacante enviar o token automaticamente.
 - **Preflight bloqueado:** o servidor responde ao `OPTIONS` com `403` ou sem headers CORS para origens nao confiaveis, bloqueando requests com headers custom ou metodos nao simples.
 - **Ambiente de staging/dev:** a misconfiguracao existe apenas em ambientes nao produtivos sem dados reais e sem acesso de usuarios finais.
+## Recommendation
+1. Usar allowlist explícita de origens exatas (esquema + host + porta), nunca reflexão crua ou regex permissiva.
+2. Não combinar `Access-Control-Allow-Origin: *` com credenciais; para APIs públicas sem credenciais, `*` é aceitável.
+3. Rejeitar `Origin: null` e origens desconhecidas com resposta sem cabeçalhos CORS.
+4. Validar a origem no servidor após parse completo da URL, comparando host exato; não usar `startsWith`/`endsWith`.
+5. Enviar `Vary: Origin` para evitar cache poisoning de respostas CORS.
+6. Limitar métodos e headers ao necessário; não liberar `Authorization` para origens não confiáveis.
+7. Preferir tokens no header `Authorization` a cookies para APIs cross-origin; se usar cookies, exigir `SameSite=Lax/Strict` e CSRF token.
+8. Exemplo Spring:
+```java
+@Bean
+CorsConfigurationSource corsConfigurationSource() {
+    CorsConfiguration c = new CorsConfiguration();
+    c.setAllowedOrigins(List.of("https://app.alvo.com", "https://admin.alvo.com"));
+    c.setAllowedMethods(List.of("GET", "POST"));
+    c.setAllowedHeaders(List.of("Content-Type", "Authorization"));
+    c.setAllowCredentials(true);
+    UrlBasedCorsConfigurationSource s = new UrlBasedCorsConfigurationSource();
+    s.registerCorsConfiguration("/api/**", c);
+    return s;
+}
+```
+9. Monitorar subdomínios e remover registros DNS órfãos para evitar bypass via subdomain takeover.
+

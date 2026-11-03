@@ -89,22 +89,6 @@ Casos reais e mentalidade de ataque (RWBH): Uber e GitHub (perfis/roles) mostram
 - **Paths comuns:** `/api/users`, `/api/users/{id}`, `/api/register`, `/api/profile`, `/api/account`, `/api/settings`, `/api/organizations`, `/api/billing`, `/graphql`.
 - **Sinais:** OpenAPI/GraphQL revela campos internos; PATCH aceita body completo; frontend envia menos campos que o backend aceita; respostas incluem `role`/`isAdmin`.
 
-## Recommendation
-1. Usar DTOs específicos por operação (Create/Update) com allowlist explícita de campos; nunca vincular entidade de domínio diretamente ao body.
-2. Em Spring, usar `@JsonIgnoreProperties(ignoreUnknown = false)` ou `FAIL_ON_UNKNOWN_PROPERTIES` para rejeitar campos desconhecidos; evitar `@ModelAttribute` em entidades.
-```java
-public record UpdateUserRequest(
-    @NotBlank String name,
-    @Email String email
-) {}
-```
-3. Em Rails, usar strong parameters (`params.require(:user).permit(:name, :email)`); em Node, validar com Zod/Joi e montar o objeto campo a campo; em Laravel, `$fillable` restritivo.
-4. Nunca permitir que o cliente defina `role`, `isAdmin`, `permissions`, `ownerId`, `tenantId`, `balance` e `status`; esses campos devem ser derivados no servidor.
-5. Aplicar autorização e regras de negócio no servidor, independentemente do que o cliente envia.
-6. Rejeitar propriedades desconhecidas e retornar 400; não ignorar silenciosamente.
-7. Auditar alterações sensíveis e alertar sobre mudanças de role/owner fora do fluxo administrativo.
-8. Cobrir com testes que enviem campos extras em todos os endpoints de criação/atualização.
-
 ## Escalation Techniques
 - **Mass assignment + privilege escalation:** enviar `{"role":"admin"}` ou `{"isAdmin":true}` em endpoint de criacao/atualizacao de usuario para obter acesso administrativo; a partir dai, acessar dados de todos os usuarios, alterar configuracoes e criar backdoors.
 - **Mass assignment + account takeover:** alterar campos como `email`, `emailVerified:true` ou `resetToken` via mass assignment para sequestrar contas -- o atacante muda o e-mail para o seu, marca como verificado e redefine a senha.
@@ -126,3 +110,19 @@ public record UpdateUserRequest(
 - **Endpoint requer privilegio admin:** o endpoint que aceita mass assignment so e acessivel por administradores autenticados (ex.: `PUT /api/admin/users/{id}`) -- um admin alterando roles de outros usuarios e comportamento esperado, nao uma vulnerabilidade.
 - **Validacao rejeita com 400:** o servidor retorna `400 Bad Request` ou `422 Unprocessable Entity` com mensagem explicita sobre campos nao permitidos -- a protecao contra mass assignment esta funcionando.
 - **DTO especifico por operacao:** a API usa records/DTOs diferentes para criacao e atualizacao, com allowlist explicita de campos; campos nao declarados no DTO sao rejeitados na deserializacao -- o risco e mitigado por design.
+## Recommendation
+1. Usar DTOs específicos por operação (Create/Update) com allowlist explícita de campos; nunca vincular entidade de domínio diretamente ao body.
+2. Em Spring, usar `@JsonIgnoreProperties(ignoreUnknown = false)` ou `FAIL_ON_UNKNOWN_PROPERTIES` para rejeitar campos desconhecidos; evitar `@ModelAttribute` em entidades.
+```java
+public record UpdateUserRequest(
+    @NotBlank String name,
+    @Email String email
+) {}
+```
+3. Em Rails, usar strong parameters (`params.require(:user).permit(:name, :email)`); em Node, validar com Zod/Joi e montar o objeto campo a campo; em Laravel, `$fillable` restritivo.
+4. Nunca permitir que o cliente defina `role`, `isAdmin`, `permissions`, `ownerId`, `tenantId`, `balance` e `status`; esses campos devem ser derivados no servidor.
+5. Aplicar autorização e regras de negócio no servidor, independentemente do que o cliente envia.
+6. Rejeitar propriedades desconhecidas e retornar 400; não ignorar silenciosamente.
+7. Auditar alterações sensíveis e alertar sobre mudanças de role/owner fora do fluxo administrativo.
+8. Cobrir com testes que enviem campos extras em todos os endpoints de criação/atualização.
+

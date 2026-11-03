@@ -92,26 +92,6 @@ Casos reais e mentalidade de ataque (RWBH): Twitter e Yahoo (headers refletidos)
 - **Paths comuns:** `/redirect`, `/login`, `/logout`, `/set-locale`, `/api/redirect`, `/download`, `/error`, `/search`.
 - **Sinais:** entrada refletida em `Location`, `Set-Cookie` ou `Content-Type`; headers duplicados; resposta com `\r\n` no valor; logs com linhas forjadas.
 
-## Recommendation
-1. Rejeitar qualquer entrada que contenha `\r`, `\n` ou caracteres de controle antes de inserir em headers; usar validação de allowlist.
-2. Usar APIs do framework que codificam headers automaticamente; nunca concatenar strings em `Location`/`Set-Cookie`.
-3. Em Java, usar `HttpServletResponse.setHeader()` com valor sanitizado e validar com regex; evitar `addHeader` com entrada crua.
-4. Em Nginx, usar `$uri` normalizado e `return 302` com destino validado; não repassar headers não confiáveis.
-5. Normalizar e rejeitar sequências codificadas (`%0d`, `%0a`, `%250d`) após decodificação.
-6. Configurar proxies/WAF para bloquear CR/LF em headers e parâmetros, mas não confiar apenas neles.
-7. Sanitizar logs (escapar newlines) e nunca usar entrada do usuário como nome de header.
-8. Exemplo Java:
-```java
-private static final Pattern CRLF = Pattern.compile("[\\r\\n\\u0000]");
-
-public void redirect(HttpServletResponse res, String target) throws IOException {
-    if (CRLF.matcher(target).find()) throw new IllegalArgumentException("invalid target");
-    res.setStatus(302);
-    res.setHeader("Location", target);
-}
-```
-9. Testar respostas com `curl -i` e inspecionar headers/corpo após cada entrada.
-
 ## Escalation Techniques
 CRLF injection e um vetor inicial que escala rapidamente quando combinado com cache, sessao ou contexto HTML:
 
@@ -142,3 +122,23 @@ Sinais de que a CRLF injection detectada pelo scanner **nao e exploravel**:
 - **Proxy/WAF normaliza a resposta:** mesmo que o backend aceite CRLF, um proxy reverso (Nginx, Cloudflare) na frente pode normalizar headers e remover quebras de linha antes de entregar ao cliente -- o impacto real depende da topologia de rede.
 - **Reflexao em corpo, nao em header:** o scanner marca CRLF porque o valor `%0d%0a` aparece na resposta, mas ele esta no corpo HTML (nao em um header HTTP) -- isso nao e CRLF injection, pode ser XSS se renderizado.
 - **CRLF apenas em logs:** o payload afeta apenas logs do servidor, sem impacto na resposta HTTP ao cliente. Log injection e uma vulnerabilidade separada e de menor severidade.
+## Recommendation
+1. Rejeitar qualquer entrada que contenha `\r`, `\n` ou caracteres de controle antes de inserir em headers; usar validação de allowlist.
+2. Usar APIs do framework que codificam headers automaticamente; nunca concatenar strings em `Location`/`Set-Cookie`.
+3. Em Java, usar `HttpServletResponse.setHeader()` com valor sanitizado e validar com regex; evitar `addHeader` com entrada crua.
+4. Em Nginx, usar `$uri` normalizado e `return 302` com destino validado; não repassar headers não confiáveis.
+5. Normalizar e rejeitar sequências codificadas (`%0d`, `%0a`, `%250d`) após decodificação.
+6. Configurar proxies/WAF para bloquear CR/LF em headers e parâmetros, mas não confiar apenas neles.
+7. Sanitizar logs (escapar newlines) e nunca usar entrada do usuário como nome de header.
+8. Exemplo Java:
+```java
+private static final Pattern CRLF = Pattern.compile("[\\r\\n\\u0000]");
+
+public void redirect(HttpServletResponse res, String target) throws IOException {
+    if (CRLF.matcher(target).find()) throw new IllegalArgumentException("invalid target");
+    res.setStatus(302);
+    res.setHeader("Location", target);
+}
+```
+9. Testar respostas com `curl -i` e inspecionar headers/corpo após cada entrada.
+
