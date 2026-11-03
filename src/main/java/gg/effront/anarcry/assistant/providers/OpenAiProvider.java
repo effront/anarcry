@@ -105,6 +105,44 @@ public final class OpenAiProvider implements ProviderAdapter {
     }
 
     @Override
+    public StreamToolFragment parseStreamToolFragment(String line) {
+        if (line == null || line.isEmpty() || "[DONE]".equals(line)) {
+            return null;
+        }
+        try {
+            JsonObject json = GSON.fromJson(line, JsonObject.class);
+            JsonArray choices = json.getAsJsonArray("choices");
+            if (choices == null || choices.isEmpty()) {
+                return null;
+            }
+            JsonObject delta = choices.get(0).getAsJsonObject().getAsJsonObject("delta");
+            if (delta == null || !delta.has("tool_calls")) {
+                return null;
+            }
+            JsonArray toolCalls = delta.getAsJsonArray("tool_calls");
+            if (toolCalls == null || toolCalls.isEmpty()) {
+                return null;
+            }
+            JsonObject tc = toolCalls.get(0).getAsJsonObject();
+            String id = tc.has("id") && !tc.get("id").isJsonNull() ? tc.get("id").getAsString() : null;
+            JsonObject fn = tc.has("function") ? tc.getAsJsonObject("function") : null;
+            String name = fn != null && fn.has("name") && !fn.get("name").isJsonNull()
+                    ? fn.get("name").getAsString()
+                    : null;
+            String argsDelta = fn != null && fn.has("arguments") ? fn.get("arguments").getAsString() : null;
+            if (id != null && name != null) {
+                return new StreamToolFragment(id, name, argsDelta);
+            }
+            if (argsDelta != null) {
+                return new StreamToolFragment(null, null, argsDelta);
+            }
+        } catch (Exception e) {
+            // malformed
+        }
+        return null;
+    }
+
+    @Override
     public String extractToolCallJson(String body) {
         try {
             JsonObject json = GSON.fromJson(body, JsonObject.class);

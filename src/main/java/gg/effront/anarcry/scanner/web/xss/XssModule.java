@@ -41,13 +41,18 @@ public class XssModule implements Scanner {
             .compile("innerHTML\\s*=|outerHTML\\s*=|document\\.write\\s*\\(|eval\\s*\\(|"
                     + "location\\.href\\s*=|insertAdjacentHTML\\s*\\(|setTimeout\\s*\\(\\s*['\"]");
 
-    // Detects common HTML-encoding of '<' that indicates the app is escaping output
-    private static final Pattern HTML_ENCODED_LT = Pattern.compile("&lt;|&#x3[Cc];|&#60;");
+    private static final Pattern HTML_ENCODED_LT = Pattern.compile("&lt;|&#x3[Cc];|&#60;|\\\\u003[Cc]");
 
     private static final Pattern ALERT_CALL = Pattern.compile("alert\\([^)]*\\)");
     private static final Pattern EVENT_HANDLER = Pattern.compile("on(error|load|click|focus|toggle|mouseover|input)=");
 
     private record XssPayload(String template, String marker) {
+    }
+
+    private record ProbeResult(int status, String contentType, String body) {
+        boolean isUsable() {
+            return status >= 200 && status < 400 && contentType != null && contentType.contains("text/html");
+        }
     }
 
     @Override
@@ -72,8 +77,9 @@ public class XssModule implements Scanner {
         log.accept("[~] XSS: iniciando probe em " + base);
 
         // Phase 3 (DOM sink analysis) -- fetch root page once and scan JS inline
-        String rootBody = fetchBody(ctx, hc, base + "/");
-        if (!rootBody.isEmpty()) {
+        ProbeResult rootProbe = probe(ctx, hc, base + "/");
+        String rootBody = rootProbe.body();
+        if (rootProbe.isUsable() && !rootBody.isEmpty()) {
             var m = DOM_SINKS.matcher(rootBody);
             if (m.find()) {
                 String sink = m.group().trim();
@@ -115,14 +121,15 @@ public class XssModule implements Scanner {
                     String canary = "xsstest" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
 
                     // Anti-FP: always fetch baseline before injection
-                    String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=harmless");
+                    ProbeResult baselineProbe = probe(ctx, hc, base + path + "?" + param + "=harmless");
 
                     // Phase 1: inject canary and check for verbatim reflection
                     String canaryEncoded = URLEncoder.encode(canary, "UTF-8");
-                    String canaryBody = fetchBody(ctx, hc, base + path + "?" + param + "=" + canaryEncoded);
+                    ProbeResult canaryProbe = probe(ctx, hc, base + path + "?" + param + "=" + canaryEncoded);
 
-                    if (canaryBody.isEmpty() || !canaryBody.contains(canary) || baseline.contains(canary)) {
-                        continue; // not reflected, or coincidental baseline match
+                    if (!canaryProbe.isUsable() || !canaryProbe.body().contains(canary)
+                            || baselineProbe.body().contains(canary)) {
+                        continue;
                     }
 
                     log.accept("[~] XSS: canary refletido em " + path + "?" + param);
@@ -137,12 +144,13 @@ public class XssModule implements Scanner {
                         String marker = xp.marker();
                         String encodedHtml = URLEncoder.encode(WafEvasion.evasionPayload(ctx, htmlPayload), "UTF-8");
                         String payloadUrl = base + path + "?" + param + "=" + encodedHtml;
-                        String payloadBody = fetchBody(ctx, hc, payloadUrl);
+                        ProbeResult payloadProbe = probe(ctx, hc, payloadUrl);
                         String endpoint = path + "?" + param + "=" + encodedHtml;
 
-                        if (payloadBody.isEmpty()) {
+                        if (!payloadProbe.isUsable()) {
                             continue;
                         }
+                        String payloadBody = payloadProbe.body();
                         boolean appEscapes = HTML_ENCODED_LT.matcher(payloadBody).find();
 
                         if (!appEscapes && payloadBody.contains(marker)) {
@@ -229,14 +237,18 @@ public class XssModule implements Scanner {
         return List.copyOf(payloads);
     }
 
-    private String fetchBody(ScanContext ctx, HttpClient hc, String url) {
+    private static final ProbeResult EMPTY_PROBE = new ProbeResult(0, "", "");
+
+    private ProbeResult probe(ScanContext ctx, HttpClient hc, String url) {
         try {
             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6)).GET()
                     .build();
             HttpResponse<String> r = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
-            return r.body() != null ? r.body() : "";
+            String ct = r.headers().firstValue("content-type").orElse("");
+            String body = r.body() != null ? r.body() : "";
+            return new ProbeResult(r.statusCode(), ct, body);
         } catch (Exception e) {
-            return "";
+            return EMPTY_PROBE;
         }
     }
 }

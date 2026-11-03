@@ -24,6 +24,7 @@ public class AssistantPanel extends Panel {
     private final Panel chatArea;
     private final PasteableTextBox inputBox;
     private final Label hintLabel;
+    private final Label usageLabel;
     private final List<ChatLine> chatLines = new ArrayList<>();
     private final boolean configured;
 
@@ -49,12 +50,18 @@ public class AssistantPanel extends Panel {
         inputBox = new PasteableTextBox(new TerminalSize(0, 1));
         hintLabel = new Label(" /findings /explain /plan /kb /clear /provider /model  |  Enter: send");
         hintLabel.setForegroundColor(TextColor.ANSI.WHITE);
+        usageLabel = new Label("");
+        usageLabel.setForegroundColor(TextColor.ANSI.CYAN);
 
         var centerPanel = new Panel(new BorderLayout());
         centerPanel.addComponent(chatArea.withBorder(Borders.singleLine("Chat")), BorderLayout.Location.CENTER);
 
+        var hintRow = new Panel(new BorderLayout());
+        hintRow.addComponent(hintLabel, BorderLayout.Location.LEFT);
+        hintRow.addComponent(usageLabel, BorderLayout.Location.RIGHT);
+
         var bottomPanel = new Panel(new LinearLayout(Direction.VERTICAL));
-        bottomPanel.addComponent(hintLabel);
+        bottomPanel.addComponent(hintRow);
         bottomPanel.addComponent(inputBox);
 
         addComponent(centerPanel, BorderLayout.Location.CENTER);
@@ -171,6 +178,10 @@ public class AssistantPanel extends Panel {
         }
         streamingBuffer = null;
         repaintChat();
+    }
+
+    public void updateUsage(String summary) {
+        usageLabel.setText(summary + "  ");
     }
 
     public void scrollUp(int n) {

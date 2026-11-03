@@ -99,6 +99,33 @@ public final class AnthropicProvider implements ProviderAdapter {
     }
 
     @Override
+    public StreamToolFragment parseStreamToolFragment(String line) {
+        if (line == null || line.isEmpty()) {
+            return null;
+        }
+        try {
+            JsonObject json = GSON.fromJson(line, JsonObject.class);
+            String type = json.has("type") ? json.get("type").getAsString() : "";
+            if ("content_block_start".equals(type)) {
+                JsonObject block = json.getAsJsonObject("content_block");
+                if (block != null && "tool_use".equals(block.has("type") ? block.get("type").getAsString() : "")) {
+                    return new StreamToolFragment(block.get("id").getAsString(), block.get("name").getAsString(), null);
+                }
+            }
+            if ("content_block_delta".equals(type)) {
+                JsonObject delta = json.getAsJsonObject("delta");
+                if (delta != null
+                        && "input_json_delta".equals(delta.has("type") ? delta.get("type").getAsString() : "")) {
+                    return new StreamToolFragment(null, null, delta.get("partial_json").getAsString());
+                }
+            }
+        } catch (Exception e) {
+            // malformed
+        }
+        return null;
+    }
+
+    @Override
     public String extractToolCallJson(String body) {
         try {
             JsonObject json = GSON.fromJson(body, JsonObject.class);

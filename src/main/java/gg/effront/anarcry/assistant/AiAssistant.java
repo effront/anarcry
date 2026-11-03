@@ -84,14 +84,12 @@ public final class AiAssistant {
 
     public void sendStreaming(String userMessage, String systemPrompt, String toolsJson, Consumer<String> tokenCallback)
             throws Exception {
-        if (!tools.isEmpty()) {
-            String result = send(userMessage, systemPrompt, toolsJson);
-            tokenCallback.accept(result);
-            return;
-        }
-
         conversationHistory.add(ChatMessage.user(userMessage));
+        streamInternal(systemPrompt, toolsJson, tokenCallback);
+    }
 
+    private void streamInternal(String systemPrompt, String toolsJson, Consumer<String> tokenCallback)
+            throws Exception {
         List<ChatMessage> snapshot;
         synchronized (conversationHistory) {
             snapshot = new ArrayList<>(conversationHistory);
@@ -111,6 +109,9 @@ public final class AiAssistant {
 
         StringBuilder fullResponse = new StringBuilder();
         String lastFullBody = null;
+        String toolCallId = null;
+        String toolCallName = null;
+        StringBuilder toolInputJson = new StringBuilder();
 
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
@@ -127,6 +128,16 @@ public final class AiAssistant {
                         fullResponse.append(token);
                         tokenCallback.accept(token);
                     }
+                    ProviderAdapter.StreamToolFragment frag = provider.parseStreamToolFragment(data);
+                    if (frag != null) {
+                        if (frag.isStart()) {
+                            toolCallId = frag.id();
+                            toolCallName = frag.name();
+                        }
+                        if (frag.inputDelta() != null) {
+                            toolInputJson.append(frag.inputDelta());
+                        }
+                    }
                 }
             }
         }
@@ -134,6 +145,28 @@ public final class AiAssistant {
         if (lastFullBody != null) {
             UsageInfo usage = provider.extractUsage(lastFullBody, config.model());
             usageTracker.record(usage);
+        }
+
+        if (toolCallName != null && !tools.isEmpty()) {
+            String responseText = fullResponse.toString();
+            JsonObject toolCallPayload = new JsonObject();
+            toolCallPayload.addProperty("id", toolCallId != null ? toolCallId : "call_" + System.nanoTime());
+            toolCallPayload.addProperty("name", toolCallName);
+            String inputStr = toolInputJson.toString();
+            toolCallPayload.add("input",
+                    inputStr.isEmpty() ? new JsonObject() : GSON.fromJson(inputStr, JsonObject.class));
+
+            if (!responseText.isEmpty()) {
+                conversationHistory.add(ChatMessage.assistant(responseText));
+            }
+            conversationHistory.add(ChatMessage.assistantToolCall(GSON.toJson(toolCallPayload)));
+
+            String toolResult = dispatchToolCall(GSON.toJson(toolCallPayload));
+            if (toolResult != null) {
+                conversationHistory.add(ChatMessage.toolResult(toolResult, toolCallPayload.get("id").getAsString()));
+                streamInternal(systemPrompt, toolsJson, tokenCallback);
+                return;
+            }
         }
 
         conversationHistory.add(ChatMessage.assistant(fullResponse.toString()));
