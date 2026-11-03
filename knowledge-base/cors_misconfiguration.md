@@ -113,3 +113,35 @@ CorsConfigurationSource corsConfigurationSource() {
 }
 ```
 9. Monitorar subdomínios e remover registros DNS órfãos para evitar bypass via subdomain takeover.
+
+## Escalation Techniques
+CORS misconfiguration raramente e o objetivo final -- e o mecanismo que permite ao atacante ler dados cross-origin e pivotar para ataques de maior impacto:
+
+- **Roubo de dados autenticados:** se `Access-Control-Allow-Credentials: true` com origem refletida, uma pagina maliciosa le respostas autenticadas (tokens, PII, dados financeiros) via `fetch` com `credentials: 'include'`. O livro (Bug Bounty Bootcamp, Cap. 19) descreve como o atacante hospeda script que exfiltra a resposta para servidor proprio.
+- **Account takeover via dados de sessao:** quando o endpoint retorna tokens de API, chaves de sessao ou dados de reset de senha, o atacante automatiza a coleta e assume contas em massa.
+- **Exfiltracao via subdomain takeover:** se a politica confia em `*.example.com` e um subdomain esta abandonado (DNS CNAME dangling), o atacante registra o subdomain no servico de terceiros e usa a confianca CORS para exfiltrar dados. O livro (Cap. 20) detalha como subdomain takeovers permitem contornar SOP via cookies compartilhados e trust CORS.
+- **CORS + XSS em subdominio:** o livro (Cap. 19) destaca que "XSS is essentially a full SOP bypass" -- XSS em qualquer subdominio confiavel pela politica CORS permite ler dados autenticados da aplicacao principal, transformando um XSS de baixo impacto em vazamento cross-origin completo.
+- **CORS + cache poisoning:** se o servidor nao envia `Vary: Origin`, uma resposta com `ACAO: evil.com` pode ser cacheada por CDN/proxy e servida a outros usuarios, amplificando o impacto de um unico request malicioso.
+- **CORS + OAuth token theft:** em fluxos OAuth que retornam tokens via API, a misconfiguracao permite captura do `access_token` diretamente da resposta, sem depender de redirect_uri aberto.
+- **Automatizacao e coleta em massa:** o livro (Cap. 19) orienta avaliar: "can you harvest large amounts of user data by automating the exploitation of the SOP bypass?" -- automatizar a exfiltracao de dados de multiplos usuarios amplifica a severidade.
+
+## Hunting Methodology
+Processo passo a passo para identificar CORS misconfiguration, baseado no Cap. 19 (Bug Bounty Bootcamp):
+
+1. **Identificar tecnicas de relaxamento de SOP:** ao navegar a aplicacao com proxy (Burp/ZAP), procurar por respostas contendo `Access-Control-Allow-Origin`. O livro orienta verificar tambem se a pagina usa `postMessage()` (inspecionar Event Listeners no DevTools) ou JSONP (`<script src="...?callback=...">`).
+2. **Testar reflexao de Origin para CORS:** enviar request com `Origin: https://evil.com` e verificar se `Access-Control-Allow-Origin` retorna `https://evil.com`. Repetir com `Origin: null` -- a forma mais basica de misconfiguracao (Cap. 19: "the most basic misconfiguration involves allowing the null origin").
+3. **Testar bypasses de validacao por regex fraca:** o livro explica que regex como `.*example.com.*` e facilmente contornada. Enviar origens que exploram validacao incompleta -- `https://alvo.com.evil.com` (startsWith), `https://evilalvo.com` (endsWith), `https://alvo.com@evil.com` (userinfo), `http://alvo.com` (downgrade de esquema).
+4. **Verificar `Access-Control-Allow-Credentials`:** sem este header como `true`, o navegador nao envia cookies, limitando o impacto. Anotar quais endpoints combinam ACAO refletido com ACAC: true -- esses sao os alvos de alto impacto.
+5. **Considerar fatores mitigantes:** o livro (Cap. 19) alerta que se o site nao usa cookies para autenticacao (ex.: tokens em headers custom), a misconfiguracao pode nao ser exploravel diretamente.
+6. **Montar PoC em navegador:** criar pagina HTML com `fetch()` usando `credentials: 'include'` a partir da origem aceita; exfiltrar a resposta para servidor controlado. O livro enfatiza que reports sem PoC funcional e sem demonstracao de impacto sao mais fracos.
+7. **Checar cache poisoning:** verificar se a resposta inclui `Vary: Origin`; se nao, testar se a resposta com ACAO refletido e cacheada por CDN/proxy, amplificando o impacto para todos os visitantes.
+
+## False Positive Indicators
+Sinais de que a misconfiguracao CORS detectada pelo scanner **nao e exploravel**:
+
+- **`ACAO: *` sem credenciais:** o livro (Cap. 19) explica que `Access-Control-Allow-Origin: *` nao e exploravel porque "CORS doesn't allow credentials [...] to be sent with requests to these pages [...] no private information can be accessed." Navegadores bloqueiam cookies e headers de autenticacao nesse cenario.
+- **Endpoint sem dados sensiveis:** se o endpoint retorna apenas dados publicos (lista de paises, configuracao de tema), a reflexao de Origin nao tem impacto. O livro alerta: "if a publicly readable page is served with a null ACAO header, it would not cause damage."
+- **Reflexao de Origin sem `ACAC: true`:** o servidor reflete o `Origin` no `ACAO` mas nao envia `Allow-Credentials: true` -- o navegador nao incluira cookies, limitando o impacto a dados acessiveis sem autenticacao.
+- **Autenticacao por token em header (nao cookie):** se o site usa `Authorization: Bearer <token>` ao inves de cookies, a misconfiguracao CORS nao permite ao atacante enviar o token automaticamente.
+- **Preflight bloqueado:** o servidor responde ao `OPTIONS` com `403` ou sem headers CORS para origens nao confiaveis, bloqueando requests com headers custom ou metodos nao simples.
+- **Ambiente de staging/dev:** a misconfiguracao existe apenas em ambientes nao produtivos sem dados reais e sem acesso de usuarios finais.

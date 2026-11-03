@@ -128,6 +128,31 @@ Casos reais e mentalidade de ataque (RWBH): Uber (fetch de imagens/avatares), Fa
 
 **Fontes**: CVE List v5 (cvelistV5), NVD, advisories dos vendors.
 
+## Escalation Techniques
+- **Roubo de credenciais cloud:** SSRF para `169.254.169.254/latest/meta-data/iam/security-credentials/ROLE_NAME` (AWS) exfiltra access key, secret key e session token. Em GCP, usar `metadata.google.internal/computeMetadata/v1beta1/instance/service-accounts/default/token` (v1beta1 nao exige header `Metadata-Flavor`).
+- **Port scanning e mapeamento de rede:** variar host (`10.0.0.1-255`) e porta (`22, 80, 443, 3306, 5432, 6379, 8080, 8443`) e observar diferencas em status code (200 vs 500) e tempo de resposta para inferir topologia interna e servicos ativos.
+- **Bypass de controle de acesso:** usar o servidor como proxy para acessar paineis administrativos internos (`admin.example.com`, `internal-api.local`) que confiam no IP de origem.
+- **RCE via servicos internos:** SSRF para Redis (`gopher://127.0.0.1:6379/_SET...`), Docker API (`http://127.0.0.1:2375/containers/create`), Consul, Jenkins, Actuator -- servicos que normalmente nao exigem auth na rede interna.
+- **Exfiltracao via blind SSRF:** quando a resposta nao e refletida, usar DNS out-of-band (Collaborator, interact.sh) para confirmar conectividade, e inferir dados por timing e status codes.
+- **Combinar com open redirect:** se a allowlist aceita subdomains do alvo, encontrar um redirect aberto nesse subdomain para pivotar para `127.0.0.1` ou metadata.
+
+## Hunting Methodology
+1. Identificar features que buscam recursos externos: webhooks, upload por URL, previews, screenshots, PDF generation, avatares, integracao com servicos externos, proxies.
+2. Testar endpoints com URLs internas: `http://127.0.0.1`, `http://169.254.169.254/latest/meta-data/`, `http://[::1]`.
+3. Para SSRF regular: observar se a resposta contem banners de servico, conteudo de paginas internas ou dados de metadata.
+4. Para blind SSRF: usar servidor proprio (Netcat, Collaborator, interact.sh) e verificar se o alvo faz requisicoes outbound. Comparar status codes e tempos entre portas abertas e fechadas.
+5. Se houver blocklist: tentar bypass via representacoes alternativas de IP (decimal `2130706433`, octal `0177.0.0.1`, hex `0x7f000001`), redirect via dominio controlado, DNS rebinding, IPv6 (`[::ffff:127.0.0.1]`).
+6. Se houver allowlist: testar confusao de authority (`http://allowed.com@127.0.0.1`), regex fraco (`http://127.0.0.1/allowed.com`), e open redirects em dominios permitidos.
+7. Verificar URLs embutidas em arquivos processados pela aplicacao (XML, PDF, SVG) -- podem triggerar SSRF indireta.
+
+## False Positive Indicators
+- Servidor retorna erro generico para qualquer URL invalida, nao apenas para ranges internos -- pode ser validacao de formato, nao SSRF.
+- Requisicao DNS out-of-band e recebida mas sem HTTP follow-up -- indica que o servidor resolve DNS mas pode ter firewall de egress bloqueando conexoes.
+- Resposta identica para `127.0.0.1` e para dominio publico invalido -- a aplicacao pode estar rejeitando todas as URLs sem busca-las.
+- Funcionalidade de upload aceita URL mas processa client-side (JavaScript fetch) e nao server-side -- nao e SSRF.
+- Aplicacao retorna conteudo da URL mas com cache CDN -- a resposta pode ser cache de requisicao anterior, nao fetch real do servidor.
+- IMDSv2 ativo (requer token via PUT com hop limit) -- SSRF nao consegue obter o token, metadata retorna 401.
+
 ## Recommendation
 1. Preferir allowlist de hosts, portas e esquemas necessários; nunca aceitar URL arbitrária.
 2. Resolver o DNS no servidor, validar todos os IPs retornados e bloquear faixas privadas, loopback, link-local, multicast e metadata. Repetir a validação após cada redirect.

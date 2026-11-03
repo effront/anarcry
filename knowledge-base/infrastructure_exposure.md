@@ -93,6 +93,26 @@ Casos reais e mentalidade de ataque (RWBH): o padrão é usar SSRF ou scan diret
 - **Portas comuns:** 21, 22, 23, 25, 80, 443, 445, 1433, 1521, 2375, 2376, 3000, 3306, 5432, 5601, 6379, 8080, 8443, 8500, 9000, 9090, 9200, 9300, 11211, 27017.
 - **Sinais:** banner com versão; ausência de auth; `0.0.0.0`; painel acessível; dados de índice; `CONFIG GET` aberto.
 
+## Escalation Techniques
+- **RCE via Redis:** `CONFIG SET dir /var/spool/cron/` + `SET` + `SAVE` para escrever crontab; ou `MODULE LOAD` com .so malicioso.
+- **RCE via Docker API:** `POST /containers/create` com bind mount de `/` e exec para acessar filesystem do host.
+- **Data exfiltration via Elasticsearch:** indices sem auth permitem dump de todos os documentos; `_search` com `*` retorna tudo.
+- **Lateral movement:** credenciais default em servicos (MySQL `root`/vazio, MongoDB sem auth, Redis sem `requirepass`) permitem pivotar.
+- **SSRF pivot:** combinar com SSRF para acessar servicos internos que nao estao expostos diretamente.
+
+## Hunting Methodology
+1. Port scan das portas comuns de infraestrutura (Redis 6379, Docker 2375, Elasticsearch 9200, MongoDB 27017, MySQL 3306, Postgres 5432).
+2. Para cada porta aberta, tentar banner grab e identificar servico/versao.
+3. Testar credenciais default e acesso sem autenticacao.
+4. Se autenticado, verificar o nivel de privilegio e se permite leitura/escrita de dados sensiveis.
+5. Verificar se servicos de gerenciamento (Consul 8500, Kibana 5601, phpMyAdmin) estao expostos.
+
+## False Positive Indicators
+- Porta aberta mas servico requer autenticacao forte (TLS mutuo, RBAC) -- exposicao existe mas nao e exploravel sem credenciais.
+- Banner visivel mas servico retorna `401`/`403` para qualquer operacao -- auth implementada.
+- Servico acessivel apenas via IP interno e scan via SSRF -- o risco e real mas depende de outro vetor.
+- Honeypot: servico responde com dados falsos para detectar atacantes.
+
 ## Recommendation
 1. Fechar portas de infraestrutura na internet; usar VPN, bastion host ou private link.
 2. Bind em `127.0.0.1`/rede interna e aplicar security groups/firewall com least privilege.

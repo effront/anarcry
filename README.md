@@ -29,9 +29,9 @@
 +===========================================================================+
 |  ANARCRY -- Java 27 Security Scanner                                      |
 +===========================================================================+
-|  TUI scanner for bug bounty. 25 attack modules, parallel execution,       |
-|  CVSS v3.1 auto-scoring, knowledge base with 25 entries, export to        |
-|  HackerOne and Bugcrowd. Crypto-first + OWASP Top 10.                     |
+|  Security scanner for bug bounty. 25 attack modules, parallel execution,  |
+|  CVSS v3.1 auto-scoring, knowledge base with 26 entries, export to        |
+|  HackerOne and Bugcrowd. TUI + Swing GUI + AI Assistant.                  |
 +===========================================================================+
 ```
 
@@ -72,7 +72,7 @@
 |  [x] Actuator        -- Spring Boot /env /heapdump /mappings /beans       |
 |  [x] MassAssign      -- JSON mass assignment on REST endpoints            |
 |  [x] CachePoisoning  -- unkeyed headers reflected and cached              |
-|  [x] ReqSmuggling    -- CL.TE, TE.CL, TE.TE, Duplicate CL, CL.0,        |
+|  [x] ReqSmuggling    -- CL.TE, TE.CL, TE.TE, Duplicate CL, CL.0,          |
 |                         Hop-by-hop TE stripping                           |
 +---------------------------------------------------------------------------+
 ```
@@ -89,12 +89,13 @@
 |  02 - Technology Stack                               |
 |  03 - Export Formats                                 |
 |  04 - Findings                                       |
-|  05 - Interface TUI                                  |
+|  05 - Interface (TUI + GUI)                          |
 |  06 - Testing                                        |
 |  07 - Architecture                                   |
 |  08 - Knowledge Base                                 |
-|  09 - Changelog                                      |
-|  10 - Ethical Use                                    |
+|  09 - AI Assistant                                   |
+|  10 - Changelog                                      |
+|  11 - Ethical Use                                    |
 +------------------------------------------------------+
 ```
 
@@ -104,7 +105,7 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.7.1.jar
+java -jar build/libs/anarcry-1.8.0.jar
 ```
 
 Or use the launcher (auto-builds if source changed):
@@ -117,6 +118,12 @@ With `.env.local` for pre-configured targets:
 
 ```bash
 ./anarchrypto --env .env.local
+```
+
+Launch in GUI mode (Swing + FlatLaf):
+
+```bash
+java -jar build/libs/anarcry-1.8.0.jar --gui
 ```
 
 ---
@@ -136,6 +143,9 @@ With `.env.local` for pre-configured targets:
 |  JSON                |  Gson 2.11.0                                       |
 |  CVSS                |  CvssCalculator.java (FIRST formula, zero deps)    |
 |  Knowledge Base      |  knowledge_base.json (25 entries, CWE+CVSS+VRT)    |
+|                      |  knowledge-base/*.md (26 enriched entries)         |
+|  AI Assistant        |  Multi-provider (Claude, OpenAI, Gemini, Ollama)   |
+|  GUI                 |  Swing + FlatLaf + RSyntaxTextArea + JFreeChart    |
 |  Test                |  JUnit 5.11.3                                      |
 +======================+====================================================+
 ```
@@ -146,10 +156,10 @@ With `.env.local` for pre-configured targets:
 
 | Format | How to use | Output |
 |---|---|---|
-| Markdown + JSON | `[E]` in TUI -> option 1 | `docs/reports/anarcry-report-*.md` + `.json` |
-| HackerOne | `[E]` in TUI -> option 2 | `docs/reports/h1-report-*.md` (KB-enriched) |
-| Bugcrowd | `[E]` in TUI -> option 3 | `docs/reports/bugcrowd-report-*.md` (VRT mapped) |
-| JSON only | `[E]` in TUI -> option 4 | `docs/reports/anarcry-findings-*.json` |
+| Markdown + JSON | `[E]` in TUI -> option 1 | `~/.anarcry/reports/anarcry-report-*.md` + `.json` |
+| HackerOne | `[E]` in TUI -> option 2 | `~/.anarcry/reports/h1-report-*.md` (KB-enriched) |
+| Bugcrowd | `[E]` in TUI -> option 3 | `~/.anarcry/reports/bugcrowd-report-*.md` (VRT mapped) |
+| JSON only | `[E]` in TUI -> option 4 | `~/.anarcry/reports/anarcry-findings-*.json` |
 
 HackerOne and Bugcrowd exports are enriched from the Knowledge Base with detailed descriptions, impact statements, remediation guidance, and VRT classification.
 
@@ -191,7 +201,11 @@ without knowing their credentials.
 
 ---
 
-## 05 - Interface TUI
+## 05 - Interface
+
+Two interfaces: **TUI** (Lanterna, terminal-native) and **GUI** (Swing + FlatLaf, desktop). Both offer the same core functionality: Target scan, Repeater, Findings, SiteMap, Export. The GUI adds a Dashboard with severity chart (JFreeChart), Preferences dialog, and the AI Assistant chat view.
+
+### TUI
 
 Two operational modes: **Target** (main scan interface) and **Repeater** (HTTP request replay). Tab bar at the top, status bar at the bottom with severity counters and progress.
 
@@ -246,6 +260,29 @@ Two operational modes: **Target** (main scan interface) and **Repeater** (HTTP r
 | `PgUp/PgDn` | Scroll log |
 | `S` | Expand module progress to log (during scan) |
 | `F8` | Event log drawer |
+
+### GUI
+
+Launch with `--gui` flag. Tabs: Dashboard, Target, Findings, Repeater, SiteMap, Report, Assistant.
+
+```
++-----------------------------------------------------------------------+
+| AnarCry                                    [Privacy] [Preferences]    |
++-----------------------------------------------------------------------+
+| Dashboard | Target | Findings | Repeater | SiteMap | Report | AI Asst |
++-----------------------------------------------------------------------+
+|                                                                       |
+|  Severity Distribution (pie)   |   Recent Findings                    |
+|  [CRIT: 3] [HIGH: 5]           |   - JWT alg:none (CRITICAL)          |
+|  [MED: 8]  [LOW: 2]            |   - CORS origin reflect (CRITICAL)   |
+|                                |   - XSS reflected (HIGH)             |
+|                                                                       |
++-----------------------------------------------------------------------+
+|  Status: Scanning... | 8/25 modules | C:3 H:5 M:8 L:2 I:0             |
++-----------------------------------------------------------------------+
+```
+
+**AI Assistant tab:** chat interface with SSE streaming, tool-use indicators, and token usage display. Supports Claude, OpenAI, Gemini, and Ollama. Configure provider and API key in Preferences.
 
 ---
 
@@ -302,13 +339,47 @@ src/main/java/gg/effront/anarcry/
 |                                   ReqSmuggling, Crawler, Infra
 +-- report/
 |   +-- ReportEngine.java          MD+JSON / HackerOne / Bugcrowd (KB-enriched)
-|                                   All reports saved to docs/reports/
+|                                   All reports saved to ~/.anarcry/reports/
++-- assistant/
+|   +-- AiAssistant.java           SSE streaming, tool dispatch, conversation history
+|   +-- ContextBuilder.java        System prompt with Finding Validation Protocol
+|   +-- AssistantConfig.java       Provider/model/API key/temperature config
+|   +-- ChatMessage.java           Conversation message record
+|   +-- UsageTracker.java          Token usage tracking and cost estimation
+|   +-- providers/
+|   |   +-- ProviderAdapter.java   Interface: formatRequest, parseResponse, streaming
+|   |   +-- AnthropicProvider      Claude API (content_block_start/input_json_delta)
+|   |   +-- OpenAiProvider         OpenAI API (delta.tool_calls)
+|   |   +-- GeminiProvider         Google Gemini API
+|   |   +-- OllamaProvider         Local Ollama API
+|   +-- tools/
+|       +-- GetFindingsTool        Retrieve scan findings
+|       +-- GetSitemapTool         Retrieve discovered sitemap
+|       +-- GetScanConfigTool      Retrieve scan configuration
+|       +-- QueryKbTool            Query knowledge base entries
+|       +-- ExplainCweTool         Explain CWE IDs with context
+|       +-- SaveDocTool            Save markdown documents to ~/.anarcry/reports/
++-- gui/
+|   +-- AnarCryGui.java            Main Swing window (FlatLaf theme)
+|   +-- GuiController.java         View orchestration and scan lifecycle
+|   +-- PrivacyFilter.java         URL/JWT/IP redaction (Ctrl+Shift+P)
+|   +-- views/
+|   |   +-- DashboardView          Overview with severity chart (JFreeChart)
+|   |   +-- TargetView             Target config + module selection
+|   |   +-- FindingsView           Findings table with detail panel
+|   |   +-- RepeaterView           HTTP request replay
+|   |   +-- SiteMapView            Crawled sitemap tree
+|   |   +-- ReportView             Report generation and export
+|   |   +-- AssistantView          AI Assistant chat with streaming + tools
+|   +-- components/                Reusable GUI components
+|   +-- theme/                     FlatLaf theme customization
 +-- tui/
     +-- AnarCryTui.java            Main TUI window (Lanterna)
     +-- PasteableTextBox.java      Custom text box with paste support
     +-- chrome/                    ModeBar, StatusBar, ActionPalette, EventLogDrawer
     +-- modes/                     Target mode, Repeater mode
-    +-- panels/                    FindingsPanel, LogPanel, ModulesPanel, SiteMapPanel
+    +-- panels/                    FindingsPanel, LogPanel, ModulesPanel, SiteMapPanel,
+                                    AssistantPanel
 ```
 
 **Scan execution flow:**
@@ -329,20 +400,68 @@ ScanRunner.run(ScanContext)
 
 ## 08 - Knowledge Base
 
-`src/main/resources/knowledge_base.json` contains 25 entries, one per vulnerability class. Each entry provides:
+Two layers:
 
-- CWE ID and title
-- CVSS v3.1 vector (curated per module)
-- VRT ID (Bugcrowd Vulnerability Rating Taxonomy)
-- Summary, description, and impact text
-- Payloads and crawler hints
-- Remediation guidance
+**Structured data** -- `src/main/resources/knowledge_base.json` contains 25 entries (one per vulnerability class). Each entry provides CWE ID, CVSS v3.1 vector, VRT ID, summary, payloads, crawler hints, and remediation. `CweRegistry` delegates to `KnowledgeBase` at runtime -- findings auto-resolve CWE and CVSS from the KB when created via `Finding.of()`.
 
-`CweRegistry` delegates to `KnowledgeBase` at runtime -- findings auto-resolve CWE and CVSS from the KB when created via `Finding.of()`.
+**Enriched markdown** -- `knowledge-base/*.md` contains 26 entries with extended sections:
+
+- Description, impact, payloads and bypasses
+- Escalation Techniques (account takeover, data exfiltration, lateral movement)
+- Hunting Methodology (step-by-step discovery procedure)
+- False Positive Indicators (non-exploitable contexts, framework auto-escape)
+- Notable CVEs (71 real-world CVEs across 7 classes from MITRE CVE List v5)
+- WAF evasion strategies (Cloudflare, Akamai, Vercel-specific bypasses)
+
+The AI Assistant uses the markdown KB via `QueryKbTool` for contextual vulnerability analysis.
 
 ---
 
-## 09 - Changelog
+## 09 - AI Assistant
+
+Built-in LLM-powered security analyst available in both TUI and GUI. Supports four providers:
+
+| Provider | Models | Streaming |
+|----------|--------|-----------|
+| Claude (Anthropic) | claude-sonnet-4-20250514, claude-opus-4-20250514 | SSE with tool fragments |
+| OpenAI | gpt-4o, gpt-4o-mini | SSE with tool fragments |
+| Gemini | gemini-2.0-flash, gemini-2.5-pro | SSE |
+| Ollama | any local model | SSE |
+
+**Tools:** The assistant has 7 tools it can call proactively during analysis:
+
+| Tool | Purpose |
+|------|---------|
+| `get_findings` | Retrieve current scan findings with severity filter |
+| `get_sitemap` | Retrieve Crawler-discovered paths and parameters |
+| `get_scan_config` | Retrieve target, scope, and auth configuration |
+| `query_kb` | Query knowledge base for vulnerability context |
+| `explain_cwe` | Explain CWE IDs with impact and remediation |
+| `save_document` | Save markdown reports to ~/.anarcry/reports/ |
+
+**Slash commands:** `/findings`, `/explain <id>`, `/remediate`, `/plan`, `/kb <topic>`, `/report`
+
+**Finding Validation Protocol:** The assistant follows a mandatory 6-step validation before confirming any finding -- verify attack surface, analyze reflection context, check defenses, confirm impact, honest severity assessment, report or discard. Based on Bug Bounty Bootcamp (Vickie Li) methodology.
+
+---
+
+## 10 - Changelog
+
+### v1.8.0
+
+- **AI Assistant integration**: multi-provider LLM assistant (Claude, OpenAI, Gemini, Ollama) with SSE streaming, tool use, and conversation history -- available in both TUI (AssistantPanel) and GUI (AssistantView)
+- **Assistant tools**: 7 built-in tools -- get_findings, get_sitemap, get_scan_config, query_kb, explain_cwe, save_document -- dispatched automatically via streaming tool fragment detection
+- **Finding Validation Protocol**: 6-step mandatory validation in assistant system prompt based on Bug Bounty Bootcamp methodology -- prevents false positive relay in AI analysis
+- **Streaming tool fragments**: cross-provider SSE tool-call detection (Anthropic content_block_start/input_json_delta, OpenAI delta.tool_calls) with robust fragment accumulation
+- **SaveDocTool**: assistant can save markdown documents directly to ~/.anarcry/reports/ with timestamped filenames
+- **XSS false positive fix**: ProbeResult-based validation -- HTTP status filtering (reject 404), Content-Type validation (require text/html), JSON unicode escape detection (\\u003c is not raw HTML)
+- **Reports directory centralized**: all reports now saved to ~/.anarcry/reports/ (was docs/reports/), single source of truth via ReportEngine.REPORTS_DIR
+- **IDOR/Crawler progress logging**: progress messages added to silent loops in IDOR and Crawler modules
+- **Knowledge base enrichment**: Escalation Techniques, Hunting Methodology, and False Positive Indicators sections added to KB entries from Bug Bounty Bootcamp
+- **WAF evasion KB**: new knowledge-base entry for WAF bypass techniques with Cloudflare-specific strategies
+
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v1.7.2
 
@@ -352,9 +471,6 @@ ScanRunner.run(ScanContext)
 - **Codacy fixes**: H1 negative companions moved outside root-cause loop (was duplicating per group), extracted shared helpers (groupByRootCause, resolveKb, recordModuleResult)
 - **Launcher fixes**: suppressed Gradle OSC escape sequences causing Kitty notification spam, auto-cleanup of old versioned JARs after build
 - **README changelog**: collapsed to show only latest release
-
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v1.7.1
 
@@ -439,7 +555,7 @@ ScanRunner.run(ScanContext)
 
 ---
 
-## 10 - Ethical Use
+## 11 - Ethical Use
 
 AnarCry is designed for **authorized security testing** only:
 

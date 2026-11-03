@@ -120,6 +120,30 @@ Casos reais e mentalidade de ataque (RWBH): Uber (templates de e-mail/notificaç
 - **Paths comuns:** `/preview`, `/render`, `/email/preview`, `/template`, `/report`, `/invoice`, `/notification`, `/admin/templates`, `/api/render`.
 - **Sinais:** entrada refletida após avaliação; erros de template com stack trace; parâmetro `template`; funcionalidades de e-mail/report/PDF; expressões matemáticas avaliadas.
 
+## Escalation Techniques
+- **RCE via cadeia de classes (Python/Jinja2):** `{{''.__class__.__mro__[1].__subclasses__()}}` enumera classes disponiveis; encontrar `subprocess.Popen` ou `os.system` permite execucao de comandos.
+- **RCE via Velocity/Freemarker (Java):** reflexao via `#set($rt=$x.class.forName("java.lang.Runtime"))` ou `${"freemarker.template.utility.Execute"?new()("id")}`.
+- **File read sem RCE:** Jinja2 `{{config}}` ou Freemarker `<#include "/etc/passwd">` permite ler arquivos sensiveis.
+- **Sandbox escape:** engines com sandbox podem ser contornados via gadgets especificos da versao ou objetos nao restritos.
+- **Pivot para XSS:** se o template renderiza HTML, injecao de `<script>` via template funciona como stored XSS.
+- **Exfiltracao de segredos:** acesso a variaveis de ambiente e configuracoes via contexto do template (`{{settings.SECRET_KEY}}` em Django).
+- **DoS:** loops infinitos ou operacoes custosas via template (`{% for i in range(999999999) %}`) podem derrubar o servidor.
+
+## Hunting Methodology
+1. Identificar funcionalidades que renderizam templates dinamicamente: previews de email, gerador de PDF/relatorio, personalizacao de notificacao, temas customizaveis.
+2. Injetar probes matematicos: `{{7*7}}`, `${7*7}`, `<%= 7*7 %>`, `#{7*7}`. Se a resposta contem `49`, o engine avaliou a expressao.
+3. Identificar o engine: `{{7*'7'}}` = `7777777` -> Jinja2 (Python); `49` -> Twig (PHP). `${7*7}` -> Freemarker, Velocity, Thymeleaf. `<%= 7*7 %>` -> ERB (Ruby) ou EJS (Node).
+4. Escalar para RCE com cadeias especificas do engine identificado.
+5. Para blind SSTI: usar side-channels (delay via `sleep`, OOB via DNS/HTTP, erros distintos).
+6. Verificar sandbox e testar gadgets de escape conhecidos para a versao do engine.
+
+## False Positive Indicators
+- Expressao avaliada client-side (Angular, Vue) -- e CSTI, nao SSTI. Impacto e XSS, nao RCE.
+- `{{7*7}}` aparece como texto literal na resposta -- input nao e interpretado pelo engine.
+- Engine com sandbox robusto bloqueia acesso a `__class__`, `Runtime`, `ProcessBuilder` -- sem impacto alem de information disclosure.
+- Erro generico apos injetar payload, nao erro de template engine -- pode ser validacao de input.
+- Input sanitizado antes do template: `{{}}` aparece como texto escapado.
+
 ## Recommendation
 1. Nunca concatenar entrada do usuário no template. Passar dados como variáveis e usar autoescape.
 2. Preferir templates logic-less (Mustache) quando possível; evitar engines que permitem chamadas de método/reflexão.

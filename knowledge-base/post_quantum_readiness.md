@@ -61,6 +61,24 @@ Casos reais e mentalidade de ataque (RWBH): a mentalidade é de risco futuro -- 
 - **Paths comuns:** endpoints TLS 1.3, VPN, API gateways, mTLS entre serviços, `/health`, `/metrics`.
 - **Sinais:** TLS 1.3 ausente, apenas grupos clássicos (`X25519`, `P-256`), bibliotecas antigas, ausência de política de criptografia.
 
+## Escalation Techniques
+- **Harvest now, decrypt later (HNDL):** adversarios estatais capturam trafego encriptado com RSA/ECDH classico hoje para decriptar quando computadores quanticos forem viaveis. Dados de longa vida (saude, financeiro, segredos de Estado) sao alvos prioritarios.
+- **Signature forgery:** quando ML-DSA/SLH-DSA nao estiverem implementados, certificados e firmware assinados com RSA/ECDSA poderao ser forjados.
+- **Supply chain attack:** dependencias com criptografia classica hardcoded podem ser o elo mais fraco mesmo apos migrar a aplicacao principal.
+
+## Hunting Methodology
+1. Verificar se TLS 1.3 esta habilitado e se grupos hibridos PQC (X25519MLKEM768, SecP256r1MLKEM768) sao oferecidos.
+2. Usar `testssl.sh` ou `sslyze` para listar os grupos de key exchange suportados.
+3. Inventariar bibliotecas criptograficas (OpenSSL, BouncyCastle, AWS-LC) e suas versoes -- versoes antigas nao suportam PQC.
+4. Identificar onde RSA/ECDH classico e usado para proteger dados de longa vida (backups, tokens de longa duracao, VPN entre sites).
+5. Verificar se ha plano de agilidade criptografica documentado.
+
+## False Positive Indicators
+- Servidor nao oferece grupos PQC mas usa TLS 1.3 com X25519/P-256 -- nao e vulneravel HOJE, apenas nao esta preparado para o futuro.
+- Aplicacao lida apenas com dados efemeros (chat, streaming) que nao tem valor em 10+ anos -- HNDL e baixo risco.
+- Grupo PQC ausente no handshake mas CDN/proxy na frente suporta PQC e termina TLS -- o link externo esta protegido.
+- Biblioteca suporta PQC mas o runtime (Java, Python) nao expoe a API -- limitacao de plataforma, nao da aplicacao.
+
 ## Recommendation
 1. Habilitar TLS 1.3 e o grupo híbrido `X25519MLKEM768` (ou `SecP256r1MLKEM768`) nos terminadores TLS, load balancers, CDN e API gateways.
 2. Atualizar OpenSSL/BoringSSL/AWS-LC e runtime Java; validar interoperabilidade com clientes antes de tornar o grupo preferencial.
