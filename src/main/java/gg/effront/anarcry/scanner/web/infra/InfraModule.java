@@ -6,6 +6,7 @@ import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
 import org.w3c.dom.Document;
@@ -268,6 +269,8 @@ public class InfraModule implements Scanner {
                         break;
                     }
                 } catch (Exception ignored) {
+                    if (ignored instanceof CircuitBreakerException)
+                        throw (CircuitBreakerException) ignored;
                 }
             }
         }
@@ -399,6 +402,8 @@ public class InfraModule implements Scanner {
                 }
             }
         } catch (Exception ignored) {
+            if (ignored instanceof CircuitBreakerException)
+                throw (CircuitBreakerException) ignored;
         }
         return false;
     }
@@ -435,6 +440,8 @@ public class InfraModule implements Scanner {
                 return new String(buf, 0, n, StandardCharsets.UTF_8).trim();
             }
         } catch (Exception ignored) {
+            if (ignored instanceof CircuitBreakerException)
+                throw (CircuitBreakerException) ignored;
         }
         return "unknown";
     }
@@ -454,6 +461,8 @@ public class InfraModule implements Scanner {
                 return out.substring(start + 1, end);
             }
         } catch (Exception ignored) {
+            if (ignored instanceof CircuitBreakerException)
+                throw (CircuitBreakerException) ignored;
         }
         return "unknown";
     }
@@ -472,6 +481,8 @@ public class InfraModule implements Scanner {
                 return new String(buf, 0, n, StandardCharsets.UTF_8).trim();
             }
         } catch (Exception ignored) {
+            if (ignored instanceof CircuitBreakerException)
+                throw (CircuitBreakerException) ignored;
         }
         return "";
     }

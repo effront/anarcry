@@ -5,6 +5,7 @@ import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
 import java.net.URI;
@@ -76,6 +77,8 @@ public class CachePoisoningModule implements Scanner {
                             String cleanLoc = cleanResp.headers().firstValue("location").orElse("");
                             poisonPersisted = cleanBody.contains(PROBE_VALUE) || cleanLoc.contains(PROBE_VALUE);
                         } catch (Exception ignored) {
+                            if (ignored instanceof CircuitBreakerException)
+                                throw (CircuitBreakerException) ignored;
                         }
 
                         Severity sev = Severity.HIGH;

@@ -8,6 +8,7 @@ import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.ProbeExecutor;
 import gg.effront.anarcry.scanner.util.WafEvasion;
@@ -179,6 +180,8 @@ public class CommandInjectionModule implements Scanner {
                                 }
                             }
                         } catch (Exception ignored) {
+                            if (ignored instanceof CircuitBreakerException)
+                                throw (CircuitBreakerException) ignored;
                             // Connection errors / timeouts are not findings in Phase 1
                         }
                     }

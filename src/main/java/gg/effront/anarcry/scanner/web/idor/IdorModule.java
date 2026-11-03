@@ -6,6 +6,7 @@ import gg.effront.anarcry.scanner.ScanConfig;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
 import java.net.URI;
@@ -190,6 +191,8 @@ public class IdorModule implements Scanner {
                     break;
                 }
             } catch (Exception ignored) {
+                if (ignored instanceof CircuitBreakerException)
+                    throw (CircuitBreakerException) ignored;
             }
         }
 
@@ -234,6 +237,8 @@ public class IdorModule implements Scanner {
                         break;
                     }
                 } catch (Exception ignored) {
+                    if (ignored instanceof CircuitBreakerException)
+                        throw (CircuitBreakerException) ignored;
                 }
             }
             if (gqlFound) {
@@ -266,6 +271,8 @@ public class IdorModule implements Scanner {
                     }
                 }
             } catch (Exception ignored) {
+                if (ignored instanceof CircuitBreakerException)
+                    throw (CircuitBreakerException) ignored;
             }
         }
         return null;
@@ -283,6 +290,8 @@ public class IdorModule implements Scanner {
                 return resp.body();
             }
         } catch (Exception ignored) {
+            if (ignored instanceof CircuitBreakerException)
+                throw (CircuitBreakerException) ignored;
         }
         return null;
     }

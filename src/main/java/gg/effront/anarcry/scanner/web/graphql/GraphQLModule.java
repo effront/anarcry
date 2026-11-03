@@ -8,6 +8,7 @@ import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.TlsUtil;
 import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
 import java.net.URI;
@@ -106,6 +107,8 @@ public class GraphQLModule implements Scanner {
                                     _cweId, _cweTitle, _cveVector, _score));
                         }
                     } catch (Exception ignored) {
+                        if (ignored instanceof CircuitBreakerException)
+                            throw (CircuitBreakerException) ignored;
                     }
                 }
 

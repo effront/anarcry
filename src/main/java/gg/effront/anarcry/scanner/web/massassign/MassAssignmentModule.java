@@ -5,6 +5,7 @@ import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
 import java.net.URI;
@@ -146,6 +147,8 @@ public class MassAssignmentModule implements Scanner {
                         log.accept("[!!] MassAssign: CRITICAL -- campo admin persistiu após GET em " + verifyUrl);
                     }
                 } catch (Exception ignored) {
+                    if (ignored instanceof CircuitBreakerException)
+                        throw (CircuitBreakerException) ignored;
                 }
 
                 if (persistedAdmin) {

@@ -7,6 +7,7 @@ import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.ProbeExecutor;
 import gg.effront.anarcry.scanner.util.WafEvasion;
@@ -186,6 +187,8 @@ public class SstiModule implements Scanner {
                     return rce.description() + " → output: " + m.group();
                 }
             } catch (Exception ignored) {
+                if (ignored instanceof CircuitBreakerException)
+                    throw (CircuitBreakerException) ignored;
             }
         }
         return null;
@@ -209,6 +212,8 @@ public class SstiModule implements Scanner {
                 }
             }
         } catch (Exception ignored) {
+            if (ignored instanceof CircuitBreakerException)
+                throw (CircuitBreakerException) ignored;
         }
         return null;
     }
