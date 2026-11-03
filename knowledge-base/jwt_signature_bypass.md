@@ -120,6 +120,37 @@ Casos reais e mentalidade de ataque (RWBH): em APIs mobile e SSO de programas co
 | CVE-2024-37568 | Authlib (Python) | 2024 | Confusao de algoritmo -- HMAC verificado com chave publica assimetrica | Algorithm Confusion |
 | CVE-2024-54150 | xmidt-org cjwt (C) | 2024 | Confusao de tipo de assinatura permite bypass completo | Algorithm Confusion |
 
+## Escalation Techniques
+JWT comprometido e um dos caminhos mais diretos para account takeover e movimento lateral:
+
+- **JWT alg:none + escalacao de privilegios:** forjar token com `role: admin` ou `tenant_id` de outro cliente. Um unico bypass de alg:none da account takeover completo e acesso cross-tenant a dados de outros clientes. Conforme descrito no Bug Bounty Bootcamp, se o campo `alg` aceita `none`, tokens com assinatura vazia sao considerados validos -- permitindo impersonar qualquer usuario.
+- **Confusao de algoritmo + SSRF:** combinar confusao RS256-para-HS256 com um SSRF que vaza a chave publica (ex: `/.well-known/jwks.json` atras de firewall). O SSRF fornece o material de chave necessario para assinar tokens arbitrarios. O livro destaca que quando o algoritmo e trocado para HMAC, o token pode ser assinado com a chave publica RSA.
+- **kid injection + LFI/SQLi:** um header `kid` controlavel pode ser encadeado com path traversal (`/dev/null` como chave HMAC = string vazia) ou SQL injection para extrair segredos do banco. Isso transforma uma fraqueza JWT em RCE ou exfiltracao completa de dados.
+- **JWT forjado + OAuth token exchange:** usar um access token forjado para chamar endpoint de token exchange (`urn:ietf:params:oauth:grant-type:token-exchange`) e obter tokens para servicos downstream, habilitando movimento lateral entre microsservicos.
+- **Segredo HMAC fraco + persistencia:** crackear segredo HMAC curto offline com hashcat, depois forjar tokens com claims `exp` arbitrarios. Isso da acesso persistente mesmo apos reset de senha, se o servidor nao tem revogacao de tokens (denylist/jti). O livro menciona que se a chave nao e complexa o suficiente, brute-force e viavel.
+- **Informacao sensivel no payload:** como o JWT nao e criptografado por padrao, qualquer pessoa pode decodificar o payload em base64 e ler informacoes sensiveis (emails, roles, IDs internos). O Bug Bounty Bootcamp alerta que uma assinatura correta garante integridade, nao confidencialidade.
+
+## Hunting Methodology
+Processo passo a passo para identificar falhas em JWT:
+
+1. **Coletar tokens:** capturar JWTs de headers `Authorization`, cookies, parametros de URL e requests de upgrade WebSocket. Decodificar cada um com `base64 -d` ou jwt.io para inspecionar `alg`, `kid`, `jku`, `jwk`, `x5u` e a estrutura de claims.
+2. **Testar variantes de alg:none:** substituir `alg` por `none`, `None`, `NONE`, `nOnE`. Remover a assinatura mas manter o ponto final. Enviar para cada endpoint autenticado e verificar se o acesso e concedido. O Bug Bounty Bootcamp descreve esse teste como o primeiro a ser feito.
+3. **Testar confusao de algoritmo (RS256 -> HS256):** obter a chave publica do servidor de `/.well-known/jwks.json`, `/oauth/certs` ou do certificado TLS. Re-assinar o token com HS256 usando o PEM da chave publica como segredo HMAC. Se o servidor usa um unico `verify()` que confia no `alg` do token, vai validar.
+4. **Testar injecao de JWK/JKU/x5u:** adicionar claim `jwk` com par de chaves RSA proprio, ou setar `jku`/`x5u` para URL controlada pelo atacante com JWKS. Assinar com a chave privada correspondente. Monitorar requests de saida do servidor (Burp Collaborator ou interactsh).
+5. **Testar manipulacao de kid:** tentar path traversal (`../../../../dev/null`, `/etc/hostname`), SQL injection (`' UNION SELECT 'secret'-- -`) e paths de arquivos vazios conhecidos como valores de `kid`. Assinar com a chave previsivel correspondente (string vazia para `/dev/null`).
+6. **Brute-force de segredos fracos:** extrair o JWT e rodar `hashcat -a 0 -m 16500 jwt.txt rockyou.txt` ou `jwt-cracker`. Se crackeado, forjar tokens com claims escalados para confirmar impacto.
+7. **Verificar validacao de claims:** testar tokens com `exp` expirado, `aud` incorreto, `iss` alterado. Se o servidor aceita claims invalidos, a validacao e incompleta.
+
+## False Positive Indicators
+Sinais de que o finding de JWT **nao e exploravel**:
+
+- **Token rejeitado apesar de alg:none aceito no parsing:** algumas bibliotecas parsam o header mas ainda enforcam validacao de assinatura em camada separada (ex: API gateway valida antes da aplicacao ver o token). Confirmar pela resposta HTTP -- 200 com dados autenticados e true positive; 401/403 e false positive.
+- **Endpoint JWKS retorna chaves publicas mas algoritmo e fixo server-side:** a presenca de um `/.well-known/jwks.json` publico nao e vulnerabilidade. So se torna uma se o servidor confia em `alg`/`jku`/`jwk` do header do token ao inves de sua propria configuracao.
+- **Token expirado ou de teste na evidencia do scan:** se o scanner testou com token ja expirado e recebeu 401, o finding pode refletir rejeicao por expiracao, nao validacao de assinatura. Re-testar com token forjado fresco e nao expirado.
+- **WAF ou CDN rejeitando tokens malformados antes da aplicacao:** Cloudflare, AWS ALB e intermediarios similares podem remover ou rejeitar tokens com `alg:none` antes do backend processar. A vulnerabilidade pode existir na camada da aplicacao mas estar mitigada por infraestrutura -- notar a distincao no report.
+- **Endpoints diferentes com validacao diferente:** o scanner pode testar `/api/public` que nao valida JWTs (sem auth necessario) e reportar como aceitando `alg:none`. Confirmar contra endpoint que realmente exige autenticacao.
+- **Gateway adicionando/substituindo token:** em arquiteturas de API gateway, o gateway pode substituir o token do cliente por um token interno antes de encaminhar ao backend. O token malicioso nunca chega a aplicacao.
+
 ## Recommendation
 1. Fixar o algoritmo esperado por endpoint; nunca confiar no `alg` do token. Rejeitar `none` explicitamente.
 2. Usar bibliotecas maduras e atualizadas (jjwt, Nimbus JOSE+JWT, Spring Security OAuth2 Resource Server) e validar `iss`, `aud`, `exp`, `nbf`, `iat`, `sub`.

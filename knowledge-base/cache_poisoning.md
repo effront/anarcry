@@ -115,6 +115,42 @@ Casos reais e mentalidade de ataque (RWBH): HackerOne e Shopify (`X-Forwarded-Ho
 - **Paths comuns:** `/`, `/login`, `/home`, `/search`, `/api/*`, `/assets/*`, `/static/*`, páginas públicas com cache.
 - **Sinais:** `X-Cache: HIT`, `Age`, `CF-Cache-Status`, `Cache-Control: public`; headers refletidos em links/canonical; `Vary` ausente.
 
+## Escalation Techniques
+Cache poisoning raramente e o objetivo final -- e o vetor de distribuicao para ataques de maior impacto:
+
+- **XSS via cache:** header nao-keyed (ex: `X-Forwarded-Host: evil.com`) refletido em tag `<script src>` ou `<link>` e cacheado. Todas as vitimas que acessam o path recebem script malicioso -- equivalente a stored XSS em escala massiva.
+- **Redirect em massa para phishing:** `X-Forwarded-Host` envenenando redirect 301/302 na pagina de login. Vitimas sao redirecionadas para dominio do atacante que replica a pagina original e coleta credenciais.
+- **Cache deception para roubo de sessao:** induzir a vitima a acessar URL como `/account/profile.css`. Cache armazena resposta autenticada (com dados pessoais, tokens) sob extensao estatica. Atacante acessa a mesma URL e recebe os dados da vitima.
+- **Encadeamento com XSS para account takeover:** cache poisoning que injeta XSS pode roubar cookies de sessao (se nao `HttpOnly`) ou tokens em `localStorage` de todos os usuarios que visitam a pagina envenenada.
+- **DoS via cache corruption:** envenenar respostas com conteudo invalido ou erro 500 e forcar cache a servir a pagina quebrada para todos os usuarios ate o TTL expirar ou o cache ser purgado.
+- **Pivot para SSRF/Host Header Injection:** cache poisoning combinado com Host Header Injection pode redirecionar requisicoes internas e acessar servicos nao expostos.
+
+Conforme a metodologia geral do livro Bug Bounty Bootcamp (Cap. 1-5), ao encontrar um bug de severidade baixa ou media, tente encadea-lo com outros para maximizar o impacto -- neste caso, cache poisoning transforma reflexao simples em ataque massivo.
+
+## Hunting Methodology
+Processo passo a passo para identificar web cache poisoning:
+
+1. **Identificar infraestrutura de cache:** verificar headers de resposta como `X-Cache`, `Age`, `CF-Cache-Status`, `Vary`, `Cache-Control`. Presenca de CDN (Cloudflare, Akamai, Fastly, Varnish) indica superficie de ataque.
+2. **Determinar a chave de cache:** enviar a mesma requisicao com cache buster (`?cb=1337`) e observar se `X-Cache: MISS` aparece. Repetir sem o buster para confirmar HIT. Isso revela quais parametros fazem parte da chave.
+3. **Testar headers nao-keyed:** adicionar headers como `X-Forwarded-Host: canary.com`, `X-Forwarded-Proto: http`, `X-Forwarded-Scheme: nothttps` um por vez e verificar se o valor aparece refletido na resposta (links, canonical, redirects, scripts).
+4. **Confirmar reflexao com cache buster:** sempre testar com cache buster para nao envenenar paginas reais. Se o header e refletido, voce tem um unkeyed input.
+5. **Testar parametros nao-keyed:** experimentar parametros como `utm_source`, `utm_content`, `callback` e verificar se sao refletidos mas nao fazem parte da chave de cache.
+6. **Testar fat GET:** enviar GET com body e verificar se a aplicacao processa o body (parametros refletidos) enquanto o cache ignora.
+7. **Envenenar com payload:** substituir o valor canary por payload de XSS ou redirect malicioso. Enviar com cache buster, confirmar que a resposta envenenada e retornada, e depois enviar sem cache buster para verificar se o cache armazena.
+8. **Verificar cache deception:** acessar pagina autenticada com extensao estatica (`/account/profile.css`). Se o cache armazena a resposta, acessar a mesma URL sem autenticacao e verificar se os dados do usuario aparecem.
+9. **Automatizar:** usar Param Miner (Burp) para descobrir headers e parametros nao-keyed automaticamente. A abordagem de fuzzing (Cap. 25 do livro) se aplica -- gerar payloads automaticamente e monitorar respostas anomalas.
+
+## False Positive Indicators
+Sinais de que a deteccao de cache poisoning pelo scanner **nao e exploravel**:
+
+- **Header refletido mas nao cacheado:** se `X-Cache` nunca retorna HIT para o path testado, ou `Cache-Control: private, no-store` esta presente, a resposta nao e cacheada e o envenenamento nao atinge outros usuarios.
+- **Vary header inclui o header injetado:** se `Vary: X-Forwarded-Host` esta presente, o header faz parte da chave de cache e cada valor gera entrada separada -- nao e poisoning.
+- **Reflexao apenas em resposta nao-HTML:** header refletido em `application/json` ou `text/plain` nao e renderizado como HTML pelo browser; XSS via cache nao se aplica.
+- **CDN com protecao ativa:** Cloudflare, Fastly e Akamai possuem mecanismos de protecao contra cache poisoning. Headers injetados podem ser removidos pelo edge antes de atingir a aplicacao.
+- **TTL muito curto:** cache com `max-age=0` ou `s-maxage=1` significa que a janela de envenenamento e minima ou inexistente na pratica.
+- **Cache buster obrigatorio:** se a reflexao so ocorre com parametro de cache buster (que faz parte da chave), a versao limpa da pagina nunca e envenenada.
+- **Resposta nao-2xx:** se o endpoint retorna 404 ou 500, o cache normalmente nao armazena a resposta (depende da config, mas e o padrao).
+
 ## Recommendation
 1. Incluir todos os headers que influenciam a resposta na chave de cache (`Vary: X-Forwarded-Host, X-Forwarded-Proto`) ou, melhor, não usá-los para gerar conteúdo.
 2. Normalizar e validar headers de forwarding no edge; descartar valores do cliente.
@@ -132,3 +168,4 @@ add_header Vary "X-Forwarded-Host, X-Forwarded-Proto" always;
 proxy_cache_bypass $http_authorization $cookie_session;
 ```
 9. Monitorar envenenamento com canários e alertar sobre respostas que contenham hosts externos.
+

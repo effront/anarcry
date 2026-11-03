@@ -33,6 +33,7 @@ YAML consumido pelo `ReportEngine`.
 | `hsts_missing` | Missing HTTP Strict Transport Security | `hsts` | LOW | CWE-319 | `server_security_misconfiguration.missing_security_headers` |
 | `csrf` | Cross-Site Request Forgery | `csrf` | HIGH | CWE-352 | `broken_authentication_and_session_management.csrf` |
 | `infrastructure_exposure` | Exposed Infrastructure Service | `infra` | CRITICAL | CWE-284 | `server_security_misconfiguration.exposed_admin_interface` |
+| `waf_evasion` | WAF Detection and Evasion | `waf` | INFO | CWE-693 | `server_security_misconfiguration.waf_bypass` |
 
 ## Convenções
 

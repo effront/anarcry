@@ -76,6 +76,25 @@ Casos reais e mentalidade de ataque (RWBH): a mentalidade é combinar ausência 
 - **Paths comuns:** `/`, `/login`, `/account`, `/admin`, `/checkout`, todos os subdomínios.
 - **Sinais:** ausência de `Strict-Transport-Security`; `max-age` curto; HTTP sem 301; cookies sem `Secure`.
 
+## Escalation Techniques
+- **SSL stripping (MitM):** sem HSTS, o primeiro request HTTP pode ser interceptado em redes hostis (WiFi publico, ARP spoofing) para downgrade da conexao.
+- **Cookie theft via HTTP:** cookies sem flag `Secure` sao enviados em requests HTTP -- atacante em posicao MitM captura session cookies.
+- **Inject content via HTTP:** no request inicial antes do redirect HTTPS, atacante pode injetar JS ou redirect para phishing.
+- **Combinar com subdomains:** se `includeSubDomains` esta ausente, subdomain pode ser acessado via HTTP e servir como vetor.
+
+## Hunting Methodology
+1. Verificar se `Strict-Transport-Security` esta presente nas respostas HTTPS.
+2. Avaliar `max-age`: valores menores que 31536000 (1 ano) indicam configuracao fraca.
+3. Verificar se `includeSubDomains` e `preload` estao presentes.
+4. Testar se HTTP (porta 80) redireciona para HTTPS com 301 -- ou se serve conteudo diretamente.
+5. Verificar se cookies tem flag `Secure` -- sem ela, HSTS ajuda mas nao resolve completamente.
+
+## False Positive Indicators
+- Site e puramente estatico sem cookies ou dados sensiveis -- HSTS ausente e baixo risco.
+- HSTS presente com `max-age=0` -- indica remocao intencional (pode ser legítimo durante migracao).
+- Dominio esta na preload list do browser -- HSTS e aplicado pelo browser antes mesmo do primeiro request, header na resposta e redundante.
+- Aplicacao nao tem endpoint HTTP (porta 80 fechada) -- sem vetor de downgrade.
+
 ## Recommendation
 1. Enviar em todas as respostas HTTPS:
 ```http
