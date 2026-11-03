@@ -7,8 +7,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public record EnvLoader(String target, String jwt1, String jwt2, String assistantProvider, String assistantApiKey,
-        String assistantModel, int assistantMaxTokens) {
+public record EnvLoader(String target, String jwt1, String jwt2, String scopeHosts, String sessionCookie,
+        String assistantProvider, String assistantApiKey, String assistantModel, int assistantMaxTokens) {
 
     public static EnvLoader load(String path) throws IOException {
         Map<String, String> map = new HashMap<>();
@@ -17,9 +17,17 @@ public record EnvLoader(String target, String jwt1, String jwt2, String assistan
             if (line.isBlank() || line.startsWith("#")) {
                 continue;
             }
-            int sep = line.indexOf(':');
-            if (sep < 1) {
+            int sepColon = line.indexOf(':');
+            int sepEquals = line.indexOf('=');
+            int sep;
+            if (sepColon < 1 && sepEquals < 1) {
                 continue;
+            } else if (sepColon < 1) {
+                sep = sepEquals;
+            } else if (sepEquals < 1) {
+                sep = sepColon;
+            } else {
+                sep = Math.min(sepColon, sepEquals);
             }
             String key = line.substring(0, sep).strip().toLowerCase();
             String val = line.substring(sep + 1).strip();
@@ -28,12 +36,14 @@ public record EnvLoader(String target, String jwt1, String jwt2, String assistan
         String target = normalize(map.getOrDefault("target", ""));
         String jwt1 = map.getOrDefault("jwt1", "");
         String jwt2 = map.getOrDefault("jwt2", "");
+        String scopeHosts = map.getOrDefault("scope_hosts", "");
+        String sessionCookie = map.getOrDefault("session_cookie", "");
         String assistantProvider = map.getOrDefault("assistant_provider", "");
         String assistantApiKey = map.getOrDefault("assistant_api_key", "");
         String assistantModel = map.getOrDefault("assistant_model", "");
         int assistantMaxTokens = parseIntOrDefault(map.getOrDefault("assistant_max_tokens", ""), 4096);
-        return new EnvLoader(target, jwt1, jwt2, assistantProvider, assistantApiKey, assistantModel,
-                assistantMaxTokens);
+        return new EnvLoader(target, jwt1, jwt2, scopeHosts, sessionCookie, assistantProvider, assistantApiKey,
+                assistantModel, assistantMaxTokens);
     }
 
     public boolean hasTarget() {
@@ -49,6 +59,8 @@ public record EnvLoader(String target, String jwt1, String jwt2, String assistan
         m.put("target", target != null ? target : "");
         m.put("jwt1", jwt1 != null ? jwt1 : "");
         m.put("jwt2", jwt2 != null ? jwt2 : "");
+        m.put("scope_hosts", scopeHosts != null ? scopeHosts : "");
+        m.put("session_cookie", sessionCookie != null ? sessionCookie : "");
         m.put("assistant_provider", assistantProvider != null ? assistantProvider : "");
         m.put("assistant_api_key", assistantApiKey != null ? assistantApiKey : "");
         m.put("assistant_model", assistantModel != null ? assistantModel : "");

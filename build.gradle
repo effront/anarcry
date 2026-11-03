@@ -8,7 +8,7 @@ plugins {
 }
 
 group = 'gg.effront'
-version = '1.7.2'
+version = '1.7.3'
 
 java {
     toolchain {
@@ -44,6 +44,7 @@ processResources {
     filesMatching('version.properties') {
         expand(version: project.version)
     }
+    inputs.property('projectVersion', project.version)
 }
 
 shadowJar {

@@ -13,6 +13,7 @@ import gg.effront.anarcry.gui.views.ExportDialog;
 import gg.effront.anarcry.gui.views.FindingDetailDialog;
 import gg.effront.anarcry.gui.views.FindingsView;
 import gg.effront.anarcry.gui.views.PreferencesDialog;
+import gg.effront.anarcry.gui.views.AssistantView;
 import gg.effront.anarcry.gui.views.RepeaterView;
 import gg.effront.anarcry.gui.views.ReportView;
 import gg.effront.anarcry.gui.views.SiteMapView;
@@ -70,6 +71,7 @@ public class AnarCryGui {
     private SiteMapView siteMapView;
     private RepeaterView repeaterView;
     private ReportView reportView;
+    private AssistantView assistantView;
 
     private JTabbedPane tabs;
 
@@ -92,6 +94,7 @@ public class AnarCryGui {
         siteMapView = new SiteMapView();
         repeaterView = new RepeaterView();
         reportView = new ReportView();
+        assistantView = new AssistantView();
 
         resetSeverityCounts();
 
@@ -99,6 +102,20 @@ public class AnarCryGui {
 
         wireScanCallbacks();
         wireModulesPanelActions();
+
+        assistantView.setFindingsSupplier(() -> new ArrayList<>(allFindings));
+        assistantView.setContextSupplier(controller::getLastContext);
+        assistantView.setDiscoveredPathsSupplier(() -> {
+            DiscoveredPaths dp = controller.getDiscoveredPaths();
+            return dp != null ? dp : new DiscoveredPaths();
+        });
+
+        targetView.setOnApply(() -> {
+            modulesPanel.setTarget(targetView.getTarget());
+            modulesPanel.setJwt(targetView.getJwt());
+            modulesPanel.setJwt2(targetView.getJwt2());
+            repeaterView.setTargetUrl(targetView.getTarget());
+        });
 
         if (env != null) {
             prefillFromEnv(env);
@@ -173,11 +190,21 @@ public class AnarCryGui {
         if (env.hasTarget()) {
             modulesPanel.setTarget(env.target());
             targetView.setTarget(env.target());
+            repeaterView.setTargetUrl(env.target());
         }
         modulesPanel.setJwt(env.jwt1());
         modulesPanel.setJwt2(env.jwt2());
         targetView.setJwt(env.jwt1());
         targetView.setJwt2(env.jwt2());
+        if (!env.scopeHosts().isBlank()) {
+            targetView.setScopeHosts(env.scopeHosts().replace(",", "\n"));
+        }
+        if (!env.sessionCookie().isBlank()) {
+            targetView.setSessionCookie(env.sessionCookie());
+        }
+        if (env.hasAssistant()) {
+            assistantView.configure(env.asMap());
+        }
     }
 
     private void buildAndShowFrame() {
@@ -203,6 +230,7 @@ public class AnarCryGui {
         tabs.addTab("Repeater", repeaterView);
         tabs.addTab("Report", reportView);
         tabs.addTab("SiteMap", siteMapView);
+        tabs.addTab("Assistant", assistantView);
         tabs.setSelectedIndex(1);
 
         JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, modulesPanel, tabs);
@@ -277,7 +305,7 @@ public class AnarCryGui {
                 int mods = e.getModifiersEx();
                 boolean noMods = mods == 0;
 
-                if (code >= KeyEvent.VK_F1 && code <= KeyEvent.VK_F7 && noMods) {
+                if (code >= KeyEvent.VK_F1 && code <= KeyEvent.VK_F8 && noMods) {
                     tabs.setSelectedIndex(code - KeyEvent.VK_F1);
                     return true;
                 }

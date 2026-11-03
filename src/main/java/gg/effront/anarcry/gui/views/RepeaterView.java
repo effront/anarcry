@@ -3,7 +3,7 @@ package gg.effront.anarcry.gui.views;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
+
 import java.awt.Font;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
@@ -68,16 +68,18 @@ public class RepeaterView extends JPanel {
     private JPanel buildRequestPanel() {
         JPanel panel = new JPanel(new BorderLayout());
 
-        JPanel topBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 4));
+        JPanel topBar = new JPanel(new BorderLayout(4, 0));
+        topBar.setBorder(javax.swing.BorderFactory.createEmptyBorder(4, 4, 4, 4));
         methodCombo = new JComboBox<>(new String[]{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"});
-        urlField = new JTextField(40);
+        urlField = new JTextField();
         urlField.setText("https://");
-        sendButton = new JButton("Send");
+        urlField.setToolTipText("Ctrl+Enter to send");
+        sendButton = new JButton("Send (Ctrl+Enter)");
         sendButton.addActionListener(e -> sendRequest());
 
-        topBar.add(methodCombo);
-        topBar.add(urlField);
-        topBar.add(sendButton);
+        topBar.add(methodCombo, BorderLayout.WEST);
+        topBar.add(urlField, BorderLayout.CENTER);
+        topBar.add(sendButton, BorderLayout.EAST);
         panel.add(topBar, BorderLayout.NORTH);
 
         JPanel centerPanel = new JPanel(new BorderLayout());

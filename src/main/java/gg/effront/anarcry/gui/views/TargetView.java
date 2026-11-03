@@ -126,6 +126,14 @@ public class TargetView extends JPanel {
         jwt2Field.setText(j);
     }
 
+    public void setScopeHosts(String hosts) {
+        scopeField.setText(hosts);
+    }
+
+    public void setSessionCookie(String cookie) {
+        sessionCookieField.setText(cookie);
+    }
+
     public void setOnApply(Runnable r) {
         this.onApply = r != null ? r : () -> {
         };

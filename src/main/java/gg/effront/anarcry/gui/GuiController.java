@@ -103,6 +103,11 @@ public class GuiController {
         logCb.accept("[*] Scan interrompido");
     }
 
+    /** Returns the last scan context, or null if no scan ran. */
+    public ScanContext getLastContext() {
+        return lastScanContext;
+    }
+
     /** Returns discovered paths from the last scan, or null if no scan ran. */
     public DiscoveredPaths getDiscoveredPaths() {
         ScanContext ctx = lastScanContext;

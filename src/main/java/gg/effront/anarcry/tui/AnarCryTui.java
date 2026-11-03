@@ -45,12 +45,25 @@ import gg.effront.anarcry.tui.panels.ModulesPanel;
 import gg.effront.anarcry.tui.panels.SiteMapPanel;
 
 import gg.effront.anarcry.EnvLoader;
+import gg.effront.anarcry.assistant.AiAssistant;
+import gg.effront.anarcry.assistant.AssistantConfig;
+import gg.effront.anarcry.assistant.ContextBuilder;
+import gg.effront.anarcry.assistant.tools.ExplainCweTool;
+import gg.effront.anarcry.assistant.tools.GetFindingsTool;
+import gg.effront.anarcry.assistant.tools.GetScanConfigTool;
+import gg.effront.anarcry.assistant.tools.GetSitemapTool;
+import gg.effront.anarcry.assistant.tools.QueryKbTool;
+import gg.effront.anarcry.model.KnowledgeBase;
+import gg.effront.anarcry.scanner.DiscoveredPaths;
+import gg.effront.anarcry.scanner.ScanContext;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -78,6 +91,14 @@ public class AnarCryTui {
     private volatile Mode currentMode = Mode.SCAN;
     private volatile boolean scanning = false;
     private EnvLoader envPreload = null;
+    private AiAssistant aiAssistant;
+    private ContextBuilder contextBuilder;
+    private final DiscoveredPaths discoveredPaths = new DiscoveredPaths();
+    private final ExecutorService assistantExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "assistant-worker");
+        t.setDaemon(true);
+        return t;
+    });
 
     public void start() throws IOException {
         start(null);
@@ -390,11 +411,54 @@ public class AnarCryTui {
             TerminalSize ts = gui.getScreen().getTerminalSize();
             int chatHeight = Math.max(8, ts.getRows() - 4);
             assistantPanel = new AssistantPanel(chatHeight, configured);
+
+            if (configured) {
+                initAssistant();
+            }
+
             assistantPanel.setOnSend(msg -> {
-                addToLog("[*] Assistant query: " + msg.substring(0, Math.min(60, msg.length())) + "...");
+                if (aiAssistant == null) {
+                    assistantPanel.addSystemMessage("Assistant not configured.");
+                    return;
+                }
+                assistantExecutor.submit(() -> {
+                    try {
+                        String systemPrompt = contextBuilder.build();
+                        String toolsJson = buildToolsJson();
+                        gui.getGUIThread().invokeLater(() -> assistantPanel.startAssistantMessage());
+                        aiAssistant.sendStreaming(msg, systemPrompt, toolsJson, token -> {
+                            gui.getGUIThread().invokeLater(() -> assistantPanel.appendToken(token));
+                        });
+                        gui.getGUIThread().invokeLater(() -> assistantPanel.finishAssistantMessage());
+                    } catch (Exception e) {
+                        gui.getGUIThread()
+                                .invokeLater(() -> assistantPanel.addSystemMessage("Error: " + e.getMessage()));
+                    }
+                });
             });
             assistantPanel.setOnSlashCommand(cmd -> {
-                addToLog("[*] Assistant command: " + cmd);
+                if (contextBuilder == null) {
+                    assistantPanel.addSystemMessage("Assistant not configured.");
+                    return;
+                }
+                String[] parts = cmd.split("\\s+", 2);
+                String slashCmd = parts[0].toLowerCase();
+                String arg = parts.length > 1 ? parts[1] : "";
+                String enriched = contextBuilder.buildWithSlashCommand(slashCmd, arg);
+                if (aiAssistant != null) {
+                    assistantExecutor.submit(() -> {
+                        try {
+                            gui.getGUIThread().invokeLater(() -> assistantPanel.startAssistantMessage());
+                            aiAssistant.sendStreaming(cmd, enriched, buildToolsJson(), token -> {
+                                gui.getGUIThread().invokeLater(() -> assistantPanel.appendToken(token));
+                            });
+                            gui.getGUIThread().invokeLater(() -> assistantPanel.finishAssistantMessage());
+                        } catch (Exception e) {
+                            gui.getGUIThread()
+                                    .invokeLater(() -> assistantPanel.addSystemMessage("Error: " + e.getMessage()));
+                        }
+                    });
+                }
             });
         }
 
@@ -403,6 +467,52 @@ public class AnarCryTui {
 
         assistantPanel.getInputBox().takeFocus();
         return wrapper;
+    }
+
+    private void initAssistant() {
+        try {
+            AssistantConfig assistantConfig = AssistantConfig.fromEnv(envPreload.asMap());
+            aiAssistant = new AiAssistant(assistantConfig);
+
+            KnowledgeBase kb = KnowledgeBase.getInstance();
+
+            contextBuilder = new ContextBuilder(() -> findingHistory, () -> null, kb);
+
+            GetFindingsTool findingsTool = new GetFindingsTool(() -> findingHistory);
+            QueryKbTool kbTool = new QueryKbTool(kb);
+            ExplainCweTool cweTool = new ExplainCweTool(kb);
+            GetSitemapTool sitemapTool = new GetSitemapTool(() -> discoveredPaths);
+            GetScanConfigTool configTool = new GetScanConfigTool(() -> (ScanContext) null);
+
+            aiAssistant.registerTool(findingsTool.name(), findingsTool::call);
+            aiAssistant.registerTool(kbTool.name(), kbTool::call);
+            aiAssistant.registerTool(cweTool.name(), cweTool::call);
+            aiAssistant.registerTool(sitemapTool.name(), sitemapTool::call);
+            aiAssistant.registerTool(configTool.name(), configTool::call);
+        } catch (Exception e) {
+            assistantPanel.addSystemMessage("Error initializing assistant: " + e.getMessage());
+        }
+    }
+
+    private String buildToolsJson() {
+        if (aiAssistant == null) {
+            return "[]";
+        }
+        KnowledgeBase kb = KnowledgeBase.getInstance();
+        var toolDefs = List.of(new GetFindingsTool(() -> findingHistory), new QueryKbTool(kb), new ExplainCweTool(kb),
+                new GetSitemapTool(() -> discoveredPaths), new GetScanConfigTool(() -> (ScanContext) null));
+        var tools = new com.google.gson.JsonArray();
+        for (var tool : toolDefs) {
+            var fn = new com.google.gson.JsonObject();
+            fn.addProperty("name", tool.name());
+            fn.addProperty("description", tool.description());
+            fn.add("parameters", com.google.gson.JsonParser.parseString(tool.paramsSchema()));
+            var wrapper = new com.google.gson.JsonObject();
+            wrapper.addProperty("type", "function");
+            wrapper.add("function", fn);
+            tools.add(wrapper);
+        }
+        return tools.toString();
     }
 
     private Component buildDashboardContent() {

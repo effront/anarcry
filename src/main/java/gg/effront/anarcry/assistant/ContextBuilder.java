@@ -3,6 +3,7 @@ package gg.effront.anarcry.assistant;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.KnowledgeEntry;
+import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -220,12 +221,11 @@ public final class ContextBuilder {
         sb.append("The operator wants an executive summary report.\n\n");
         List<Finding> findings = findingsSupplier.get();
 
-        long critical = findings.stream().filter(f -> f.severity() == gg.effront.anarcry.model.Severity.CRITICAL)
-                .count();
-        long high = findings.stream().filter(f -> f.severity() == gg.effront.anarcry.model.Severity.HIGH).count();
-        long medium = findings.stream().filter(f -> f.severity() == gg.effront.anarcry.model.Severity.MEDIUM).count();
-        long low = findings.stream().filter(f -> f.severity() == gg.effront.anarcry.model.Severity.LOW).count();
-        long info = findings.stream().filter(f -> f.severity() == gg.effront.anarcry.model.Severity.INFO).count();
+        long critical = findings.stream().filter(f -> f.severity() == Severity.CRITICAL).count();
+        long high = findings.stream().filter(f -> f.severity() == Severity.HIGH).count();
+        long medium = findings.stream().filter(f -> f.severity() == Severity.MEDIUM).count();
+        long low = findings.stream().filter(f -> f.severity() == Severity.LOW).count();
+        long info = findings.stream().filter(f -> f.severity() == Severity.INFO).count();
 
         sb.append("Finding distribution:\n");
         sb.append("  CRITICAL: ").append(critical).append("\n");

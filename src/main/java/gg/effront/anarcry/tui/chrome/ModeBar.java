@@ -11,8 +11,8 @@ public class ModeBar extends Panel {
 
     private static final Mode[] MODES = Mode.values();
     private static final String[] KEYS = {"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8"};
-    private static final String[] NAMES = {"Dashboard", "Scan", "Target", "Findings", "Repeater", "Relatório",
-            "Site Map", "Assistente"};
+    private static final String[] NAMES = {"Dashboard", "Scan", "Target", "Findings", "Repeater", "Report", "SiteMap",
+            "Assistant"};
 
     private final Label[] tabs = new Label[8];
 

@@ -47,7 +47,7 @@ public class AssistantPanel extends Panel {
 
         chatArea = new Panel(new LinearLayout(Direction.VERTICAL));
         inputBox = new PasteableTextBox(new TerminalSize(0, 1));
-        hintLabel = new Label(" /findings /explain /remediate /plan /kb /report /clear  |  Enter: enviar");
+        hintLabel = new Label(" /findings /explain /remediate /plan /kb /report /clear  |  Enter: send");
         hintLabel.setForegroundColor(TextColor.ANSI.WHITE);
 
         var centerPanel = new Panel(new BorderLayout());
@@ -61,10 +61,9 @@ public class AssistantPanel extends Panel {
         addComponent(bottomPanel, BorderLayout.Location.BOTTOM);
 
         if (!configured) {
-            addSystemMessage(
-                    "Assistente IA nao configurado. Defina ASSISTANT_PROVIDER e ASSISTANT_API_KEY em .env.local");
+            addSystemMessage("AI Assistant not configured. Set ASSISTANT_PROVIDER and ASSISTANT_API_KEY in .env.local");
         } else {
-            addSystemMessage("Assistente IA pronto. Digite sua pergunta ou use um slash command.");
+            addSystemMessage("AI Assistant ready. Type your question or use a slash command.");
         }
     }
 
@@ -93,7 +92,7 @@ public class AssistantPanel extends Panel {
         }
 
         if (!configured) {
-            addSystemMessage("Assistente nao configurado. Configure ASSISTANT_PROVIDER em .env.local");
+            addSystemMessage("Assistant not configured. Set ASSISTANT_PROVIDER in .env.local");
             return true;
         }
 
@@ -110,11 +109,11 @@ public class AssistantPanel extends Panel {
             chatLines.clear();
             viewStart = 0;
             repaintChat();
-            addSystemMessage("Chat limpo.");
+            addSystemMessage("Chat cleared.");
             return;
         }
 
-        addSystemMessage("Comando: " + input);
+        addSystemMessage("Command: " + input);
         if (onSlashCommand != null) {
             onSlashCommand.accept(input);
         }
