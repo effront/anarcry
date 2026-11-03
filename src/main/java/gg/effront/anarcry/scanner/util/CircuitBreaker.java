@@ -8,7 +8,7 @@ public final class CircuitBreaker {
 
     private static final int DEFAULT_THRESHOLD = 8;
 
-    private final int threshold;
+    private volatile int threshold;
     private final AtomicInteger consecutiveBlocks = new AtomicInteger(0);
     private final AtomicBoolean tripped = new AtomicBoolean(false);
     private final AtomicBoolean logged = new AtomicBoolean(false);
@@ -47,6 +47,15 @@ public final class CircuitBreaker {
 
     public String moduleId() {
         return moduleId;
+    }
+
+    public void lowerThreshold(int newThreshold) {
+        if (newThreshold < threshold) {
+            this.threshold = newThreshold;
+            if (consecutiveBlocks.get() >= newThreshold) {
+                tripped.set(true);
+            }
+        }
     }
 
     public void checkAndThrow() {

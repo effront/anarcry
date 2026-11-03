@@ -2,6 +2,7 @@ package gg.effront.anarcry.scanner.crypto.tls;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.SecureRandom;
@@ -46,10 +47,17 @@ public final class RawTlsProbe {
             new CipherDef(0x000E, "TLS_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA"),};
 
     public static Optional<String> probe(String host, int port, CipherDef[] ciphers) {
+        if (!isSafeTarget(host)) {
+            return Optional.empty();
+        }
         byte[] clientHello = buildClientHello(host, ciphers);
         try (Socket sock = new Socket()) {
             sock.setSoTimeout(TIMEOUT_MS);
-            sock.connect(new InetSocketAddress(host, port), TIMEOUT_MS);
+            InetSocketAddress resolved = new InetSocketAddress(host, port);
+            if (resolved.isUnresolved() || !isSafeAddress(resolved.getAddress())) {
+                return Optional.empty();
+            }
+            sock.connect(resolved, TIMEOUT_MS);
             OutputStream out = sock.getOutputStream();
             InputStream in = sock.getInputStream();
             out.write(clientHello);
@@ -58,6 +66,20 @@ public final class RawTlsProbe {
         } catch (Exception e) {
             return Optional.empty();
         }
+    }
+
+    private static boolean isSafeTarget(String host) {
+        try {
+            InetAddress addr = InetAddress.getByName(host);
+            return isSafeAddress(addr);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static boolean isSafeAddress(InetAddress addr) {
+        return addr != null && !addr.isLoopbackAddress() && !addr.isLinkLocalAddress() && !addr.isSiteLocalAddress()
+                && !addr.isAnyLocalAddress();
     }
 
     private static byte[] buildClientHello(String host, CipherDef[] ciphers) {

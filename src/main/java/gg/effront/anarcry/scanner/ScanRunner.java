@@ -288,13 +288,14 @@ public class ScanRunner {
                         java.net.http.HttpResponse.BodyHandlers.ofString());
                 String cleanBody = cleanResp.body() != null ? cleanResp.body() : "";
 
-                // Multi-vendor signature detection on baseline
+                // Multi-vendor signature detection on baseline (CDN presence only -- not WAF
+                // enforcement)
                 var providers = WafEvasion.detectProviders(cleanResp.statusCode(), cleanResp.headers().map(), cleanBody,
                         ctx.targetUrl());
+                String baselineProvider = "";
                 if (!providers.isEmpty()) {
-                    var top = providers.get(0);
-                    ctx.wafState().markWafDetected(top.name());
-                    safeLog.accept("[!] Phase 1.5: " + providers.size() + " provider(s) detectado(s) via signatures: "
+                    baselineProvider = providers.get(0).name();
+                    safeLog.accept("[~] Phase 1.5: " + providers.size() + " provider(s) detectado(s) via signatures: "
                             + providers.stream().map(p -> p.name() + "(" + p.confidence() + ")")
                                     .reduce((a, b) -> a + ", " + b).orElse(""));
                 }
@@ -315,7 +316,7 @@ public class ScanRunner {
 
                 if (!cfType.isEmpty()) {
                     if (!ctx.wafState().isWafDetected()) {
-                        ctx.wafState().markWafDetected("cloudflare");
+                        ctx.wafState().markWafDetected(baselineProvider.isEmpty() ? "cloudflare" : baselineProvider);
                     }
                     if ("managed".equals(cfType) || "interactive".equals(cfType) || "non-interactive".equals(cfType)
                             || "embedded".equals(cfType)) {
@@ -337,7 +338,9 @@ public class ScanRunner {
                     String challengeType = WafEvasion.detectChallengeType(probeResp.statusCode(),
                             probeResp.headers().map(), probeBody);
                     if (!ctx.wafState().isWafDetected()) {
-                        String product = WafEvasion.detectWafProduct(serverHdr);
+                        String product = !baselineProvider.isEmpty()
+                                ? baselineProvider
+                                : WafEvasion.detectWafProduct(serverHdr);
                         ctx.wafState().markWafDetected(product.isEmpty() ? serverHdr : product);
                     }
                     ctx.wafState().markBlockType(WafState.WafBlockType.JS_CHALLENGE);
@@ -346,7 +349,9 @@ public class ScanRunner {
                             + probeResp.statusCode() + ")");
                 } else if (WafEvasion.isWafBlocked(probeResp.statusCode(), serverHdr, probeBody)) {
                     if (!ctx.wafState().isWafDetected()) {
-                        String product = WafEvasion.detectWafProduct(serverHdr);
+                        String product = !baselineProvider.isEmpty()
+                                ? baselineProvider
+                                : WafEvasion.detectWafProduct(serverHdr);
                         ctx.wafState().markWafDetected(product.isEmpty() ? serverHdr : product);
                     }
                     ctx.wafState().markBlockType(WafState.WafBlockType.RULE_BLOCK);
@@ -442,7 +447,7 @@ public class ScanRunner {
                     }
                 }, modulePool).orTimeout(MODULE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
-                futures.add(future.whenComplete((findings, ex) -> {
+                futures.add(future.handle((findings, ex) -> {
                     if (ex != null) {
                         Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                         if (cause instanceof TimeoutException) {
@@ -474,6 +479,7 @@ public class ScanRunner {
                         safeLog.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
                     }
                     eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, module.id(), moduleIndex, moduleCount));
+                    return (Void) null;
                 }));
             }
         }
