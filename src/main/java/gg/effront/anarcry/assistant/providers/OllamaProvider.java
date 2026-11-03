@@ -71,7 +71,8 @@ public final class OllamaProvider implements ProviderAdapter {
             body.addProperty("stream", true);
         }
 
-        return HttpRequest.newBuilder().uri(URI.create(DEFAULT_URL)).header("Content-Type", "application/json")
+        String url = resolveUrl(config);
+        return HttpRequest.newBuilder().uri(URI.create(url)).header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(body))).build();
     }
 
@@ -116,6 +117,14 @@ public final class OllamaProvider implements ProviderAdapter {
     @Override
     public String extractToolCallJson(String body) {
         return null;
+    }
+
+    private static String resolveUrl(AssistantConfig config) {
+        String key = config.apiKey();
+        if (key != null && key.startsWith("http")) {
+            return key.endsWith("/v1/chat/completions") ? key : key + "/v1/chat/completions";
+        }
+        return DEFAULT_URL;
     }
 
     @Override

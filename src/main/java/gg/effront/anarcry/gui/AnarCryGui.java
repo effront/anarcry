@@ -122,6 +122,7 @@ public class AnarCryGui {
         if (env != null) {
             prefillFromEnv(env);
         }
+        assistantView.configure(env != null ? env.asMap() : java.util.Map.of());
 
         SwingUtilities.invokeLater(this::buildAndShowFrame);
     }
@@ -203,9 +204,6 @@ public class AnarCryGui {
         }
         if (!env.sessionCookie().isBlank()) {
             targetView.setSessionCookie(env.sessionCookie());
-        }
-        if (env.hasAssistant()) {
-            assistantView.configure(env.asMap());
         }
     }
 

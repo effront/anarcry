@@ -3,6 +3,7 @@ package gg.effront.anarcry.gui.views;
 import gg.effront.anarcry.assistant.AiAssistant;
 import gg.effront.anarcry.assistant.AssistantConfig;
 import gg.effront.anarcry.assistant.ContextBuilder;
+import gg.effront.anarcry.assistant.ProviderRegistry;
 import gg.effront.anarcry.assistant.UsageTracker;
 import gg.effront.anarcry.assistant.tools.AssistantTool;
 import gg.effront.anarcry.assistant.tools.ExplainCweTool;
@@ -17,7 +18,10 @@ import gg.effront.anarcry.scanner.ScanContext;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.event.ItemEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.util.List;
@@ -26,7 +30,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 
+import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollBar;
@@ -46,6 +52,7 @@ public class AssistantView extends JPanel {
     private static final Color ASSISTANT_COLOR = new Color(0xD4, 0xD4, 0xD4);
     private static final Color SYSTEM_COLOR = new Color(0xE5, 0xC0, 0x7B);
     private static final Color INPUT_BG = new Color(0x2D, 0x2D, 0x3D);
+    private static final Color LABEL_COLOR = new Color(0x88, 0x88, 0x99);
     private static final Font CHAT_FONT = new Font(Font.MONOSPACED, Font.PLAIN, 13);
     private static final Font INPUT_FONT = new Font(Font.MONOSPACED, Font.PLAIN, 14);
 
@@ -53,6 +60,8 @@ public class AssistantView extends JPanel {
     private final JTextField inputField;
     private final JLabel usageLabel;
     private final JScrollPane scrollPane;
+    private final JComboBox<String> providerCombo;
+    private final JComboBox<String> modelCombo;
 
     private AiAssistant aiAssistant;
     private ContextBuilder contextBuilder;
@@ -66,9 +75,53 @@ public class AssistantView extends JPanel {
     private Supplier<ScanContext> contextSupplier = () -> null;
     private Supplier<DiscoveredPaths> discoveredPathsSupplier = DiscoveredPaths::new;
 
+    private List<ProviderRegistry.ProviderInfo> availableProviders = List.of();
+    private int maxTokens = 4096;
+    private boolean suppressComboEvents;
+
     public AssistantView() {
         super(new BorderLayout(0, 4));
         setBackground(DARK_BG);
+
+        providerCombo = new JComboBox<>();
+        providerCombo.setBackground(INPUT_BG);
+        providerCombo.setForeground(ASSISTANT_COLOR);
+        providerCombo.setFont(CHAT_FONT);
+        providerCombo.setPreferredSize(new Dimension(140, 26));
+        providerCombo.addItemListener(e -> {
+            if (!suppressComboEvents && e.getStateChange() == ItemEvent.SELECTED) {
+                onProviderChanged();
+            }
+        });
+
+        modelCombo = new JComboBox<>();
+        modelCombo.setEditable(true);
+        modelCombo.setBackground(INPUT_BG);
+        modelCombo.setForeground(ASSISTANT_COLOR);
+        modelCombo.setFont(CHAT_FONT);
+        modelCombo.setPreferredSize(new Dimension(250, 26));
+        modelCombo.getEditor().getEditorComponent().setBackground(INPUT_BG);
+        modelCombo.getEditor().getEditorComponent().setForeground(ASSISTANT_COLOR);
+        modelCombo.addItemListener(e -> {
+            if (!suppressComboEvents && e.getStateChange() == ItemEvent.SELECTED) {
+                onModelChanged();
+            }
+        });
+
+        JLabel providerLabel = new JLabel(" Provider:");
+        providerLabel.setForeground(LABEL_COLOR);
+        providerLabel.setFont(CHAT_FONT);
+
+        JLabel modelLabel = new JLabel("  Model:");
+        modelLabel.setForeground(LABEL_COLOR);
+        modelLabel.setFont(CHAT_FONT);
+
+        JPanel selectorBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 4));
+        selectorBar.setBackground(DARK_BG);
+        selectorBar.add(providerLabel);
+        selectorBar.add(providerCombo);
+        selectorBar.add(modelLabel);
+        selectorBar.add(modelCombo);
 
         chatPane = new JTextPane();
         chatPane.setEditable(false);
@@ -78,13 +131,18 @@ public class AssistantView extends JPanel {
 
         scrollPane = new JScrollPane(chatPane);
         scrollPane.setBorder(null);
-        add(scrollPane, BorderLayout.CENTER);
+
+        JPanel centerPanel = new JPanel(new BorderLayout());
+        centerPanel.setBackground(DARK_BG);
+        centerPanel.add(selectorBar, BorderLayout.NORTH);
+        centerPanel.add(scrollPane, BorderLayout.CENTER);
+        add(centerPanel, BorderLayout.CENTER);
 
         JPanel bottomPanel = new JPanel(new BorderLayout(4, 0));
         bottomPanel.setBackground(DARK_BG);
 
         JLabel hintLabel = new JLabel(" /findings /explain /remediate /plan /kb /report /clear");
-        hintLabel.setForeground(new Color(0x88, 0x88, 0x99));
+        hintLabel.setForeground(LABEL_COLOR);
         hintLabel.setFont(CHAT_FONT);
 
         inputField = new JTextField();
@@ -92,9 +150,9 @@ public class AssistantView extends JPanel {
         inputField.setForeground(ASSISTANT_COLOR);
         inputField.setCaretColor(ASSISTANT_COLOR);
         inputField.setFont(INPUT_FONT);
-        inputField.setBorder(javax.swing.BorderFactory.createCompoundBorder(
-                javax.swing.BorderFactory.createLineBorder(new Color(0x44, 0x44, 0x55)),
-                javax.swing.BorderFactory.createEmptyBorder(6, 8, 6, 8)));
+        inputField.setBorder(
+                BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(0x44, 0x44, 0x55)),
+                        BorderFactory.createEmptyBorder(6, 8, 6, 8)));
 
         inputField.addKeyListener(new KeyAdapter() {
             @Override
@@ -110,7 +168,7 @@ public class AssistantView extends JPanel {
         sendBtn.addActionListener(e -> handleSubmit());
 
         usageLabel = new JLabel("");
-        usageLabel.setForeground(new Color(0x88, 0x88, 0x99));
+        usageLabel.setForeground(LABEL_COLOR);
         usageLabel.setFont(CHAT_FONT);
 
         JPanel inputRow = new JPanel(new BorderLayout(4, 0));
@@ -130,14 +188,103 @@ public class AssistantView extends JPanel {
     }
 
     public void configure(Map<String, String> envMap) {
-        AssistantConfig config = AssistantConfig.fromEnv(envMap);
-        if (!config.isConfigured()) {
-            appendSystem(
-                    "AI Assistant not configured. " + "Set ASSISTANT_PROVIDER and ASSISTANT_API_KEY in .env.local");
-            return;
+        availableProviders = ProviderRegistry.detect(envMap);
+        maxTokens = AssistantConfig.parseMaxTokens(envMap);
+
+        suppressComboEvents = true;
+        providerCombo.removeAllItems();
+        for (ProviderRegistry.ProviderInfo info : availableProviders) {
+            providerCombo.addItem(info.label());
         }
 
+        int selectIndex = 0;
+        String legacyProvider = envMap.getOrDefault("assistant_provider", "").toLowerCase();
+        if (!legacyProvider.isEmpty()) {
+            String resolvedId = "anthropic".equals(legacyProvider) ? "claude" : legacyProvider;
+            for (int i = 0; i < availableProviders.size(); i++) {
+                if (availableProviders.get(i).id().equals(resolvedId)) {
+                    selectIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (!availableProviders.isEmpty()) {
+            providerCombo.setSelectedIndex(selectIndex);
+            populateModels(availableProviders.get(selectIndex));
+        }
+        suppressComboEvents = false;
+
+        if (!availableProviders.isEmpty()) {
+            initAssistant(availableProviders.get(selectIndex), selectedModel());
+        }
+    }
+
+    public void setFindingsSupplier(Supplier<List<Finding>> supplier) {
+        this.findingsSupplier = supplier;
+    }
+
+    public void setContextSupplier(Supplier<ScanContext> supplier) {
+        this.contextSupplier = supplier;
+    }
+
+    public void setDiscoveredPathsSupplier(Supplier<DiscoveredPaths> supplier) {
+        this.discoveredPathsSupplier = supplier;
+    }
+
+    public JTextField getInputField() {
+        return inputField;
+    }
+
+    private void onProviderChanged() {
+        int idx = providerCombo.getSelectedIndex();
+        if (idx < 0 || idx >= availableProviders.size()) {
+            return;
+        }
+        ProviderRegistry.ProviderInfo info = availableProviders.get(idx);
+        suppressComboEvents = true;
+        populateModels(info);
+        suppressComboEvents = false;
+        switchProvider(info, info.defaultModel());
+    }
+
+    private void onModelChanged() {
+        int idx = providerCombo.getSelectedIndex();
+        if (idx < 0 || idx >= availableProviders.size()) {
+            return;
+        }
+        switchProvider(availableProviders.get(idx), selectedModel());
+    }
+
+    private void populateModels(ProviderRegistry.ProviderInfo info) {
+        modelCombo.removeAllItems();
+        for (String model : info.models()) {
+            modelCombo.addItem(model);
+        }
+        modelCombo.setSelectedItem(info.defaultModel());
+    }
+
+    private String selectedModel() {
+        Object item = modelCombo.getSelectedItem();
+        return item != null ? item.toString().strip() : "";
+    }
+
+    private void switchProvider(ProviderRegistry.ProviderInfo info, String model) {
+        chatPane.setText("");
+        initAssistant(info, model);
+    }
+
+    private void initAssistant(ProviderRegistry.ProviderInfo info, String model) {
         try {
+            AssistantConfig config = AssistantConfig.forProvider(info, model, maxTokens);
+            if (!config.isConfigured()) {
+                appendSystem("No API key for " + info.label() + ". Set " + info.id().toUpperCase()
+                        + "_API_KEY in .env.local");
+                aiAssistant = null;
+                contextBuilder = null;
+                return;
+            }
+
             aiAssistant = new AiAssistant(config);
             KnowledgeBase kb = KnowledgeBase.getInstance();
             contextBuilder = new ContextBuilder(findingsSupplier, contextSupplier, kb);
@@ -161,22 +308,6 @@ public class AssistantView extends JPanel {
         }
     }
 
-    public void setFindingsSupplier(Supplier<List<Finding>> supplier) {
-        this.findingsSupplier = supplier;
-    }
-
-    public void setContextSupplier(Supplier<ScanContext> supplier) {
-        this.contextSupplier = supplier;
-    }
-
-    public void setDiscoveredPathsSupplier(Supplier<DiscoveredPaths> supplier) {
-        this.discoveredPathsSupplier = supplier;
-    }
-
-    public JTextField getInputField() {
-        return inputField;
-    }
-
     private void handleSubmit() {
         String text = inputField.getText().strip();
         if (text.isEmpty()) {
@@ -190,7 +321,7 @@ public class AssistantView extends JPanel {
         }
 
         if (aiAssistant == null) {
-            appendSystem("Assistant not configured. Set ASSISTANT_PROVIDER in .env.local");
+            appendSystem("Assistant not configured. Select a provider with an API key.");
             return;
         }
 

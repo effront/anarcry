@@ -7,32 +7,40 @@ public record AssistantConfig(String provider, String apiKey, String model, int 
     private static final int DEFAULT_MAX_TOKENS = 4096;
 
     public static AssistantConfig fromEnv(Map<String, String> env) {
-        String provider = env.getOrDefault("assistant_provider", "").toLowerCase();
-        String apiKey = env.getOrDefault("assistant_api_key", "");
-        String model = env.getOrDefault("assistant_model", defaultModel(provider));
-        int maxTokens = DEFAULT_MAX_TOKENS;
-        String maxStr = env.getOrDefault("assistant_max_tokens", "");
-        if (!maxStr.isEmpty()) {
-            try {
-                maxTokens = Integer.parseInt(maxStr);
-            } catch (NumberFormatException ignored) {
-                // keep default
+        var providers = ProviderRegistry.detect(env);
+        String legacyProvider = env.getOrDefault("assistant_provider", "").toLowerCase();
+        String resolvedId = "anthropic".equals(legacyProvider) ? "claude" : legacyProvider;
+        for (var info : providers) {
+            if (info.id().equals(resolvedId)) {
+                String model = env.getOrDefault("assistant_model", info.defaultModel());
+                return forProvider(info, model, parseMaxTokens(env));
             }
         }
-        return new AssistantConfig(provider, apiKey, model, maxTokens);
+        if (!providers.isEmpty()) {
+            var first = providers.get(0);
+            return forProvider(first, first.defaultModel(), parseMaxTokens(env));
+        }
+        return new AssistantConfig("", "", "", DEFAULT_MAX_TOKENS);
+    }
+
+    public static AssistantConfig forProvider(ProviderRegistry.ProviderInfo info, String model, int maxTokens) {
+        String m = (model == null || model.isEmpty()) ? info.defaultModel() : model;
+        return new AssistantConfig(info.id(), info.apiKey(), m, maxTokens);
     }
 
     public boolean isConfigured() {
         return !provider.isEmpty() && (!apiKey.isEmpty() || "ollama".equals(provider));
     }
 
-    private static String defaultModel(String provider) {
-        return switch (provider) {
-            case "gemini" -> "gemini-2.5-flash";
-            case "claude" -> "claude-sonnet-4-20250514";
-            case "openai" -> "gpt-4.1-mini";
-            case "ollama" -> "llama3.1";
-            default -> "";
-        };
+    public static int parseMaxTokens(Map<String, String> env) {
+        String maxStr = env.getOrDefault("assistant_max_tokens", "");
+        if (!maxStr.isEmpty()) {
+            try {
+                return Integer.parseInt(maxStr);
+            } catch (NumberFormatException ignored) {
+                // keep default
+            }
+        }
+        return DEFAULT_MAX_TOKENS;
     }
 }

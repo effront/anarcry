@@ -47,7 +47,7 @@ public class AssistantPanel extends Panel {
 
         chatArea = new Panel(new LinearLayout(Direction.VERTICAL));
         inputBox = new PasteableTextBox(new TerminalSize(0, 1));
-        hintLabel = new Label(" /findings /explain /remediate /plan /kb /report /clear  |  Enter: send");
+        hintLabel = new Label(" /findings /explain /plan /kb /clear /provider /model  |  Enter: send");
         hintLabel.setForegroundColor(TextColor.ANSI.WHITE);
 
         var centerPanel = new Panel(new BorderLayout());
@@ -61,7 +61,8 @@ public class AssistantPanel extends Panel {
         addComponent(bottomPanel, BorderLayout.Location.BOTTOM);
 
         if (!configured) {
-            addSystemMessage("AI Assistant not configured. Set ASSISTANT_PROVIDER and ASSISTANT_API_KEY in .env.local");
+            addSystemMessage(
+                    "No API keys configured. Set GEMINI_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY in .env.local");
         } else {
             addSystemMessage("AI Assistant ready. Type your question or use a slash command.");
         }
@@ -92,7 +93,7 @@ public class AssistantPanel extends Panel {
         }
 
         if (!configured) {
-            addSystemMessage("Assistant not configured. Set ASSISTANT_PROVIDER in .env.local");
+            addSystemMessage("No API keys configured. Use /provider to check available providers.");
             return true;
         }
 

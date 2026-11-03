@@ -48,6 +48,7 @@ import gg.effront.anarcry.EnvLoader;
 import gg.effront.anarcry.assistant.AiAssistant;
 import gg.effront.anarcry.assistant.AssistantConfig;
 import gg.effront.anarcry.assistant.ContextBuilder;
+import gg.effront.anarcry.assistant.ProviderRegistry;
 import gg.effront.anarcry.assistant.tools.ExplainCweTool;
 import gg.effront.anarcry.assistant.tools.GetFindingsTool;
 import gg.effront.anarcry.assistant.tools.GetScanConfigTool;
@@ -61,6 +62,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -93,6 +95,10 @@ public class AnarCryTui {
     private EnvLoader envPreload = null;
     private AiAssistant aiAssistant;
     private ContextBuilder contextBuilder;
+    private List<ProviderRegistry.ProviderInfo> availableProviders = List.of();
+    private ProviderRegistry.ProviderInfo currentProvider;
+    private String currentModel;
+    private int maxTokens = 4096;
     private final DiscoveredPaths discoveredPaths = new DiscoveredPaths();
     private final ExecutorService assistantExecutor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "assistant-worker");
@@ -407,14 +413,11 @@ public class AnarCryTui {
 
     private Component buildAssistantContent() {
         if (assistantPanel == null) {
-            boolean configured = envPreload != null && envPreload.hasAssistant();
             TerminalSize ts = gui.getScreen().getTerminalSize();
             int chatHeight = Math.max(8, ts.getRows() - 4);
-            assistantPanel = new AssistantPanel(chatHeight, configured);
+            assistantPanel = new AssistantPanel(chatHeight, true);
 
-            if (configured) {
-                initAssistant();
-            }
+            initAssistant();
 
             assistantPanel.setOnSend(msg -> {
                 if (aiAssistant == null) {
@@ -437,13 +440,23 @@ public class AnarCryTui {
                 });
             });
             assistantPanel.setOnSlashCommand(cmd -> {
+                String[] parts = cmd.split("\\s+", 2);
+                String slashCmd = parts[0].toLowerCase();
+                String arg = parts.length > 1 ? parts[1] : "";
+
+                if ("/provider".equals(slashCmd)) {
+                    handleProviderCommand(arg);
+                    return;
+                }
+                if ("/model".equals(slashCmd)) {
+                    handleModelCommand(arg);
+                    return;
+                }
+
                 if (contextBuilder == null) {
                     assistantPanel.addSystemMessage("Assistant not configured.");
                     return;
                 }
-                String[] parts = cmd.split("\\s+", 2);
-                String slashCmd = parts[0].toLowerCase();
-                String arg = parts.length > 1 ? parts[1] : "";
                 String enriched = contextBuilder.buildWithSlashCommand(slashCmd, arg);
                 if (aiAssistant != null) {
                     assistantExecutor.submit(() -> {
@@ -471,27 +484,100 @@ public class AnarCryTui {
 
     private void initAssistant() {
         try {
-            AssistantConfig assistantConfig = AssistantConfig.fromEnv(envPreload.asMap());
-            aiAssistant = new AiAssistant(assistantConfig);
+            Map<String, String> envMap = envPreload != null ? envPreload.asMap() : Map.of();
+            availableProviders = ProviderRegistry.detect(envMap);
+            maxTokens = AssistantConfig.parseMaxTokens(envMap);
 
-            KnowledgeBase kb = KnowledgeBase.getInstance();
+            String legacyProvider = envMap.getOrDefault("assistant_provider", "").toLowerCase();
+            String resolvedId = "anthropic".equals(legacyProvider) ? "claude" : legacyProvider;
+            currentProvider = null;
+            for (var p : availableProviders) {
+                if (p.id().equals(resolvedId)) {
+                    currentProvider = p;
+                    break;
+                }
+            }
+            if (currentProvider == null && !availableProviders.isEmpty()) {
+                currentProvider = availableProviders.get(0);
+            }
+            if (currentProvider == null) {
+                assistantPanel.addSystemMessage("No AI providers available.");
+                return;
+            }
 
-            contextBuilder = new ContextBuilder(() -> findingHistory, () -> scanRunner.getLastContext(), kb);
+            String envModel = envMap.getOrDefault("assistant_model", "");
+            currentModel = envModel.isEmpty() ? currentProvider.defaultModel() : envModel;
 
-            GetFindingsTool findingsTool = new GetFindingsTool(() -> findingHistory);
-            QueryKbTool kbTool = new QueryKbTool(kb);
-            ExplainCweTool cweTool = new ExplainCweTool(kb);
-            GetSitemapTool sitemapTool = new GetSitemapTool(() -> discoveredPaths);
-            GetScanConfigTool configTool = new GetScanConfigTool(() -> scanRunner.getLastContext());
-
-            aiAssistant.registerTool(findingsTool.name(), findingsTool::call);
-            aiAssistant.registerTool(kbTool.name(), kbTool::call);
-            aiAssistant.registerTool(cweTool.name(), cweTool::call);
-            aiAssistant.registerTool(sitemapTool.name(), sitemapTool::call);
-            aiAssistant.registerTool(configTool.name(), configTool::call);
+            initAssistantForProvider();
+            assistantPanel.addSystemMessage("AI Assistant ready (" + currentProvider.label() + " / " + currentModel
+                    + "). Use /provider or /model to switch.");
         } catch (Exception e) {
             assistantPanel.addSystemMessage("Error initializing assistant: " + e.getMessage());
         }
+    }
+
+    private void initAssistantForProvider() {
+        AssistantConfig config = AssistantConfig.forProvider(currentProvider, currentModel, maxTokens);
+        aiAssistant = new AiAssistant(config);
+        KnowledgeBase kb = KnowledgeBase.getInstance();
+        contextBuilder = new ContextBuilder(() -> findingHistory, () -> scanRunner.getLastContext(), kb);
+
+        GetFindingsTool findingsTool = new GetFindingsTool(() -> findingHistory);
+        QueryKbTool kbTool = new QueryKbTool(kb);
+        ExplainCweTool cweTool = new ExplainCweTool(kb);
+        GetSitemapTool sitemapTool = new GetSitemapTool(() -> discoveredPaths);
+        GetScanConfigTool configTool = new GetScanConfigTool(() -> scanRunner.getLastContext());
+
+        aiAssistant.registerTool(findingsTool.name(), findingsTool::call);
+        aiAssistant.registerTool(kbTool.name(), kbTool::call);
+        aiAssistant.registerTool(cweTool.name(), cweTool::call);
+        aiAssistant.registerTool(sitemapTool.name(), sitemapTool::call);
+        aiAssistant.registerTool(configTool.name(), configTool::call);
+    }
+
+    private void handleProviderCommand(String arg) {
+        if (arg.isEmpty()) {
+            StringBuilder sb = new StringBuilder("Available providers:");
+            for (var p : availableProviders) {
+                String marker = (currentProvider != null && p.id().equals(currentProvider.id())) ? " [active]" : "";
+                sb.append("\n  ").append(p.id()).append(" (").append(p.label()).append(")").append(marker);
+            }
+            sb.append("\nUsage: /provider <id>");
+            assistantPanel.addSystemMessage(sb.toString());
+            return;
+        }
+        for (var p : availableProviders) {
+            if (p.id().equalsIgnoreCase(arg) || p.label().equalsIgnoreCase(arg)) {
+                currentProvider = p;
+                currentModel = p.defaultModel();
+                initAssistantForProvider();
+                aiAssistant.clearHistory();
+                assistantPanel.addSystemMessage("Switched to " + p.label() + " / " + currentModel);
+                return;
+            }
+        }
+        assistantPanel.addSystemMessage("Unknown provider: " + arg);
+    }
+
+    private void handleModelCommand(String arg) {
+        if (currentProvider == null) {
+            assistantPanel.addSystemMessage("No provider selected. Use /provider first.");
+            return;
+        }
+        if (arg.isEmpty()) {
+            StringBuilder sb = new StringBuilder("Models for " + currentProvider.label() + ":");
+            for (String m : currentProvider.models()) {
+                String marker = m.equals(currentModel) ? " [active]" : "";
+                sb.append("\n  ").append(m).append(marker);
+            }
+            sb.append("\nUsage: /model <name> (custom names accepted)");
+            assistantPanel.addSystemMessage(sb.toString());
+            return;
+        }
+        currentModel = arg;
+        initAssistantForProvider();
+        aiAssistant.clearHistory();
+        assistantPanel.addSystemMessage("Switched to " + currentProvider.label() + " / " + currentModel);
     }
 
     private String buildToolsJson() {
