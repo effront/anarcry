@@ -130,11 +130,8 @@ public final class OpenAiProvider implements ProviderAdapter {
                     ? fn.get("name").getAsString()
                     : null;
             String argsDelta = fn != null && fn.has("arguments") ? fn.get("arguments").getAsString() : null;
-            if (id != null && name != null) {
+            if (id != null || name != null || argsDelta != null) {
                 return new StreamToolFragment(id, name, argsDelta);
-            }
-            if (argsDelta != null) {
-                return new StreamToolFragment(null, null, argsDelta);
             }
         } catch (Exception e) {
             // malformed

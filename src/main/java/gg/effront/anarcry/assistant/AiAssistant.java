@@ -130,8 +130,10 @@ public final class AiAssistant {
                     }
                     ProviderAdapter.StreamToolFragment frag = provider.parseStreamToolFragment(data);
                     if (frag != null) {
-                        if (frag.isStart()) {
+                        if (frag.id() != null) {
                             toolCallId = frag.id();
+                        }
+                        if (frag.name() != null) {
                             toolCallName = frag.name();
                         }
                         if (frag.inputDelta() != null) {
@@ -153,8 +155,12 @@ public final class AiAssistant {
             toolCallPayload.addProperty("id", toolCallId != null ? toolCallId : "call_" + System.nanoTime());
             toolCallPayload.addProperty("name", toolCallName);
             String inputStr = toolInputJson.toString();
-            toolCallPayload.add("input",
-                    inputStr.isEmpty() ? new JsonObject() : GSON.fromJson(inputStr, JsonObject.class));
+            try {
+                toolCallPayload.add("input",
+                        inputStr.isEmpty() ? new JsonObject() : GSON.fromJson(inputStr, JsonObject.class));
+            } catch (Exception e) {
+                toolCallPayload.add("input", new JsonObject());
+            }
 
             if (!responseText.isEmpty()) {
                 conversationHistory.add(ChatMessage.assistant(responseText));
