@@ -105,7 +105,7 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.9.0.jar
+java -jar build/libs/anarcry-1.9.1.jar
 ```
 
 Or use the launcher (auto-builds if source changed):
@@ -123,7 +123,7 @@ With `.env.local` for pre-configured targets:
 Launch in GUI mode (Swing + FlatLaf):
 
 ```bash
-java -jar build/libs/anarcry-1.9.0.jar --gui
+java -jar build/libs/anarcry-1.9.1.jar --gui
 ```
 
 ---
@@ -457,6 +457,14 @@ Built-in LLM-powered security analyst available in both TUI and GUI. Supports fo
 ---
 
 ## 10 - Changelog
+
+### v1.9.1
+
+- **CF WAF false positive fix**: `isWafBlocked()` now requires CF-specific body markers (Attention Required, cf_chl_opt, challenge-platform) when `Server: cloudflare` is present -- app-level 403s behind CF CDN no longer trigger circuit breaker
+- **Circuit breaker propagation fix**: dedicated `catch(CircuitBreakerException)` clauses in all 11 scanner modules with nested try-catch -- fixes 5 outer catch-alls that silently swallowed the rethrown exception (GraphQL, OAuth, CachePoisoning, MassAssignment)
+- **Non-WAF response resets CB counter**: any response that is not a WAF block (including app-level 403/404) now resets the consecutive block counter -- CB only trips on truly consecutive WAF blocks
+- **Dynamic threshold for RULE_BLOCK**: WAF rule-block threshold raised from 8 to 25 -- modules behind confirmed WAF get more room for evasion before aborting
+- **Bidirectional threshold adjustment**: `adjustThreshold()` replaces `lowerThreshold()` -- threshold can increase when WAF rule-block is detected mid-scan
 
 ### v1.9.0
 

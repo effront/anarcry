@@ -5,6 +5,7 @@ import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.TlsUtil;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.WafEvasion;
@@ -158,6 +159,8 @@ public class XxeModule implements Scanner {
             if (resp.statusCode() == 200 && resp.body() != null) {
                 return resp.body();
             }
+        } catch (CircuitBreakerException cbe) {
+            throw cbe;
         } catch (Exception ignored) {
         }
         return null;

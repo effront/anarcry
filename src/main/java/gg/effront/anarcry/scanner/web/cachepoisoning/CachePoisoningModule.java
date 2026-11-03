@@ -5,6 +5,7 @@ import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
 import java.net.URI;
@@ -75,6 +76,8 @@ public class CachePoisoningModule implements Scanner {
                             String cleanBody = cleanResp.body() != null ? cleanResp.body() : "";
                             String cleanLoc = cleanResp.headers().firstValue("location").orElse("");
                             poisonPersisted = cleanBody.contains(PROBE_VALUE) || cleanLoc.contains(PROBE_VALUE);
+                        } catch (CircuitBreakerException cbe) {
+                            throw cbe;
                         } catch (Exception ignored) {
                         }
 
@@ -98,6 +101,8 @@ public class CachePoisoningModule implements Scanner {
                                 _cweId, _cweTitle, _cveVector, _score));
                         break outer;
                     }
+                } catch (CircuitBreakerException cbe) {
+                    throw cbe;
                 } catch (Exception e) {
                     // Skip connection errors -- continue
                 }

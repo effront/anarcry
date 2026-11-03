@@ -165,8 +165,10 @@ class WafEvasionTest {
     @Test
     @Order(9)
     void isWafBlockedDetectsCf() {
-        assertTrue(WafEvasion.isWafBlocked(403, "cloudflare", ""),
-                "403 + cloudflare server header deve ser detectado como WAF block");
+        assertTrue(WafEvasion.isWafBlocked(403, "cloudflare", "Attention Required | Cloudflare"),
+                "403 + cloudflare server header + CF body marker deve ser detectado como WAF block");
+        assertFalse(WafEvasion.isWafBlocked(403, "cloudflare", "Forbidden"),
+                "403 + cloudflare sem body marker CF nao deve ser WAF block");
     }
 
     @Test

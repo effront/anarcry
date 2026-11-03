@@ -22,6 +22,7 @@ public final class WafState {
     }
 
     private static final int DEFAULT_THRESHOLD = 8;
+    private static final int WAF_RULE_THRESHOLD = 25;
     private static final int MANAGED_CHALLENGE_THRESHOLD = 3;
 
     private final AtomicBoolean wafDetected = new AtomicBoolean(false);
@@ -158,7 +159,10 @@ public final class WafState {
      * be blocked -- no point insisting.
      */
     public int effectiveThreshold() {
-        return isManaged() ? MANAGED_CHALLENGE_THRESHOLD : DEFAULT_THRESHOLD;
+        if (isManaged()) {
+            return MANAGED_CHALLENGE_THRESHOLD;
+        }
+        return isRuleBlock() ? WAF_RULE_THRESHOLD : DEFAULT_THRESHOLD;
     }
 
     public CircuitBreaker circuitBreaker(String moduleId) {

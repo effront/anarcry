@@ -9,6 +9,7 @@ import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.TlsUtil;
 
@@ -68,6 +69,8 @@ public class OAuthModule implements Scanner {
                         if (json.has("authorization_endpoint")) {
                             authorizeEndpoint = json.get("authorization_endpoint").getAsString();
                         }
+                    } catch (CircuitBreakerException cbe) {
+                        throw cbe;
                     } catch (Exception ignored) {
                     }
                     findings.add(Finding.of("OAuth", baseUrl + wk, "OAuth / OpenID Connect endpoint descoberto",
@@ -78,6 +81,8 @@ public class OAuthModule implements Scanner {
                             _cweTitle, _cveVector, _score));
                     break;
                 }
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
             } catch (Exception e) {
                 log.accept("[~] OAuth: " + wk + " -- " + e.getMessage());
             }
@@ -110,6 +115,8 @@ public class OAuthModule implements Scanner {
                             "Exigir state e PKCE; validar redirect_uri contra whitelist estrita", _cweId, _cweTitle,
                             _cveVector, _score));
                     break;
+                } catch (CircuitBreakerException cbe) {
+                    throw cbe;
                 } catch (Exception e) {
                     log.accept("[~] OAuth: " + path + " -- " + e.getMessage());
                 }

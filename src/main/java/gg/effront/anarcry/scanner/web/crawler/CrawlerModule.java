@@ -6,6 +6,7 @@ import gg.effront.anarcry.model.KnowledgeEntry;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
@@ -112,6 +113,9 @@ public class CrawlerModule implements Scanner {
                         discovered.add(m.group(1));
                     }
                 }
+            } catch (CircuitBreakerException cbe) {
+                log.accept("[!] Crawler JS fetch: " + cbe.getMessage());
+                break;
             } catch (Exception ignored) {
             }
         }
@@ -135,6 +139,9 @@ public class CrawlerModule implements Scanner {
                             "CWE-200", "Exposure of Sensitive Information to an Unauthorized Actor",
                             "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N", 5.3));
                 }
+            } catch (CircuitBreakerException cbe) {
+                log.accept("[!] Crawler OpenAPI: " + cbe.getMessage());
+                break;
             } catch (Exception ignored) {
             }
         }
@@ -178,6 +185,9 @@ public class CrawlerModule implements Scanner {
                                 "AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N", 7.5));
                     }
                 }
+            } catch (CircuitBreakerException cbe) {
+                log.accept("[!] Crawler: " + cbe.getMessage());
+                break;
             } catch (Exception ignored) {
             }
         }

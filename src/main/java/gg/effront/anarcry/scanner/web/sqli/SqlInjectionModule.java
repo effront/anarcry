@@ -8,6 +8,7 @@ import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.ProbeExecutor;
 import gg.effront.anarcry.scanner.util.WafEvasion;
@@ -137,6 +138,8 @@ public class SqlInjectionModule implements Scanner {
                                 cancel.set(true);
                                 return local;
                             }
+                        } catch (CircuitBreakerException cbe) {
+                            throw cbe;
                         } catch (Exception ignored) {
                         }
                     }
@@ -216,6 +219,8 @@ public class SqlInjectionModule implements Scanner {
                                 cancel.set(true);
                                 return local;
                             }
+                        } catch (CircuitBreakerException cbe) {
+                            throw cbe;
                         } catch (Exception ignored) {
                         }
                     }

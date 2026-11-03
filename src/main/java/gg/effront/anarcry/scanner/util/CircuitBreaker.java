@@ -49,12 +49,10 @@ public final class CircuitBreaker {
         return moduleId;
     }
 
-    public void lowerThreshold(int newThreshold) {
-        if (newThreshold < threshold) {
-            this.threshold = newThreshold;
-            if (consecutiveBlocks.get() >= newThreshold) {
-                tripped.set(true);
-            }
+    public void adjustThreshold(int newThreshold) {
+        this.threshold = newThreshold;
+        if (consecutiveBlocks.get() >= newThreshold) {
+            tripped.set(true);
         }
     }
 

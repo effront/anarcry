@@ -8,6 +8,7 @@ import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.TlsUtil;
 import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
 import java.net.URI;
@@ -105,10 +106,14 @@ public class GraphQLModule implements Scanner {
                                             + "considerar persisted queries para reduzir superfície de ataque",
                                     _cweId, _cweTitle, _cveVector, _score));
                         }
+                    } catch (CircuitBreakerException cbe) {
+                        throw cbe;
                     } catch (Exception ignored) {
                     }
                 }
 
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
             } catch (Exception e) {
                 log.accept("[~] GraphQL: " + url + " -- " + e.getMessage());
             }

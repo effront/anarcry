@@ -8,6 +8,7 @@ import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.ProbeExecutor;
 import gg.effront.anarcry.scanner.util.WafEvasion;
@@ -210,6 +211,8 @@ public class LfiModule implements Scanner {
                     if (!srv.isBlank()) {
                         serverRef.compareAndSet("", srv);
                     }
+                } catch (CircuitBreakerException cbe) {
+                    throw cbe;
                 } catch (Exception ignored) {
                 }
 
@@ -267,6 +270,8 @@ public class LfiModule implements Scanner {
                                 cancelLinux.set(true);
                                 return local;
                             }
+                        } catch (CircuitBreakerException cbe) {
+                            throw cbe;
                         } catch (Exception ignored) {
                         }
                     }
@@ -340,6 +345,8 @@ public class LfiModule implements Scanner {
                                     cancelWindows.set(true);
                                     return local;
                                 }
+                            } catch (CircuitBreakerException cbe) {
+                                throw cbe;
                             } catch (Exception ignored) {
                             }
                         }
@@ -389,6 +396,8 @@ public class LfiModule implements Scanner {
                                     String text = new String(decoded);
                                     confirmedPhp = text.contains("<?php") || text.contains("<?")
                                             || text.contains("require") || text.contains("$_");
+                                } catch (CircuitBreakerException cbe) {
+                                    throw cbe;
                                 } catch (Exception ignored) {
                                 }
 
@@ -414,6 +423,8 @@ public class LfiModule implements Scanner {
                                     return local;
                                 }
                             }
+                        } catch (CircuitBreakerException cbe) {
+                            throw cbe;
                         } catch (Exception ignored) {
                         }
                     }
@@ -504,6 +515,8 @@ public class LfiModule implements Scanner {
             Http.send(ctx, hc,
                     HttpRequest.newBuilder().uri(URI.create(base + "/")).timeout(Duration.ofSeconds(5)).GET().build(),
                     HttpResponse.BodyHandlers.ofString(), id());
+        } catch (CircuitBreakerException cbe) {
+            throw cbe;
         } catch (Exception ignored) {
         }
 
@@ -529,6 +542,8 @@ public class LfiModule implements Scanner {
                     log.accept("[!!!] LFI RCE via log poisoning em " + logPath + " → output: '" + m.group() + "'");
                     return logPath + " → output: " + m.group();
                 }
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
             } catch (Exception ignored) {
             }
         }
