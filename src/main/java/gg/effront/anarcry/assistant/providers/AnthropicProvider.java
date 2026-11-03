@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import gg.effront.anarcry.assistant.AssistantConfig;
 import gg.effront.anarcry.assistant.ChatMessage;
 import gg.effront.anarcry.assistant.UsageInfo;
@@ -50,17 +51,14 @@ public final class AnthropicProvider implements ProviderAdapter {
             if ("system".equals(msg.role())) {
                 continue;
             }
-            JsonObject m = new JsonObject();
-            m.addProperty("role", "tool".equals(msg.role()) ? "user" : msg.role());
-            m.addProperty("content", msg.content());
-            msgs.add(m);
+            msgs.add(formatMessage(msg));
         }
         body.add("messages", msgs);
 
         if (toolsJson != null && !toolsJson.isEmpty()) {
-            JsonArray tools = GSON.fromJson(toolsJson, JsonArray.class);
-            if (tools != null && !tools.isEmpty()) {
-                body.add("tools", tools);
+            JsonArray rawTools = GSON.fromJson(toolsJson, JsonArray.class);
+            if (rawTools != null && !rawTools.isEmpty()) {
+                body.add("tools", convertToolSchemas(rawTools));
             }
         }
 
@@ -125,6 +123,26 @@ public final class AnthropicProvider implements ProviderAdapter {
     }
 
     @Override
+    public String extractToolCallId(String body) {
+        try {
+            JsonObject json = GSON.fromJson(body, JsonObject.class);
+            JsonArray content = json.getAsJsonArray("content");
+            if (content == null) {
+                return null;
+            }
+            for (JsonElement block : content) {
+                JsonObject b = block.getAsJsonObject();
+                if ("tool_use".equals(b.has("type") ? b.get("type").getAsString() : "")) {
+                    return b.get("id").getAsString();
+                }
+            }
+        } catch (Exception e) {
+            // malformed
+        }
+        return null;
+    }
+
+    @Override
     public UsageInfo extractUsage(String body, String model) {
         try {
             JsonObject json = GSON.fromJson(body, JsonObject.class);
@@ -138,6 +156,59 @@ public final class AnthropicProvider implements ProviderAdapter {
         } catch (Exception e) {
             return new UsageInfo(0, 0, model);
         }
+    }
+
+    private static JsonObject formatMessage(ChatMessage msg) {
+        JsonObject m = new JsonObject();
+        if ("assistant".equals(msg.role()) && msg.toolCallPayload() != null) {
+            m.addProperty("role", "assistant");
+            JsonObject payload = JsonParser.parseString(msg.toolCallPayload()).getAsJsonObject();
+            JsonArray contentArr = new JsonArray();
+            JsonObject toolUseBlock = new JsonObject();
+            toolUseBlock.addProperty("type", "tool_use");
+            toolUseBlock.addProperty("id", payload.get("id").getAsString());
+            toolUseBlock.addProperty("name", payload.get("name").getAsString());
+            toolUseBlock.add("input", payload.get("input"));
+            contentArr.add(toolUseBlock);
+            m.add("content", contentArr);
+            return m;
+        }
+        if ("tool".equals(msg.role())) {
+            m.addProperty("role", "user");
+            JsonArray contentArr = new JsonArray();
+            JsonObject toolResultBlock = new JsonObject();
+            toolResultBlock.addProperty("type", "tool_result");
+            if (msg.toolCallId() != null) {
+                toolResultBlock.addProperty("tool_use_id", msg.toolCallId());
+            }
+            toolResultBlock.addProperty("content", msg.content());
+            contentArr.add(toolResultBlock);
+            m.add("content", contentArr);
+            return m;
+        }
+        m.addProperty("role", msg.role());
+        m.addProperty("content", msg.content());
+        return m;
+    }
+
+    private static JsonArray convertToolSchemas(JsonArray rawTools) {
+        JsonArray converted = new JsonArray();
+        for (JsonElement el : rawTools) {
+            JsonObject tool = el.getAsJsonObject().deepCopy();
+            if (tool.has("type") && "function".equals(tool.get("type").getAsString())) {
+                JsonObject fn = tool.getAsJsonObject("function").deepCopy();
+                if (fn.has("parameters")) {
+                    fn.add("input_schema", fn.remove("parameters"));
+                }
+                converted.add(fn);
+            } else {
+                if (tool.has("parameters")) {
+                    tool.add("input_schema", tool.remove("parameters"));
+                }
+                converted.add(tool);
+            }
+        }
+        return converted;
     }
 
     private static String extractText(JsonObject json) {

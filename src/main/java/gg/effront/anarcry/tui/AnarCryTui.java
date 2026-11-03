@@ -476,13 +476,13 @@ public class AnarCryTui {
 
             KnowledgeBase kb = KnowledgeBase.getInstance();
 
-            contextBuilder = new ContextBuilder(() -> findingHistory, () -> null, kb);
+            contextBuilder = new ContextBuilder(() -> findingHistory, () -> scanRunner.getLastContext(), kb);
 
             GetFindingsTool findingsTool = new GetFindingsTool(() -> findingHistory);
             QueryKbTool kbTool = new QueryKbTool(kb);
             ExplainCweTool cweTool = new ExplainCweTool(kb);
             GetSitemapTool sitemapTool = new GetSitemapTool(() -> discoveredPaths);
-            GetScanConfigTool configTool = new GetScanConfigTool(() -> (ScanContext) null);
+            GetScanConfigTool configTool = new GetScanConfigTool(() -> scanRunner.getLastContext());
 
             aiAssistant.registerTool(findingsTool.name(), findingsTool::call);
             aiAssistant.registerTool(kbTool.name(), kbTool::call);
@@ -500,17 +500,14 @@ public class AnarCryTui {
         }
         KnowledgeBase kb = KnowledgeBase.getInstance();
         var toolDefs = List.of(new GetFindingsTool(() -> findingHistory), new QueryKbTool(kb), new ExplainCweTool(kb),
-                new GetSitemapTool(() -> discoveredPaths), new GetScanConfigTool(() -> (ScanContext) null));
+                new GetSitemapTool(() -> discoveredPaths), new GetScanConfigTool(() -> scanRunner.getLastContext()));
         var tools = new com.google.gson.JsonArray();
         for (var tool : toolDefs) {
             var fn = new com.google.gson.JsonObject();
             fn.addProperty("name", tool.name());
             fn.addProperty("description", tool.description());
             fn.add("parameters", com.google.gson.JsonParser.parseString(tool.paramsSchema()));
-            var wrapper = new com.google.gson.JsonObject();
-            wrapper.addProperty("type", "function");
-            wrapper.add("function", fn);
-            tools.add(wrapper);
+            tools.add(fn);
         }
         return tools.toString();
     }

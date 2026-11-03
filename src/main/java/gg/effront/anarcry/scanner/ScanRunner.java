@@ -63,6 +63,8 @@ public class ScanRunner {
         return t;
     });
 
+    private volatile ScanContext lastScanContext;
+
     private Runnable onScanStart = () -> {
     };
     private Runnable onScanFinish = () -> {
@@ -101,7 +103,12 @@ public class ScanRunner {
         return List.copyOf(testedModules);
     }
 
+    public ScanContext getLastContext() {
+        return lastScanContext;
+    }
+
     public void run(ScanContext ctx) {
+        lastScanContext = ctx;
         executor.submit(() -> {
             try {
                 testedClean.clear();

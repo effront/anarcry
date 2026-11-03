@@ -2,7 +2,9 @@ package gg.effront.anarcry.assistant.providers;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import gg.effront.anarcry.assistant.AssistantConfig;
 import gg.effront.anarcry.assistant.ChatMessage;
 import gg.effront.anarcry.assistant.UsageInfo;
@@ -50,17 +52,14 @@ public final class OpenAiProvider implements ProviderAdapter {
             if ("system".equals(msg.role())) {
                 continue;
             }
-            JsonObject m = new JsonObject();
-            m.addProperty("role", msg.role());
-            m.addProperty("content", msg.content());
-            msgs.add(m);
+            msgs.add(formatMessage(msg));
         }
         body.add("messages", msgs);
 
         if (toolsJson != null && !toolsJson.isEmpty()) {
-            JsonArray tools = GSON.fromJson(toolsJson, JsonArray.class);
-            if (tools != null && !tools.isEmpty()) {
-                body.add("tools", tools);
+            JsonArray rawTools = GSON.fromJson(toolsJson, JsonArray.class);
+            if (rawTools != null && !rawTools.isEmpty()) {
+                body.add("tools", wrapToolSchemas(rawTools));
             }
         }
 
@@ -129,6 +128,29 @@ public final class OpenAiProvider implements ProviderAdapter {
     }
 
     @Override
+    public String extractToolCallId(String body) {
+        try {
+            JsonObject json = GSON.fromJson(body, JsonObject.class);
+            JsonArray choices = json.getAsJsonArray("choices");
+            if (choices == null || choices.isEmpty()) {
+                return null;
+            }
+            JsonObject message = choices.get(0).getAsJsonObject().getAsJsonObject("message");
+            if (message == null || !message.has("tool_calls")) {
+                return null;
+            }
+            JsonArray toolCalls = message.getAsJsonArray("tool_calls");
+            if (toolCalls == null || toolCalls.isEmpty()) {
+                return null;
+            }
+            JsonObject call = toolCalls.get(0).getAsJsonObject();
+            return call.has("id") ? call.get("id").getAsString() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
     public UsageInfo extractUsage(String body, String model) {
         try {
             JsonObject json = GSON.fromJson(body, JsonObject.class);
@@ -142,6 +164,42 @@ public final class OpenAiProvider implements ProviderAdapter {
         } catch (Exception e) {
             return new UsageInfo(0, 0, model);
         }
+    }
+
+    private static JsonObject formatMessage(ChatMessage msg) {
+        JsonObject m = new JsonObject();
+        if ("assistant".equals(msg.role()) && msg.toolCallPayload() != null) {
+            m.addProperty("role", "assistant");
+            JsonArray toolCalls = new JsonArray();
+            toolCalls.add(JsonParser.parseString(msg.toolCallPayload()));
+            m.add("tool_calls", toolCalls);
+            return m;
+        }
+        if ("tool".equals(msg.role()) && msg.toolCallId() != null) {
+            m.addProperty("role", "tool");
+            m.addProperty("tool_call_id", msg.toolCallId());
+            m.addProperty("content", msg.content());
+            return m;
+        }
+        m.addProperty("role", msg.role());
+        m.addProperty("content", msg.content());
+        return m;
+    }
+
+    private static JsonArray wrapToolSchemas(JsonArray rawTools) {
+        JsonArray wrapped = new JsonArray();
+        for (JsonElement el : rawTools) {
+            JsonObject tool = el.getAsJsonObject();
+            if (tool.has("type") && "function".equals(tool.get("type").getAsString())) {
+                wrapped.add(tool);
+            } else {
+                JsonObject wrapper = new JsonObject();
+                wrapper.addProperty("type", "function");
+                wrapper.add("function", tool);
+                wrapped.add(wrapper);
+            }
+        }
+        return wrapped;
     }
 
     private static String extractContent(JsonObject json) {

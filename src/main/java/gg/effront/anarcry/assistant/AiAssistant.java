@@ -70,7 +70,9 @@ public final class AiAssistant {
         if (toolCallJson != null && !tools.isEmpty()) {
             String toolResult = dispatchToolCall(toolCallJson);
             if (toolResult != null) {
-                conversationHistory.add(ChatMessage.tool(toolResult));
+                String toolCallId = provider.extractToolCallId(body);
+                conversationHistory.add(ChatMessage.assistantToolCall(toolCallJson));
+                conversationHistory.add(ChatMessage.toolResult(toolResult, toolCallId));
                 return sendFollowUp(systemPrompt, toolsJson);
             }
         }

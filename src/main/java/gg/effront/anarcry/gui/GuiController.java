@@ -4,10 +4,12 @@ import gg.effront.anarcry.model.AuthType;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.RequestRecord;
 import gg.effront.anarcry.scanner.DiscoveredPaths;
+import gg.effront.anarcry.scanner.ScanConfig;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.ScanEvent;
-import gg.effront.anarcry.scanner.ScanOrchestrator;
 import gg.effront.anarcry.scanner.ScanRunner;
+import gg.effront.anarcry.scanner.SuppressionLoader;
+import gg.effront.anarcry.scanner.util.WafState;
 
 import java.util.Set;
 import java.util.function.Consumer;
@@ -28,6 +30,8 @@ public class GuiController {
     private final Consumer<String> logCb;
     private final Consumer<Finding> findingCb;
     private volatile ScanContext lastScanContext;
+    private volatile Set<String> scopeHosts = Set.of();
+    private volatile String sessionCookie = "";
 
     /**
      * Creates a controller wired to the given GUI callbacks.
@@ -92,9 +96,27 @@ public class GuiController {
             return;
         }
 
-        ScanContext ctx = ScanOrchestrator.buildContext(authType, target, cred1, cred2, modules, requestLogCb);
+        String jwt = authType.usesBearer() ? (cred1 != null ? cred1 : "") : "";
+        String jwt2 = authType.usesBearer() ? (cred2 != null ? cred2 : "") : "";
+        String cookie = authType.usesCookie() ? (cred1 != null ? cred1 : "") : "";
+        String cookie2 = authType.usesCookie() ? (cred2 != null ? cred2 : "") : "";
+        if (!sessionCookie.isEmpty()) {
+            cookie = sessionCookie;
+        }
+        ScanConfig cfg = new ScanConfig(0, cookie, cookie2, scopeHosts, SuppressionLoader.loadFromCwd(), "",
+                ScanConfig.DEFAULT_PROBE_CONCURRENCY);
+        ScanContext ctx = new ScanContext(target, jwt, jwt2, modules, cfg, requestLogCb, new DiscoveredPaths(),
+                new WafState());
         lastScanContext = ctx;
         scanRunner.run(ctx);
+    }
+
+    public void setScopeHosts(Set<String> hosts) {
+        this.scopeHosts = hosts != null ? Set.copyOf(hosts) : Set.of();
+    }
+
+    public void setSessionCookie(String cookie) {
+        this.sessionCookie = cookie != null ? cookie : "";
     }
 
     /** Requests immediate cancellation of any running scan. */

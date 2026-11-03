@@ -23,5 +23,9 @@ public interface ProviderAdapter {
 
     String extractToolCallJson(String body);
 
+    default String extractToolCallId(String body) {
+        return null;
+    }
+
     UsageInfo extractUsage(String body, String model);
 }

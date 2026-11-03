@@ -50,6 +50,16 @@ public final class OllamaProvider implements ProviderAdapter {
             if ("system".equals(msg.role())) {
                 continue;
             }
+            if ("tool".equals(msg.role())) {
+                JsonObject m = new JsonObject();
+                m.addProperty("role", "user");
+                m.addProperty("content", "[Tool result] " + msg.content());
+                msgs.add(m);
+                continue;
+            }
+            if ("assistant".equals(msg.role()) && msg.toolCallPayload() != null) {
+                continue;
+            }
             JsonObject m = new JsonObject();
             m.addProperty("role", msg.role());
             m.addProperty("content", msg.content());

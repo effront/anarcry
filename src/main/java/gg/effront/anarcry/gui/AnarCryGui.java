@@ -115,6 +115,8 @@ public class AnarCryGui {
             modulesPanel.setJwt(targetView.getJwt());
             modulesPanel.setJwt2(targetView.getJwt2());
             repeaterView.setTargetUrl(targetView.getTarget());
+            controller.setScopeHosts(targetView.getScopeHosts());
+            controller.setSessionCookie(targetView.getSessionCookie());
         });
 
         if (env != null) {

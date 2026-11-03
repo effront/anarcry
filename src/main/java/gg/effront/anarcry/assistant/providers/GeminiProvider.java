@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import gg.effront.anarcry.assistant.AssistantConfig;
 import gg.effront.anarcry.assistant.ChatMessage;
 import gg.effront.anarcry.assistant.UsageInfo;
@@ -43,14 +44,7 @@ public final class GeminiProvider implements ProviderAdapter {
             if ("system".equals(msg.role())) {
                 continue;
             }
-            JsonObject content = new JsonObject();
-            content.addProperty("role", mapRole(msg.role()));
-            JsonArray parts = new JsonArray();
-            JsonObject textPart = new JsonObject();
-            textPart.addProperty("text", msg.content());
-            parts.add(textPart);
-            content.add("parts", parts);
-            contents.add(content);
+            contents.add(formatMessage(msg));
         }
         body.add("contents", contents);
 
@@ -69,7 +63,7 @@ public final class GeminiProvider implements ProviderAdapter {
             if (tools != null && !tools.isEmpty()) {
                 JsonArray toolsWrapper = new JsonArray();
                 JsonObject funcDecls = new JsonObject();
-                funcDecls.add("functionDeclarations", tools);
+                funcDecls.add("functionDeclarations", stripToolWrappers(tools));
                 toolsWrapper.add(funcDecls);
                 body.add("tools", toolsWrapper);
             }
@@ -149,6 +143,61 @@ public final class GeminiProvider implements ProviderAdapter {
         } catch (Exception e) {
             return new UsageInfo(0, 0, model);
         }
+    }
+
+    private static JsonObject formatMessage(ChatMessage msg) {
+        JsonObject content = new JsonObject();
+        JsonArray parts = new JsonArray();
+
+        if ("assistant".equals(msg.role()) && msg.toolCallPayload() != null) {
+            content.addProperty("role", "model");
+            JsonObject fcPart = new JsonObject();
+            fcPart.add("functionCall", JsonParser.parseString(msg.toolCallPayload()));
+            parts.add(fcPart);
+            content.add("parts", parts);
+            return content;
+        }
+
+        if ("tool".equals(msg.role())) {
+            content.addProperty("role", "function");
+            JsonObject frPart = new JsonObject();
+            JsonObject funcResponse = new JsonObject();
+            funcResponse.addProperty("name", extractToolName(msg));
+            JsonObject responseObj = new JsonObject();
+            responseObj.addProperty("result", msg.content());
+            funcResponse.add("response", responseObj);
+            frPart.add("functionResponse", funcResponse);
+            parts.add(frPart);
+            content.add("parts", parts);
+            return content;
+        }
+
+        content.addProperty("role", mapRole(msg.role()));
+        JsonObject textPart = new JsonObject();
+        textPart.addProperty("text", msg.content());
+        parts.add(textPart);
+        content.add("parts", parts);
+        return content;
+    }
+
+    private static String extractToolName(ChatMessage toolMsg) {
+        // Gemini tool results don't carry an ID -- they reference the function by name.
+        // The tool call payload is on the preceding assistant message, not on the tool
+        // result itself, so we fall back to "tool" as a safe default.
+        return "tool";
+    }
+
+    private static JsonArray stripToolWrappers(JsonArray rawTools) {
+        JsonArray stripped = new JsonArray();
+        for (JsonElement el : rawTools) {
+            JsonObject tool = el.getAsJsonObject();
+            if (tool.has("type") && "function".equals(tool.get("type").getAsString()) && tool.has("function")) {
+                stripped.add(tool.getAsJsonObject("function"));
+            } else {
+                stripped.add(tool);
+            }
+        }
+        return stripped;
     }
 
     private static String extractText(JsonObject json) {
