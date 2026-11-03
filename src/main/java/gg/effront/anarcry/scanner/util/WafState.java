@@ -26,6 +26,7 @@ public final class WafState {
 
     private final AtomicBoolean wafDetected = new AtomicBoolean(false);
     private final AtomicReference<String> wafProduct = new AtomicReference<>("");
+    private final AtomicReference<String> cdnProduct = new AtomicReference<>("");
     private final AtomicReference<WafEvasion.Strategy> effectiveStrategy = new AtomicReference<>();
     private final AtomicBoolean stealthActive = new AtomicBoolean(false);
     private final AtomicBoolean jsChallenge = new AtomicBoolean(false);
@@ -49,6 +50,16 @@ public final class WafState {
 
     public String wafProduct() {
         return wafProduct.get();
+    }
+
+    public void markCdnPresent(String product) {
+        if (product != null && !product.isBlank()) {
+            cdnProduct.set(product);
+        }
+    }
+
+    public String cdnProduct() {
+        return cdnProduct.get();
     }
 
     public void markEffectiveStrategy(WafEvasion.Strategy strategy) {

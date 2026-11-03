@@ -63,7 +63,8 @@ public class Http {
                 if (!providers.isEmpty()) {
                     ctx.wafState().markWafDetected(providers.get(0).name());
                 } else {
-                    String product = WafEvasion.detectWafProduct(serverHdr);
+                    String cdn = ctx.wafState().cdnProduct();
+                    String product = !cdn.isEmpty() ? cdn : WafEvasion.detectWafProduct(serverHdr);
                     ctx.wafState().markWafDetected(product.isEmpty() ? serverHdr : product);
                 }
                 if (log != null) {
@@ -98,15 +99,7 @@ public class Http {
         }
 
         if (!ctx.wafState().isWafDetected() && WafEvasion.isCloudflarePresent(resp.headers().map())) {
-            ctx.wafState().markWafDetected("cloudflare");
-            Consumer<String> log = ctx.wafState().runtimeLog();
-            if (log != null) {
-                log.accept(
-                        "[!] Runtime: Cloudflare detectado via cf-ray/Server em " + moduleId + " -- ativando stealth");
-            }
-            if (!ctx.wafState().isStealthActive() && bt == null) {
-                ctx.wafState().markStealthActive();
-            }
+            ctx.wafState().markCdnPresent("cloudflare");
         }
 
         long bodySize = resp.headers().firstValueAsLong("content-length").orElse(0);
