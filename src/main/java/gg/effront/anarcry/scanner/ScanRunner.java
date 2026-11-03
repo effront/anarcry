@@ -2,10 +2,13 @@ package gg.effront.anarcry.scanner;
 
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.RequestRecord;
+import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.util.BrowserTransport;
+import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.StealthHttpClient;
 import gg.effront.anarcry.scanner.util.WafEvasion;
+import gg.effront.anarcry.scanner.util.WafState;
 import gg.effront.anarcry.scanner.web.cors.CorsModule;
 import gg.effront.anarcry.scanner.web.crlf.CrlfModule;
 import gg.effront.anarcry.scanner.web.graphql.GraphQLModule;
@@ -40,11 +43,14 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 public class ScanRunner {
 
     private static final int DEFAULT_PARALLELISM = 4;
+    private static final long MODULE_TIMEOUT_SECONDS = 180;
 
     private final Consumer<String> logCb;
     private final Consumer<Finding> findingCb;
@@ -143,6 +149,7 @@ public class ScanRunner {
         };
         ScanContext ctx = new ScanContext(origCtx.targetUrl(), origCtx.jwtToken(), origCtx.jwtToken2(),
                 origCtx.enabledModules(), origCtx.config(), safeReqLog, origCtx.discoveredPaths(), origCtx.wafState());
+        ctx.wafState().setRuntimeLog(safeLog);
         List<Scanner> modules = new ArrayList<>();
         if (ctx.has("TLS")) {
             modules.add(new TlsModule());
@@ -272,6 +279,28 @@ public class ScanRunner {
             safeLog.accept("[*] Phase 1.5: WAF detection probe em " + ctx.targetUrl());
             try {
                 java.net.http.HttpClient probeHc = HttpClientFactory.http2();
+
+                // Baseline: clean GET (no payload) to detect WAF/CDN via signatures
+                java.net.http.HttpRequest cleanReq = java.net.http.HttpRequest.newBuilder()
+                        .uri(java.net.URI.create(ctx.targetUrl())).timeout(java.time.Duration.ofSeconds(6)).GET()
+                        .build();
+                java.net.http.HttpResponse<String> cleanResp = probeHc.send(cleanReq,
+                        java.net.http.HttpResponse.BodyHandlers.ofString());
+                String cleanBody = cleanResp.body() != null ? cleanResp.body() : "";
+
+                // Multi-vendor signature detection on baseline (CDN presence only -- not WAF
+                // enforcement)
+                var providers = WafEvasion.detectProviders(cleanResp.statusCode(), cleanResp.headers().map(), cleanBody,
+                        ctx.targetUrl());
+                String baselineProvider = "";
+                if (!providers.isEmpty()) {
+                    baselineProvider = providers.get(0).name();
+                    safeLog.accept("[~] Phase 1.5: " + providers.size() + " provider(s) detectado(s) via signatures: "
+                            + providers.stream().map(p -> p.name() + "(" + p.confidence() + ")")
+                                    .reduce((a, b) -> a + ", " + b).orElse(""));
+                }
+
+                // Probe: inject XSS canary to trigger WAF rules
                 String canary = java.net.URLEncoder.encode("<script>alert(1)</script>",
                         java.nio.charset.StandardCharsets.UTF_8);
                 String probeUrl = ctx.targetUrl() + "?wafprobe=" + canary;
@@ -282,21 +311,53 @@ public class ScanRunner {
                 String serverHdr = probeResp.headers().firstValue("Server").orElse("");
                 String probeBody = probeResp.body() != null ? probeResp.body() : "";
 
-                // Check JS challenge first (Vercel/Cloudflare managed challenge)
-                if (WafEvasion.isJsChallenge(probeResp.statusCode(), probeResp.headers().map(), probeBody)) {
+                // Classify challenge type (CF-specific: managed/jsd/interactive/turnstile)
+                String cfType = WafEvasion.parseCfChallengeType(probeBody, probeResp.headers().map(), probeUrl);
+
+                if (!cfType.isEmpty()) {
+                    if (!ctx.wafState().isWafDetected()) {
+                        ctx.wafState().markWafDetected(baselineProvider.isEmpty() ? "cloudflare" : baselineProvider);
+                    }
+                    if ("managed".equals(cfType) || "interactive".equals(cfType) || "non-interactive".equals(cfType)
+                            || "embedded".equals(cfType)) {
+                        ctx.wafState().markBlockType(WafState.WafBlockType.MANAGED_CHALLENGE);
+                        ctx.wafState().markJsChallenge(cfType);
+                        safeLog.accept("[!] Phase 1.5: CF Managed Challenge (" + cfType + ") -- HTTP "
+                                + probeResp.statusCode() + " -- evasion strategies nao aplicaveis");
+                    } else if ("turnstile".equals(cfType)) {
+                        ctx.wafState().markBlockType(WafState.WafBlockType.TURNSTILE);
+                        safeLog.accept("[!] Phase 1.5: CF Turnstile detectado -- HTTP " + probeResp.statusCode()
+                                + " -- bypass automatizado fora do escopo");
+                    } else if ("jsd".equals(cfType)) {
+                        ctx.wafState().markBlockType(WafState.WafBlockType.JS_CHALLENGE);
+                        ctx.wafState().markJsChallenge(cfType);
+                        safeLog.accept("[!] Phase 1.5: CF JS Challenge (jsd) -- HTTP " + probeResp.statusCode()
+                                + " -- tentando BrowserTransport");
+                    }
+                } else if (WafEvasion.isJsChallenge(probeResp.statusCode(), probeResp.headers().map(), probeBody)) {
                     String challengeType = WafEvasion.detectChallengeType(probeResp.statusCode(),
                             probeResp.headers().map(), probeBody);
-                    String product = WafEvasion.detectWafProduct(serverHdr);
-                    ctx.wafState().markWafDetected(product.isEmpty() ? serverHdr : product);
+                    if (!ctx.wafState().isWafDetected()) {
+                        String product = !baselineProvider.isEmpty()
+                                ? baselineProvider
+                                : WafEvasion.detectWafProduct(serverHdr);
+                        ctx.wafState().markWafDetected(product.isEmpty() ? serverHdr : product);
+                    }
+                    ctx.wafState().markBlockType(WafState.WafBlockType.JS_CHALLENGE);
                     ctx.wafState().markJsChallenge(challengeType);
                     safeLog.accept("[!] Phase 1.5: JS challenge detectado -- " + challengeType + " (HTTP "
                             + probeResp.statusCode() + ")");
                 } else if (WafEvasion.isWafBlocked(probeResp.statusCode(), serverHdr, probeBody)) {
-                    String product = WafEvasion.detectWafProduct(serverHdr);
-                    ctx.wafState().markWafDetected(product.isEmpty() ? serverHdr : product);
-                    safeLog.accept("[!] Phase 1.5: WAF detectado -- " + ctx.wafState().wafProduct() + " (HTTP "
+                    if (!ctx.wafState().isWafDetected()) {
+                        String product = !baselineProvider.isEmpty()
+                                ? baselineProvider
+                                : WafEvasion.detectWafProduct(serverHdr);
+                        ctx.wafState().markWafDetected(product.isEmpty() ? serverHdr : product);
+                    }
+                    ctx.wafState().markBlockType(WafState.WafBlockType.RULE_BLOCK);
+                    safeLog.accept("[!] Phase 1.5: WAF rule block -- " + ctx.wafState().wafProduct() + " (HTTP "
                             + probeResp.statusCode() + ")");
-                } else {
+                } else if (!ctx.wafState().isWafDetected()) {
                     safeLog.accept("[+] Phase 1.5: nenhum WAF detectado");
                 }
             } catch (Exception e) {
@@ -305,12 +366,17 @@ public class ScanRunner {
         }
 
         if (ctx.wafState().isWafDetected()) {
-            if (ctx.wafState().isJsChallenge()) {
+            WafState.WafBlockType bt = ctx.wafState().blockType();
+            if (ctx.wafState().isManaged()) {
+                // Managed challenge or Turnstile -- evasion/stealth won't help
+                safeLog.accept("[*] Phase 1.5: " + bt + " detectado -- pulando evasion strategy probing");
+                safeLog.accept("[*] Alternativa: abra o alvo no Chrome, copie os cookies e cole em Session Cookie");
+            } else if (bt == WafState.WafBlockType.JS_CHALLENGE || ctx.wafState().isJsChallenge()) {
                 // JS challenge -- use headless Chromium as request transport
                 safeLog.accept("[*] Phase 1.5: ativando BrowserTransport (headless Chromium)...");
-                BrowserTransport bt = BrowserTransport.create(ctx.targetUrl(), safeLog);
-                if (bt != null) {
-                    ctx.wafState().setBrowserTransport(bt);
+                BrowserTransport browserTx = BrowserTransport.create(ctx.targetUrl(), safeLog);
+                if (browserTx != null) {
+                    ctx.wafState().setBrowserTransport(browserTx);
                     safeLog.accept("[+] Phase 1.5: JS challenge bypassado -- requests via Chromium headless");
                 } else {
                     safeLog.accept("[-] Phase 1.5: BrowserTransport indisponivel");
@@ -320,9 +386,9 @@ public class ScanRunner {
                 // WAF rule block -- try TLS fingerprint bypass
                 safeLog.accept("[*] Phase 1.5: TLS fingerprint bypass (Chrome JA3 + H2) em " + ctx.targetUrl());
                 try {
-                    String canary = java.net.URLEncoder.encode("<script>alert(1)</script>",
+                    String canary2 = java.net.URLEncoder.encode("<script>alert(1)</script>",
                             java.nio.charset.StandardCharsets.UTF_8);
-                    String stealthUrl = ctx.targetUrl() + "?wafprobe=" + canary;
+                    String stealthUrl = ctx.targetUrl() + "?wafprobe=" + canary2;
                     java.net.http.HttpRequest stealthReq = java.net.http.HttpRequest.newBuilder()
                             .uri(java.net.URI.create(stealthUrl)).timeout(java.time.Duration.ofSeconds(6)).GET()
                             .build();
@@ -345,8 +411,8 @@ public class ScanRunner {
                 // Payload-level bypass strategies (complementar ao TLS)
                 safeLog.accept("[*] Phase 1.5: probing payload bypass strategies para " + ctx.wafState().wafProduct());
                 try {
-                    java.net.http.HttpClient probeHc = HttpClientFactory.http2();
-                    WafEvasion.Strategy effective = WafEvasion.probeStrategies(ctx, probeHc, ctx.targetUrl(),
+                    java.net.http.HttpClient probeHc2 = HttpClientFactory.http2();
+                    WafEvasion.Strategy effective = WafEvasion.probeStrategies(ctx, probeHc2, ctx.targetUrl(),
                             "WafProbe", safeLog);
                     if (effective != null) {
                         ctx.wafState().markEffectiveStrategy(effective);
@@ -379,11 +445,19 @@ public class ScanRunner {
                     } catch (Throwable e) {
                         throw new RuntimeException(e);
                     }
-                }, modulePool);
+                }, modulePool).orTimeout(MODULE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
-                futures.add(future.whenComplete((findings, ex) -> {
+                futures.add(future.handle((findings, ex) -> {
                     if (ex != null) {
-                        safeLog.accept("[!] " + module.id() + " erro: " + ex.getMessage());
+                        Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                        if (cause instanceof TimeoutException) {
+                            safeLog.accept("[!] " + module.id() + " timeout apos " + MODULE_TIMEOUT_SECONDS
+                                    + "s -- abortando modulo");
+                        } else if (cause instanceof CircuitBreakerException) {
+                            safeLog.accept("[!] " + cause.getMessage());
+                        } else {
+                            safeLog.accept("[!] " + module.id() + " erro: " + ex.getMessage());
+                        }
                     } else {
                         recordModuleResult(module.id(), findings);
                         for (Finding f : findings) {
@@ -405,14 +479,40 @@ public class ScanRunner {
                         safeLog.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
                     }
                     eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, module.id(), moduleIndex, moduleCount));
+                    return (Void) null;
                 }));
             }
         }
 
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
+        // Post-scan: emit INFO finding for managed challenges
+        if (ctx.wafState().isManaged()) {
+            WafState.WafBlockType wafBt = ctx.wafState().blockType();
+            String typeName = wafBt == WafState.WafBlockType.TURNSTILE
+                    ? "Cloudflare Turnstile"
+                    : "Cloudflare Managed Challenge";
+            String wafFinding = typeName + " -- Bypass Automatizado Nao Aplicavel";
+            String dedupKey = "WAF|" + ctx.targetUrl() + "|" + wafFinding;
+            if (seenFindings.add(dedupKey)) {
+                Finding f = Finding.of("WAF", ctx.targetUrl(), wafFinding, Severity.INFO,
+                        "Alvo protegido por " + typeName + " (provider: " + ctx.wafState().wafProduct()
+                                + ", block type: " + wafBt + ")",
+                        "O target utiliza " + typeName + " que exige interacao de browser real. "
+                                + "Estrategias de evasion de payload (encoding, case mutation, etc.) "
+                                + "nao sao efetivas contra este tipo de protecao.",
+                        "Verificar manualmente via browser se o alvo apresenta challenge page.",
+                        "Testar manualmente via browser com DevTools. "
+                                + "Copiar cookies de sessao pos-challenge e usar no campo Session Cookie do scanner. "
+                                + "Considerar headless browser com solve de challenge para automacao.",
+                        "", "", "", 0.0);
+                findingCb.accept(f);
+                total[0]++;
+            }
+        }
+
         eventCb.accept(new ScanEvent(ScanEvent.Type.SCAN_DONE, null, moduleCount, moduleCount));
-        safeLog.accept("[*] Scan concluído -- " + total[0] + " finding(s) no total");
+        safeLog.accept("[*] Scan concluido -- " + total[0] + " finding(s) no total");
     }
 
     private void recordModuleResult(String moduleId, List<Finding> findings) {

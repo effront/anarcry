@@ -11,6 +11,8 @@ import javax.net.ssl.SSLSocket;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -44,6 +46,10 @@ public class CipherSuiteProbe {
                     "Ciphers EXPORT foram deliberadamente enfraquecidos (40-56 bits) -- FREAK/DROWN/LOGJAM",
                     "-cipher EXPORT"));
 
+    private static final Map<String, RawTlsProbe.CipherDef[]> RAW_CIPHERS = Map.of("RC4", RawTlsProbe.RC4_CIPHERS,
+            "NULL", RawTlsProbe.NULL_CIPHERS, "ANON", RawTlsProbe.ANON_CIPHERS, "3DES", RawTlsProbe.DES3_CIPHERS,
+            "EXPORT", RawTlsProbe.EXPORT_CIPHERS);
+
     public static List<String> groupNames() {
         return GROUPS.stream().map(CipherGroup::name).toList();
     }
@@ -72,7 +78,27 @@ public class CipherSuiteProbe {
                     String[] weak = Arrays.stream(supported).filter(group.matcher()).toArray(String[]::new);
 
                     if (weak.length == 0) {
-                        log.accept("[+] CIPHER: " + group.name() + " -- nenhum cipher disponível localmente");
+                        // JVM doesn't have this cipher -- fallback to raw TLS ClientHello
+                        RawTlsProbe.CipherDef[] rawDefs = RAW_CIPHERS.get(group.name());
+                        if (rawDefs == null) {
+                            log.accept("[+] CIPHER: " + group.name() + " -- sem probe disponivel");
+                            continue;
+                        }
+                        log.accept("[~] CIPHER: " + group.name()
+                                + " -- JVM nao suporta, testando via raw TLS ClientHello");
+                        Optional<String> rawResult = RawTlsProbe.probe(host, port, rawDefs);
+                        if (rawResult.isPresent()) {
+                            log.accept("[!] CIPHER: " + group.name() + " aceito (raw probe) -- " + rawResult.get());
+                            findings.add(Finding.of("TLS", host + ":" + port, group.title(), group.severity(),
+                                    "Negociacao via raw TLS ClientHello: " + rawResult.get() + " em " + host + ":"
+                                            + port,
+                                    group.impact(),
+                                    "openssl s_client -connect " + host + ":" + port + " " + group.opensslFlag(),
+                                    "Desabilitar cipher suites " + group.name() + " na configuracao TLS do servidor",
+                                    _cweId, _cweTitle, _cveVector, _score));
+                        } else {
+                            log.accept("[+] CIPHER: " + group.name() + " rejeitado (raw probe)");
+                        }
                         continue;
                     }
 
@@ -86,9 +112,9 @@ public class CipherSuiteProbe {
 
                     log.accept("[!] CIPHER: " + group.name() + " aceito -- " + negotiated);
                     findings.add(Finding.of("TLS", host + ":" + port, group.title(), group.severity(),
-                            "Negociação bem-sucedida: " + negotiated + " em " + host + ":" + port, group.impact(),
+                            "Negociacao bem-sucedida: " + negotiated + " em " + host + ":" + port, group.impact(),
                             "openssl s_client -connect " + host + ":" + port + " " + group.opensslFlag(),
-                            "Desabilitar cipher suites " + group.name() + " na configuração TLS do servidor", _cweId,
+                            "Desabilitar cipher suites " + group.name() + " na configuracao TLS do servidor", _cweId,
                             _cweTitle, _cveVector, _score));
                 } catch (Exception e) {
                     log.accept("[+] CIPHER: " + group.name() + " rejeitado (ok): " + e.getMessage());
