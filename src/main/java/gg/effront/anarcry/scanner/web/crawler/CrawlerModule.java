@@ -141,8 +141,15 @@ public class CrawlerModule implements Scanner {
 
         // 4. Wordlist + KB probing
         int found200 = 0;
+        int probeIdx = 0;
+        int totalProbes = mergedProbeSet.size();
         long delayMs = ctx.config().delayMs() > 0 ? ctx.config().delayMs() : 100;
+        log.accept("[~] Crawler: probing " + totalProbes + " paths (delay " + delayMs + "ms)");
         for (String p : mergedProbeSet) {
+            probeIdx++;
+            if (probeIdx % 20 == 0) {
+                log.accept("[~] Crawler: [" + probeIdx + "/" + totalProbes + "] probing...");
+            }
             if (OPENAPI_PATHS.contains(p)) {
                 continue; // já verificado
             }
