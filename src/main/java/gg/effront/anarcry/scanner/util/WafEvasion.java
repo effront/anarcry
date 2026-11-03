@@ -46,6 +46,10 @@ public final class WafEvasion {
             .compile("(?i)(blocked|access denied|attention required|request blocked|"
                     + "web application firewall|security policy|not acceptable)");
 
+    private static final Pattern CF_WAF_BODY = Pattern.compile("(?i)(attention required|just a moment|cf-error-details|"
+            + "cf-challenge-|cloudflare ray id|enable javascript.*cookies|"
+            + "cf_chl_opt|challenge-platform|why have i been blocked)");
+
     @SuppressWarnings("checkstyle:LineLengthCheck")
     private static final List<WafSignature> SIGNATURES = List.of(new WafSignature("akamai", "Akamai", "waf",
             List.of(new WafSignal(SignalType.COOKIE, "_abck", 100), new WafSignal(SignalType.COOKIE, "ak_bmsc", 90),
@@ -181,6 +185,11 @@ public final class WafEvasion {
             return false;
         }
         if (serverHeader != null && WAF_SERVER.matcher(serverHeader).find()) {
+            // CF sets Server: cloudflare on ALL responses, not just WAF blocks.
+            // Require body evidence to distinguish WAF block from app-level 403.
+            if (serverHeader.toLowerCase().contains("cloudflare")) {
+                return body != null && CF_WAF_BODY.matcher(body).find();
+            }
             return true;
         }
         return body != null && WAF_BODY.matcher(body).find();

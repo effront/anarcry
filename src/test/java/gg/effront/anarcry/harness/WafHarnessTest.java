@@ -65,7 +65,7 @@ class WafHarnessTest {
 
             if (blocked) {
                 exchange.getResponseHeaders().set("Server", serverHeader);
-                byte[] resp = "Access Denied".getBytes();
+                byte[] resp = "Attention Required | Cloudflare".getBytes();
                 exchange.sendResponseHeaders(403, resp.length);
                 exchange.getResponseBody().write(resp);
             } else {
@@ -98,7 +98,7 @@ class WafHarnessTest {
                     .build();
             HttpResponse<String> resp = hc.send(req, HttpResponse.BodyHandlers.ofString());
             assertEquals(403, resp.statusCode(), "WAF deve bloquear payload <script> com 403");
-            assertTrue(resp.body().contains("Access Denied"), "Body deve conter 'Access Denied' quando bloqueado");
+            assertTrue(resp.body().contains("Attention Required"), "Body deve conter marker CF WAF quando bloqueado");
         } finally {
             server.stop(0);
         }
@@ -272,7 +272,7 @@ class WafHarnessTest {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             exchange.getResponseHeaders().set("Server", "cloudflare");
-            byte[] body = "Access Denied".getBytes();
+            byte[] body = "Attention Required | Cloudflare".getBytes();
             exchange.sendResponseHeaders(403, body.length);
             exchange.getResponseBody().write(body);
             exchange.getResponseBody().close();
@@ -315,7 +315,7 @@ class WafHarnessTest {
             if (combined.contains("'") || combined.contains("SELECT") || combined.contains("UNION")
                     || combined.contains("OR+1")) {
                 exchange.getResponseHeaders().set("Server", serverHeader);
-                byte[] resp = "Access Denied".getBytes();
+                byte[] resp = "Attention Required | Cloudflare".getBytes();
                 exchange.sendResponseHeaders(403, resp.length);
                 exchange.getResponseBody().write(resp);
                 exchange.getResponseBody().close();
