@@ -55,10 +55,15 @@ class WafHarnessTest {
                 }
             }
 
-            // WAF logic: block if decoded query or body contains known attack patterns
+            // WAF logic: regex-based rule matching (simulates real WAF regex engine).
+            // Rules match contiguous tokens -- control chars (\n, \t) inside a token
+            // break the regex, simulating how newline/tab injection bypasses real
+            // WAF regex engines.
             boolean blocked = false;
             String combined = decodedQuery + body;
-            if (combined.contains("<script>") || combined.contains("SELECT") || combined.contains("../etc/passwd")
+            java.util.regex.Pattern xssTag = java.util.regex.Pattern
+                    .compile("<[a-z]+[^\\n\\t\\r]*(on[a-z]+=|src=|href=|>)", java.util.regex.Pattern.CASE_INSENSITIVE);
+            if (xssTag.matcher(combined).find() || combined.contains("SELECT") || combined.contains("../etc/passwd")
                     || combined.contains("{{7*7")) {
                 blocked = true;
             }

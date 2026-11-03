@@ -80,6 +80,7 @@ public class AssistantView extends JPanel {
     private List<ProviderRegistry.ProviderInfo> availableProviders = List.of();
     private int maxTokens = 4096;
     private boolean suppressComboEvents;
+    private int thinkingStart = -1;
 
     public AssistantView() {
         super(new BorderLayout(0, 4));
@@ -152,9 +153,10 @@ public class AssistantView extends JPanel {
         inputField.setForeground(ASSISTANT_COLOR);
         inputField.setCaretColor(ASSISTANT_COLOR);
         inputField.setFont(INPUT_FONT);
+        inputField.setPreferredSize(new Dimension(0, 38));
         inputField.setBorder(
                 BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(0x44, 0x44, 0x55)),
-                        BorderFactory.createEmptyBorder(6, 8, 6, 8)));
+                        BorderFactory.createEmptyBorder(8, 8, 8, 8)));
 
         inputField.addKeyListener(new KeyAdapter() {
             @Override
@@ -379,11 +381,20 @@ public class AssistantView extends JPanel {
     }
 
     private void startStreaming() {
-        appendStyled("", "assistant");
+        StyledDocument doc = chatPane.getStyledDocument();
+        thinkingStart = doc.getLength();
+        appendStyled("Pensando...\n", "system");
     }
 
     private void appendStreamToken(String token) {
         StyledDocument doc = chatPane.getStyledDocument();
+        if (thinkingStart >= 0) {
+            try {
+                doc.remove(thinkingStart, doc.getLength() - thinkingStart);
+            } catch (BadLocationException ignored) {
+            }
+            thinkingStart = -1;
+        }
         try {
             doc.insertString(doc.getLength(), token, doc.getStyle("assistant"));
         } catch (BadLocationException ignored) {

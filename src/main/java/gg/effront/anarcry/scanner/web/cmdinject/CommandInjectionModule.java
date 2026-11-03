@@ -52,6 +52,9 @@ public class CommandInjectionModule implements Scanner {
             "command", "ping", "target", "server", "address", "dns", "query", "lookup", "hostname", "dest",
             "destination");
 
+    // High-signal subset for WAF-detected targets
+    private static final List<String> WAF_KEYWORDS = List.of("host", "ip", "cmd", "exec", "ping", "target", "command");
+
     // Phase 1: active output-based injection payloads (separator + 'id' command)
     private static final List<String> ACTIVE_PAYLOADS = List.of("; id", "| id", "|| id", "&& id", "$(id)");
 
@@ -92,15 +95,8 @@ public class CommandInjectionModule implements Scanner {
 
         List<String> activePayloads = mergeKbPayloads(false);
         List<String> sleepPayloads = mergeKbPayloads(true);
-        log.accept("[~] CmdInjection: iniciando varredura em " + base + " (" + PATHS.size() + " paths × "
-                + NETWORK_KEYWORDS.size() + " params, " + activePayloads.size() + " active + " + sleepPayloads.size()
-                + " sleep payloads)");
-
-        boolean browserActive = ctx.wafState().browserTransport() != null;
-        if (browserActive) {
-            log.accept("[~] CmdInjection: BrowserTransport ativo -- phase 2 (time-based blind) desabilitada"
-                    + " (latência do browser inviabiliza medição temporal)");
-        }
+        log.accept("[~] CmdInjection: iniciando varredura em " + base + " (" + PATHS.size() + " paths, "
+                + activePayloads.size() + " active + " + sleepPayloads.size() + " sleep payloads)");
 
         AtomicBoolean cancel = new AtomicBoolean(false);
         List<Callable<List<Finding>>> tasks = new ArrayList<>();
@@ -110,8 +106,16 @@ public class CommandInjectionModule implements Scanner {
             final int pathIdx = pi;
             tasks.add(() -> {
                 List<Finding> local = new ArrayList<>();
-                log.accept("[~] CmdInjection: [" + (pathIdx + 1) + "/" + PATHS.size() + "] " + path);
-                for (String param : NETWORK_KEYWORDS) {
+                boolean waf = ctx.wafState().isWafDetected();
+                boolean skipTimeBased = waf || ctx.wafState().browserTransport() != null;
+                List<String> effectiveKeywords = waf ? WAF_KEYWORDS : NETWORK_KEYWORDS;
+                log.accept("[~] CmdInjection: [" + (pathIdx + 1) + "/" + PATHS.size() + "] " + path + " -- "
+                        + effectiveKeywords.size() + " params" + (waf ? " (WAF mode)" : ""));
+                if (skipTimeBased && pathIdx == 0) {
+                    log.accept("[~] CmdInjection: phase 2 (time-based blind) desabilitada"
+                            + (waf ? " (WAF mode)" : " (BrowserTransport ativo)"));
+                }
+                for (String param : effectiveKeywords) {
                     if (cancel.get()) {
                         return local;
                     }
@@ -187,9 +191,7 @@ public class CommandInjectionModule implements Scanner {
                     }
 
                     // -- Phase 2: Time-based blind injection --
-                    // Skip when BrowserTransport is active: its inherent latency
-                    // (~4-5s per request) makes timing measurements unreliable.
-                    if (cancel.get() || ctx.wafState().browserTransport() != null) {
+                    if (cancel.get() || skipTimeBased) {
                         return local;
                     }
                     long baselineMs = measureBaselineRtt(ctx, hc, base, path, param);

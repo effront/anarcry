@@ -137,9 +137,10 @@ public class AnarCryGui {
 
     private void wireScanCallbacks() {
         controller.setOnScanEvent(event -> {
-            if (event.type() == ScanEvent.Type.SCAN_START || event.type() == ScanEvent.Type.MODULE_START
-                    || event.type() == ScanEvent.Type.MODULE_DONE) {
-                SwingUtilities.invokeLater(() -> statusBar.setModuleProgress(event.index(), event.total()));
+            if (event.type() == ScanEvent.Type.SCAN_START) {
+                SwingUtilities.invokeLater(() -> statusBar.setModuleTotal(event.total()));
+            } else if (event.type() == ScanEvent.Type.MODULE_DONE) {
+                SwingUtilities.invokeLater(() -> statusBar.moduleCompleted());
             }
         });
 
@@ -156,7 +157,7 @@ public class AnarCryGui {
             logPane.clear();
             resetSeverityCounts();
             statusBar.setSeverityCounts(0, 0, 0, 0);
-            statusBar.setModuleProgress(0, 0);
+            statusBar.resetProgress();
             String target = modulesPanel.getTarget();
             siteMapView.setRootUrl(target);
             repeaterView.setTargetUrl(target);

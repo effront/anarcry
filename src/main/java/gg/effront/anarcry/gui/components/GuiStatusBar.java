@@ -37,6 +37,8 @@ public class GuiStatusBar extends JPanel {
     private final JToggleButton privacyToggle;
 
     private String rawTarget = "";
+    private int modulesCompleted = 0;
+    private int modulesTotal = 0;
 
     public GuiStatusBar() {
         super(new BorderLayout());
@@ -61,8 +63,8 @@ public class GuiStatusBar extends JPanel {
 
         targetLabel = new JLabel("");
 
-        progressBar = new JProgressBar();
-        progressBar.setIndeterminate(true);
+        progressBar = new JProgressBar(0, 100);
+        progressBar.setStringPainted(true);
         progressBar.setVisible(false);
 
         left.add(criticalLabel);
@@ -104,9 +106,54 @@ public class GuiStatusBar extends JPanel {
         });
     }
 
-    /** Update module progress label. Safe to call from any thread. */
+    /** Set total module count at scan start. Safe to call from any thread. */
+    public void setModuleTotal(int total) {
+        SwingUtilities.invokeLater(() -> {
+            modulesTotal = total;
+            modulesCompleted = 0;
+            updateProgress();
+        });
+    }
+
+    /** Increment completion counter by one. Safe to call from any thread. */
+    public void moduleCompleted() {
+        SwingUtilities.invokeLater(() -> {
+            modulesCompleted++;
+            updateProgress();
+        });
+    }
+
+    /** Reset progress to zero. Safe to call from any thread. */
+    public void resetProgress() {
+        SwingUtilities.invokeLater(() -> {
+            modulesCompleted = 0;
+            modulesTotal = 0;
+            updateProgress();
+        });
+    }
+
+    private void updateProgress() {
+        modulesLabel.setText("Modules: " + modulesCompleted + "/" + modulesTotal);
+        if (modulesTotal > 0) {
+            int pct = (int) Math.round(100.0 * modulesCompleted / modulesTotal);
+            progressBar.setValue(pct);
+            progressBar.setString(pct + "%");
+        } else {
+            progressBar.setValue(0);
+            progressBar.setString("");
+        }
+    }
+
+    /**
+     * @deprecated Use {@link #setModuleTotal(int)} + {@link #moduleCompleted()}.
+     */
+    @Deprecated
     public void setModuleProgress(int done, int total) {
-        SwingUtilities.invokeLater(() -> modulesLabel.setText("Modules: " + done + "/" + total));
+        SwingUtilities.invokeLater(() -> {
+            modulesCompleted = done;
+            modulesTotal = total;
+            updateProgress();
+        });
     }
 
     /** Update target label. Safe to call from any thread. */

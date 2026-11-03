@@ -41,6 +41,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -50,7 +51,7 @@ import java.util.function.Consumer;
 public class ScanRunner {
 
     private static final int DEFAULT_PARALLELISM = 4;
-    private static final long MODULE_TIMEOUT_SECONDS = 180;
+    private static final long MODULE_TIMEOUT_SECONDS = 300;
 
     private final Consumer<String> logCb;
     private final Consumer<Finding> findingCb;
@@ -378,6 +379,24 @@ public class ScanRunner {
                 if (browserTx != null) {
                     ctx.wafState().setBrowserTransport(browserTx);
                     safeLog.accept("[+] Phase 1.5: JS challenge bypassado -- requests via Chromium headless");
+                    // BT solves JS challenges; any subsequent block is payload-level
+                    ctx.wafState().markBlockType(WafState.WafBlockType.RULE_BLOCK);
+                    // Probe payload bypass strategies through BT
+                    safeLog.accept(
+                            "[*] Phase 1.5: probing payload bypass strategies para " + ctx.wafState().wafProduct());
+                    try {
+                        java.net.http.HttpClient probeHc2 = HttpClientFactory.http2();
+                        WafEvasion.Strategy effective = WafEvasion.probeStrategies(ctx, probeHc2, ctx.targetUrl(),
+                                "WafProbe", safeLog);
+                        if (effective != null) {
+                            ctx.wafState().markEffectiveStrategy(effective);
+                            safeLog.accept("[+] WAF bypass: usando " + effective + " para modulos de payload");
+                        } else {
+                            safeLog.accept("[-] WAF bypass: nenhuma estrategia de payload efetiva");
+                        }
+                    } catch (Exception e) {
+                        safeLog.accept("[!] WAF probe falhou: " + e.getMessage());
+                    }
                 } else {
                     safeLog.accept("[-] Phase 1.5: BrowserTransport indisponivel");
                     safeLog.accept("[*] Alternativa: abra o alvo no Chrome, copie os cookies e cole em Session Cookie");
@@ -429,6 +448,7 @@ public class ScanRunner {
         // Phase 2: Scanner modules (parallel)
         int enricherCount = enrichers.size();
         List<CompletableFuture<?>> futures = new ArrayList<>();
+        ConcurrentHashMap<String, Thread> moduleThreads = new ConcurrentHashMap<>();
 
         if (!scanners.isEmpty()) {
             safeLog.accept("[*] Phase 2: " + scanners.size() + " scanner modules (parallel)");
@@ -440,10 +460,13 @@ public class ScanRunner {
                 safeLog.accept("[*] Modulo " + module.id() + " iniciado");
 
                 CompletableFuture<List<Finding>> future = CompletableFuture.supplyAsync(() -> {
+                    moduleThreads.put(module.id(), Thread.currentThread());
                     try {
                         return module.scan(ctx, safeLog);
                     } catch (Throwable e) {
                         throw new RuntimeException(e);
+                    } finally {
+                        moduleThreads.remove(module.id());
                     }
                 }, modulePool).orTimeout(MODULE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
@@ -453,6 +476,10 @@ public class ScanRunner {
                         if (cause instanceof TimeoutException) {
                             safeLog.accept("[!] " + module.id() + " timeout apos " + MODULE_TIMEOUT_SECONDS
                                     + "s -- abortando modulo");
+                            Thread t = moduleThreads.remove(module.id());
+                            if (t != null) {
+                                t.interrupt();
+                            }
                         } else if (cause instanceof CircuitBreakerException) {
                             safeLog.accept("[!] " + cause.getMessage());
                         } else {
