@@ -95,6 +95,37 @@ Casos reais e mentalidade de ataque (RWBH): Shopify (password reset poisoning) e
 - **Paths comuns:** `/password/reset`, `/forgot-password`, `/account/reset`, `/login`, `/redirect`, `/webhook`, `/callback`, `/api/*`, `/admin`.
 - **Sinais:** links absolutos gerados com Host; `Location` refletindo Host; cache de páginas com host; vhosts diferentes; erros de proxy.
 
+## Escalation Techniques
+Host header injection raramente e o fim -- e o vetor para ataques de alto impacto:
+
+- **Password reset poisoning:** o cenario classico: o atacante envia request de reset com `Host: evil.com` e o link enviado por e-mail aponta para o dominio do atacante, capturando o token de reset. Combinado com endpoints sem rate limiting, permite account takeover em massa. O livro (Bug Bounty Bootcamp, Cap. 13) descreve como servidores confiam em headers para construir URLs.
+- **Cache poisoning:** resposta contendo host injetado e cacheada por CDN/proxy e servida a outros usuarios. Links internos, canonical URLs e scripts com host dinamico passam a apontar para dominio malicioso, afetando todos os visitantes.
+- **SSRF e routing bypass:** o livro (Cap. 13) explica como servidores confiam em headers de forwarding para rotear requests; `X-Forwarded-Host` ou `Host` manipulado pode direcionar o request para backends internos, painel admin, ou servicos na rede privada -- o atacante assume posicao privilegiada na rede.
+- **OAuth/webhook hijack:** callbacks e webhooks construidos a partir do Host apontam para servidor do atacante, capturando tokens OAuth, notificacoes e dados de integracao.
+- **Cookie scoping attack:** `Set-Cookie` com dominio derivado do Host permite fixar cookies em dominio controlado ou ampliar o escopo do cookie para subdominios nao previstos.
+- **Encadeamento com open redirect:** o livro (Cap. 7) descreve como open redirects potencializam host header injection -- o atacante redireciona a vitima atraves de URL confiavel para capturar tokens via referrer. Uma allowlist de SSRFs pode ser contornada por open redirect no dominio permitido (Cap. 13).
+
+## Hunting Methodology
+Processo passo a passo para identificar host header injection, adaptado dos Cap. 7 e 13 (Bug Bounty Bootcamp):
+
+1. **Mapear funcionalidades que geram links absolutos:** identificar endpoints de password reset, e-mail verification, webhooks, callbacks, canonical URLs, e qualquer pagina que construa URLs completas. O livro (Cap. 13) destaca que features de proxy, webhook e upload sao os alvos mais comuns para SSRF, e host header injection compartilha a mesma superficie.
+2. **Testar manipulacao basica do Host:** enviar request com `Host: evil.com` e verificar se o valor aparece em headers de resposta (`Location`, `Set-Cookie`), no corpo HTML (links, forms, canonical), ou em e-mails enviados pela aplicacao.
+3. **Testar headers alternativos de forwarding:** se o Host basico nao funciona, testar `X-Forwarded-Host`, `X-Forwarded-Server`, `X-Host`, `X-HTTP-Host-Override`, `Forwarded: host=evil.com`. Muitos proxies repassam esses headers sem validacao.
+4. **Testar bypass de validacao:** usar tecnicas de URL manipulation do livro (Cap. 7) -- `Host: alvo.com.evil.com`, `Host: alvo.com@evil.com`, `Host: alvo.com%00.evil.com`, Host duplicado. Testar absolute-form request URI (`GET https://evil.com/path`).
+5. **Verificar fluxo de password reset:** solicitar reset para conta propria com Host manipulado e verificar o link recebido por e-mail. Se o host no link reflete o valor injetado, o finding e confirmado e o impacto e account takeover.
+6. **Testar cacheabilidade:** enviar request com Host injetado e verificar se a resposta e cacheada. Repetir o request com Host normal e verificar se a resposta cacheada contem o host malicioso -- isso confirma cache poisoning.
+7. **Testar vhost enumeration:** enviar diferentes valores de Host para descobrir vhosts internos e paineis administrativos. Respostas diferentes (200 vs 404/403) indicam vhosts existentes. O livro (Cap. 13) explica como usar diferencas em tempo de resposta e status codes para mapear a rede interna.
+
+## False Positive Indicators
+Sinais de que o host header injection detectado pelo scanner **nao e exploravel**:
+
+- **Host refletido apenas em paginas informativas:** o Host aparece em mensagens de erro ou paginas de debug, mas nao e usado para construir links, cookies, ou redirecionamentos -- sem impacto funcional.
+- **Proxy normaliza Host antes do backend:** proxies como Nginx e Cloudflare frequentemente sobrescrevem `Host` e `X-Forwarded-Host` antes de repassar ao backend -- o valor injetado nao chega a aplicacao mesmo que o scanner detecte reflexao no nivel do proxy.
+- **Host ignorado na construcao de URLs:** a aplicacao usa configuracao estatica (`app.base-url`) ou variavel de ambiente para gerar links, nao o header Host do request. O host aparece em logs ou headers informativos, mas links e e-mails usam o dominio canonico.
+- **Ambiente sem envio de e-mail:** o endpoint de password reset aceita o Host manipulado, mas o ambiente de teste/staging nao envia e-mails reais -- o impacto nao pode ser demonstrado sem acesso ao servidor de e-mail.
+- **Cache desabilitado ou com chave correta:** a resposta com Host injetado nao e cacheada porque o servidor envia `Cache-Control: no-store` ou a chave de cache inclui o Host canonico -- cache poisoning nao e possivel.
+- **Host refletido em `X-*` response header informativo:** o Host aparece em um header de resposta como `X-Request-Host` para debug, mas nao em `Location`, `Set-Cookie`, ou no corpo HTML -- nenhum navegador interpreta headers informativos como redirecionamento.
+
 ## Recommendation
 1. Validar `Host` contra allowlist de domínios canônicos; rejeitar hosts desconhecidos com 400.
 2. Não confiar em `X-Forwarded-Host`/`X-Forwarded-Server` para construir URLs; usar configuração estática (`app.base-url`) ou o host validado.

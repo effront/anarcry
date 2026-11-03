@@ -113,6 +113,32 @@ Bypasses de proteção:
 
 Casos reais e mentalidade de ataque (RWBH): Uber (recibos/viagens), Zomato (perfis) e Yahoo (objetos de conta) exploraram IDs sequenciais, UUID previsível e troca de método; o atacante testa GET, PATCH, DELETE e exportações.
 
+## Escalation Techniques
+- **Account takeover:** IDOR em endpoint de reset de senha, troca de email ou recuperacao de conta pode permitir takeover completo. Priorizar endpoints de escrita que alterem credenciais ou dados de autenticacao.
+- **Combinar com self-XSS:** write-based IDOR que permite injetar conteudo no perfil de outro usuario pode transformar self-XSS em stored XSS quando a vitima visualiza o conteudo injetado.
+- **Enumeracao em massa:** IDs sequenciais ou UUIDv1 previsivel permitem iterar sobre todos os objetos. Usar Burp Intruder ou scripts para varrer ranges de IDs e extrair dados de todos os usuarios.
+- **IDOR em operacoes destrutivas:** DELETE e PATCH sem checagem de ownership permitem exclusao ou modificacao de dados de terceiros -- impacto muito maior que IDOR de leitura.
+- **Vertical escalation:** quando o IDOR permite acessar endpoint administrativo (ex.: `/users/create_admin`), a sessao de usuario comum pode virar acesso admin completo.
+- **Exfiltracao via export/relatorio:** endpoints de exportacao (`/export`, `/report`, `/download`) frequentemente aceitam arrays de IDs e podem nao validar ownership de cada item do lote.
+- **Blind IDOR:** a resposta HTTP nao muda, mas a acao e executada -- dados podem vazar em emails, relatorios mensais, exports ou notificacoes.
+
+## Hunting Methodology
+1. Criar duas contas: uma atacante e uma vitima. Se a app tem niveis de permissao, criar contas em cada nivel.
+2. Mapear funcionalidades que retornam ou modificam dados por ID: perfil, mensagens, faturas, uploads, configuracoes, dados financeiros.
+3. Capturar requests com proxy e identificar parametros com IDs (URL, query, body JSON/XML, headers, cookies). Testar em dois browsers simultaneos para verificar impacto imediato.
+4. Trocar IDs da vitima nas requests do atacante. Testar todos os metodos HTTP (GET, POST, PUT, PATCH, DELETE) -- frequentemente um metodo e protegido e outro nao.
+5. Para IDs codificados: decodificar (base64, URL encoding, base64url) e tentar prever o padrao. Para hashed IDs, verificar se sao expostos em outros endpoints ou paginas publicas.
+6. Oferecer ID mesmo quando a app nao pede: adicionar `?user_id=VICTIM` ou `{"user_id": "VICTIM"}` a endpoints que usam apenas cookies para identificacao.
+7. Testar IDOR em diferentes versoes da API (`/v1/`, `/v2/`, `/internal/`) e em GraphQL (`node(id:)`) quando REST esta protegido.
+8. Trocar extensao do recurso (`.json`, `.xml`) para verificar se controles de acesso diferem por formato.
+
+## False Positive Indicators
+- Endpoint retorna `200 OK` para qualquer ID mas o body e identico (dados do usuario autenticado, nao do ID solicitado) -- a app ignora o ID e usa a sessao.
+- Resposta contem dados publicos (perfil publico, nome, avatar) que qualquer usuario pode ver por design -- nao e IDOR se o dado e intencionalmente publico.
+- Endpoint retorna `404` ou `403` consistentemente para IDs de outros usuarios -- controle de acesso esta funcionando.
+- IDs opacos (UUIDv4) sem fonte de leak -- a mera existencia de um endpoint parametrizado nao prova IDOR; e necessario demonstrar acesso nao autorizado.
+- Dados diferentes entre requests por causa de cache ou race condition, nao por falta de auth check.
+
 ## Real-World Cases
 
 ### Caso 1 -- Album privado via API (0xdelta.org, SERROS404)

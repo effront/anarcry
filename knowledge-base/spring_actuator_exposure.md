@@ -100,6 +100,43 @@ Casos reais e mentalidade de ataque (RWBH): em aplicações Spring Boot, o padr�
 - **Paths comuns:** `/actuator`, `/actuator/env`, `/actuator/heapdump`, `/actuator/mappings`, `/actuator/beans`, `/actuator/httptrace`, `/actuator/loggers`, `/actuator/threaddump`, `/actuator/jolokia`, `/env`, `/heapdump`, `/mappings`, `/beans`, `/trace`.
 - **Sinais:** JSON com `_links`; `whitelabel` error; Spring Boot headers; `management.endpoints.web.exposure.include=*`; heapdump grande.
 
+## Escalation Techniques
+Actuator exposto e o ponto de partida para ataques de alto impacto -- o vazamento de informacao leva a comprometimento real:
+
+- **Credenciais do heapdump para acesso a cloud/banco:** `/actuator/heapdump` contem a heap JVM em texto claro. Extrair com `strings heapdump.hprof | grep -iE 'password|secret|token|aws_|jdbc'` revela credenciais de banco de dados, chaves de API, tokens AWS/GCP/Azure. O atacante usa essas credenciais para pivotar para a infraestrutura de cloud.
+- **RCE via /env + /refresh:** em configuracoes vulneraveis, `POST /actuator/env` permite sobrescrever propriedades como `logging.config` com URL apontando para `logback.xml` malicioso contendo JNDI injection. Apos `POST /actuator/refresh`, o backend carrega a configuracao remota e executa codigo arbitrario.
+- **RCE via Jolokia:** `/actuator/jolokia` expoe operacoes JMX. Atacante pode invocar `Runtime.exec()` ou manipular MBeans para execucao de codigo, criacao de arquivos, ou alteracao de configuracao.
+- **Mapeamento interno via /mappings e /beans:** `/actuator/mappings` revela todas as rotas da aplicacao (incluindo endpoints administrativos, APIs internas, debug endpoints). `/actuator/beans` expoe o grafo de dependencias e configuracoes. Essas informacoes permitem ataques direcionados a funcionalidades sensiveis.
+- **Roubo de sessoes via /httptrace:** `/actuator/httptrace` (ou `/httpexchanges`) registra requisicoes recentes com headers, incluindo cookies de sessao e tokens de autorizacao de outros usuarios.
+- **Modificacao de runtime via /loggers:** atacante pode alterar niveis de log para DEBUG em producao, causando vazamento de dados sensiveis nos logs e potencial DoS por volume de I/O.
+- **Encadeamento com SSRF:** conforme o livro Bug Bounty Bootcamp (Cap. 13), SSRF pode ser usada para acessar endpoints Actuator internos que nao sao expostos externamente. Um SSRF para `http://localhost:8080/actuator/env` bypassa qualquer firewall ou ACL de rede.
+
+Conforme a mentalidade de escalacao do livro (Cap. 21 -- Information Disclosure), a informacao vazada pelo Actuator deve sempre ser tratada como ponto de partida para ataques de maior impacto, nao como finding isolado.
+
+## Hunting Methodology
+Processo passo a passo para identificar exposicao de Spring Actuator:
+
+1. **Identificar stack Spring Boot:** procurar sinais como pagina de erro `Whitelabel Error Page`, headers `X-Application-Context`, favicon padrao do Spring Boot, ou mensagens de erro com stack traces Java.
+2. **Varrer paths do Actuator:** testar `/actuator`, `/actuator/health`, `/actuator/info`, `/actuator/env`, `/actuator/heapdump`, `/actuator/mappings`, `/actuator/beans`, `/actuator/httptrace`, `/actuator/loggers`, `/actuator/jolokia`. Testar tambem paths legados (Spring Boot 1.x): `/env`, `/heapdump`, `/mappings`, `/beans`, `/trace`.
+3. **Testar prefixos alternativos:** `/management/actuator/`, `/api/actuator/`, `/internal/actuator/`, `/actuator;.js` (bypass com path parameter). Testar portas alternativas de management (8081, 9090).
+4. **Verificar resposta do /actuator:** se retorna JSON com `_links`, listar todos os endpoints disponiveis e testar cada um.
+5. **Baixar e analisar heapdump:** se `/actuator/heapdump` esta acessivel, baixar o arquivo e usar `strings`, Eclipse MAT ou VisualVM para buscar credenciais, tokens e chaves.
+6. **Analisar /env:** verificar se propriedades sensiveis sao exibidas em texto claro ou mascaradas (`******`). Mesmo mascaradas, os nomes das propriedades revelam a stack tecnologica.
+7. **Testar /mappings para superficie de ataque:** mapear todas as rotas internas e endpoints administrativos revelados. Usar essas rotas como entrada para testes subsequentes (IDOR, SQLi, etc.).
+8. **Automatizar:** incluir wordlist de paths do Actuator no fuzzer (abordagem do Cap. 25 do livro). Ferramentas como dirsearch, ffuf ou o proprio CrawlerModule do AnarCry devem incluir essas wordlists.
+
+## False Positive Indicators
+Sinais de que o Actuator detectado **nao representa risco real**:
+
+- **Apenas /health e /info expostos:** se somente esses dois endpoints respondem e retornam informacao generica (status: UP, versao), o risco e INFO, nao HIGH. Esses endpoints sao comumente expostos de proposito para health checks de load balancers.
+- **Autenticacao exigida:** se /actuator/env retorna 401/403 e exige credenciais validas, a exposicao esta protegida por Spring Security. Verificar se nao ha bypass via headers ou paths alternativos antes de descartar.
+- **Porta de management separada e nao acessivel:** se o Actuator roda em porta diferente (ex: 8081) vinculada a localhost, e o scanner so acessa a porta publica (8080), os endpoints nao sao acessiveis externamente.
+- **Valores mascarados em /env:** se todas as propriedades sensiveis aparecem como `******` (configuracao `show-values: never`), o /env nao vaza credenciais diretamente. Porem, os nomes das propriedades ainda revelam informacao util.
+- **Heapdump desabilitado:** se `/actuator/heapdump` retorna 404 ou `"enabled": false`, o endpoint mais critico nao esta acessivel. Reduzir severidade de acordo.
+- **Ambiente de staging/desenvolvimento:** se o alvo e claramente ambiente de staging e nao producao (verificar via dominio, dados, configuracao), o impacto real e menor, embora ainda deva ser reportado.
+- **Resposta generica sem dados sensiveis:** se /actuator/env retorna apenas propriedades de configuracao inofensivas (server.port, spring.profiles.active) sem credenciais ou tokens, o impacto e reduzido.
+
+
 ## Recommendation
 1. Expor apenas endpoints necessários (`health`, `info`) e desabilitar o resto:
 ```yaml
@@ -127,3 +164,4 @@ management:
 7. Atualizar Spring Boot e dependências; versões antigas têm CVEs de Actuator.
 8. Monitorar acessos a `/actuator/*` e downloads de heapdump; alertar imediatamente.
 9. Se houver exposição, rotacionar todos os segredos que possam estar no heap/env.
+

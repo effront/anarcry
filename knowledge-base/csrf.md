@@ -91,6 +91,41 @@ Casos reais e mentalidade de ataque (RWBH): Uber (ações de conta) e Yahoo (web
 - **Paths comuns:** `/api/email`, `/api/password`, `/api/user`, `/account/*`, `/settings`, `/admin/*`, `/logout`, `/transfer`, `/checkout`.
 - **Sinais:** endpoints que alteram estado via GET; ausência de token; token não vinculado à sessão; `SameSite=None`; `Origin`/`Referer` não validados.
 
+## Escalation Techniques
+CSRF isolado costuma ser classificado como medio, mas pode ser escalado para impacto critico:
+
+- **Vazamento de informacoes via preferencias:** se CSRF permite alterar o e-mail de cobranca ou de notificacao da vitima, o atacante pode redirecionar e-mails contendo dados sensiveis (enderecos, telefones, cartoes) para seu proprio e-mail. A vitima pode nao notar a mudanca por semanas.
+- **Self-XSS para Stored XSS:** campos que so o proprio usuario ve e edita (ex: apelido de conta, bio) frequentemente sao vulneraveis a self-XSS, mas nao sao exploraveis sozinhos. Um CSRF que altera esse campo pode injetar payload XSS, transformando self-XSS em stored XSS que executa toda vez que a vitima acessa a pagina.
+- **Account takeover:** CSRF em endpoints de criacao/alteracao de senha, alteracao de e-mail ou reset de senha permite tomar controle da conta da vitima. Especialmente perigoso em fluxos onde usuarios cadastrados via rede social nao tem senha definida -- o atacante define uma via CSRF.
+- **Encadeamento com XSS para entrega em massa:** se o site tem stored XSS em outra superficie (ex: comentarios), o atacante pode embutir o formulario CSRF no payload XSS, atingindo todos os visitantes daquela pagina automaticamente.
+- **Entrega via imagem (GET CSRF):** se a acao state-changing aceita GET, o payload pode ser embutido em tag `<img>` postada em forum ou mensagem -- qualquer usuario que visualize a pagina executa a acao sem clicar.
+- **Bypass de SameSite:** mesmo com `SameSite=Lax` padrao em Chrome, CSRF via GET com top-level navigation ainda funciona. Alem disso, se o cookie esta marcado como `SameSite=None` (necessario para integracoes cross-origin), CSRF classico funciona normalmente.
+- **CSRF + clickjacking:** se o endpoint usa token CSRF mas a pagina e frameable (sem `X-Frame-Options`), clickjacking pode ser usado para fazer a vitima clicar no botao real da pagina legitima, que inclui o token correto.
+
+Ao avaliar impacto, considere: qual acao e afetada (troca de senha vs trocar cor de tema)? Pode ser encadeado com outro bug? Como o payload pode ser entregue (link, imagem, XSS)?
+
+## Hunting Methodology
+Processo passo a passo para identificar CSRF:
+
+1. **Mapear acoes state-changing:** navegar pela aplicacao e listar todos os endpoints que alteram dados -- troca de senha, envio de mensagem, exclusao, transferencia, alteracao de configuracoes. Anotar URL, metodo HTTP e parametros de cada um.
+2. **Verificar ausencia de protecao:** interceptar cada requisicao com proxy e buscar por tokens CSRF (parametros ou headers com nomes como `csrf_token`, `_token`, `authenticity_token`, `X-CSRF-Token`). Verificar tambem cookies `SameSite`.
+3. **Testar bypasses de token:** se ha token, tentar: remover o parametro inteiro; enviar token vazio; reutilizar token de outra sessao/usuario; trocar metodo POST por GET (ou vice-versa).
+4. **Testar bypass de Referer:** se a protecao e por Referer, adicionar `<meta name="referrer" content="no-referrer">` na pagina de ataque para omitir o header. Tentar tambem colocar o dominio-alvo como subdominio ou path do Referer (`attacker.com/example.com`).
+5. **Confirmar a vulnerabilidade:** criar pagina HTML com formulario auto-submit que imita a requisicao. Abrir em browser autenticado no alvo e verificar se a acao foi executada.
+6. **Verificar clickjacking como alternativa:** se o endpoint usa tokens CSRF corretamente, verificar se a pagina pode ser carregada em iframe. Se sim, clickjacking pode substituir CSRF.
+7. **Elaborar estrategia de entrega:** demonstrar como o payload pode ser entregue -- link em forum, imagem embarcada, stored XSS, pagina maliciosa.
+
+## False Positive Indicators
+Sinais de que a ausencia de token detectada pelo scanner **nao e CSRF exploravel**:
+
+- **SameSite=Lax efetivo:** se o cookie de sessao usa `SameSite=Lax` (padrao em Chrome) e a acao requer POST, requisicoes cross-origin nao incluirao o cookie. CSRF classico nao funciona nesse cenario para POST requests.
+- **Validacao de Origin/Referer server-side:** mesmo sem token CSRF visivel, o backend pode validar o header `Origin` ou `Referer` e rejeitar requests de origens externas. Confirmar enviando request com `Origin: https://evil.com`.
+- **Custom header obrigatorio:** APIs que exigem header customizado (ex: `X-Requested-With: XMLHttpRequest`) sao protegidas por CORS preflight -- formularios HTML simples nao conseguem adicionar headers customizados.
+- **Content-Type restrito com CORS:** se o endpoint exige `Content-Type: application/json` e rejeita `text/plain`/`multipart/form-data`, CSRF via formulario nao funciona, pois formularios HTML so enviam esses dois tipos sem preflight.
+- **Acao nao e realmente state-changing:** scanner pode reportar ausencia de token em endpoints que apenas retornam dados (GET puro), sem alterar estado. CSRF so e relevante em acoes que modificam dados.
+- **Reautenticacao obrigatoria:** se o endpoint exige senha atual ou MFA antes de executar a acao, CSRF nao consegue fornecer essa informacao e a acao falha.
+- **Token presente em header/cookie nao visivel:** o scanner pode nao detectar tokens enviados via headers customizados ou cookies double-submit com assinatura HMAC.
+
 ## Recommendation
 1. Exigir token anti-CSRF em todas as requisições state-changing (POST/PUT/PATCH/DELETE), vinculado à sessão e de uso único quando possível.
 2. Validar `Origin` e `Referer` contra allowlist, além do token; rejeitar requisições sem `Origin` em contextos sensíveis.

