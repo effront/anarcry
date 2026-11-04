@@ -31,7 +31,7 @@
 +===========================================================================+
 |  Security scanner for bug bounty. 25 attack modules, parallel execution,  |
 |  CVSS v3.1 auto-scoring, knowledge base with 26 entries, WAF detection    |
-|  (14 providers) + circuit breaker. TUI + Swing GUI + AI Assistant.        |
+|  (15 providers) + circuit breaker. TUI + Swing GUI + AI Assistant.        |
 +===========================================================================+
 ```
 
@@ -105,7 +105,7 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.9.3.jar
+java -jar build/libs/anarcry-1.9.4.jar
 ```
 
 Or use the launcher (auto-builds if source changed):
@@ -123,7 +123,7 @@ With `.env.local` for pre-configured targets:
 Launch in GUI mode (Swing + FlatLaf):
 
 ```bash
-java -jar build/libs/anarcry-1.9.3.jar --gui
+java -jar build/libs/anarcry-1.9.4.jar --gui
 ```
 
 ---
@@ -333,7 +333,7 @@ src/main/java/gg/effront/anarcry/
 |   |   +-- HttpClientFactory.java Shared HttpClient (HTTP/2, no-redirect, follow-one)
 |   |   +-- TlsUtil.java           BouncyCastle TLS context setup
 |   |   +-- WafState.java          WAF/CDN state: block type, circuit breakers, stealth
-|   |   +-- WafEvasion.java        5 bypass strategies + 14-vendor signature detection
+|   |   +-- WafEvasion.java        5 bypass strategies + 15-vendor signature detection
 |   |   +-- CircuitBreaker.java    Per-module WAF block counter with dynamic threshold
 |   +-- crypto/                    5 modules: TLS (+ RawTlsProbe), Headers, HSTS,
 |   |                               JWT (5 probes), PQC
@@ -392,8 +392,8 @@ src/main/java/gg/effront/anarcry/
 ScanRunner.run(ScanContext)
   -> Phase 1: run Crawler (blocking) to populate DiscoveredPaths
   -> Phase 1.5: WAF detection -- baseline GET + canary probe
-     -> multi-vendor signature detection (14 providers)
-     -> classify block type: RULE_BLOCK / MANAGED_CHALLENGE / JS_CHALLENGE / TURNSTILE
+     -> multi-vendor signature detection (15 providers)
+     -> classify block type: RULE_BLOCK / MANAGED_CHALLENGE / JS_CHALLENGE / VERCEL_CHALLENGE / TURNSTILE
      -> probe evasion strategies (skip for managed challenges)
   -> Phase 2: submit remaining modules to thread pool (parallelism=4)
      -> per-module timeout (180s via CompletableFuture.orTimeout)
@@ -458,6 +458,18 @@ Built-in LLM-powered security analyst available in both TUI and GUI. Supports fo
 
 ## 10 - Changelog
 
+### v1.9.4
+
+- **Vercel WAF detection + bypass**: Vercel Security Checkpoint detected via `x-vercel-mitigated` header and body content, with dedicated `VERCEL_CHALLENGE` block type (threshold 5) and 4-signal WAF signature (x-vercel-mitigated, x-vercel-challenge-token, x-vercel-id, body content)
+- **ChallengeSolver integration**: Phase 1.5 invokes `ChallengeSolver.solve()` for Vercel challenges (headless Chromium + WASM proof-of-work + mouse simulation) -- extracted cookies injected into all subsequent requests via `Http.send()`
+- **Manual cookie fallback**: when ChallengeSolver fails (no Playwright, challenge changed), log instructs user to extract cookies from browser and paste into Session Cookie field
+- **Vercel in isWafBlocked()**: header-aware overload recognizes Vercel 403 + `x-vercel-mitigated: challenge` -- circuit breaker now detects Vercel blocks at runtime instead of letting modules waste requests on the challenge page
+- **Dynamic post-scan finding labels**: managed/Vercel challenge findings use `challengeType()` or block type name instead of hardcoded "Cloudflare" -- only emitted when challenge was NOT solved
+- **Body-based detection hardened**: Vercel body check requires 403/503 status code to avoid false-positive challenge handling on normal pages containing "Vercel Security Checkpoint"
+
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
+
 ### v1.9.3
 
 - **CF WAF bypass pipeline**: automatic 3-layer retry chain when Cloudflare WAF blocks a GET request -- (1) origin spoof headers (X-Forwarded-For, CF-Connecting-IP, True-Client-IP = 127.0.0.1), (2) X-Original-URL/X-Rewrite-URL header rewrite (WAF inspects clean /, backend reads payload from header), (3) POST JSON body delivery (CF applies weaker rulesets to JSON)
@@ -481,16 +493,13 @@ Built-in LLM-powered security analyst available in both TUI and GUI. Supports fo
 
 - **Per-module timeout**: 180s timeout via `CompletableFuture.orTimeout()` -- stuck modules no longer block the entire scan
 - **Circuit breaker**: per-module consecutive WAF block counter (threshold 8, or 3 for managed challenges) -- aborts module when WAF is persistently blocking
-- **Multi-vendor WAF signature detection**: 14 providers (Akamai, AWS WAF, Cloudflare, DataDome, Imperva, PerimeterX, Kasada, Reblaze, Sucuri, Shape, hCaptcha, reCAPTCHA, FunCaptcha, GeeTest) detected via cookie/header/URL/content signals with confidence scores
+- **Multi-vendor WAF signature detection**: 15 providers (Akamai, AWS WAF, Cloudflare, DataDome, Imperva, PerimeterX, Kasada, Reblaze, Sucuri, Shape, Vercel, hCaptcha, reCAPTCHA, FunCaptcha, GeeTest) detected via cookie/header/URL/content signals with confidence scores
 - **CF challenge classification**: distinguishes RULE_BLOCK vs MANAGED_CHALLENGE vs JS_CHALLENGE vs TURNSTILE -- evasion strategies skipped for managed challenges (per-session, not per-payload)
 - **CDN vs WAF separation**: passive CDN detection (cf-ray) no longer marks WAF as active -- WAF only marked on confirmed blocking, preventing false positive stealth activation on Cloudflare CDN sites
 - **Raw TLS ClientHello probe**: tests weak cipher suites (RC4, NULL, ANON, 3DES, EXPORT) by building raw TLS packets with hardcoded cipher IDs -- bypasses JVM and OpenSSL 3.0 cipher removal
 - **Runtime WAF detection**: `Http.send()` detects WAF mid-scan and auto-activates stealth mode, classifies block type, and adjusts circuit breaker threshold dynamically
 - **Future recovery**: timed-out or circuit-broken modules no longer abort the entire scan -- `.handle()` recovers failed futures so remaining modules complete normally
 - **RawTlsProbe scope validation**: private/link-local/loopback IP check before raw socket connection (defense-in-depth against SSRF)
-
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v1.8.0
 
