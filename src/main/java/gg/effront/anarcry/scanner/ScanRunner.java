@@ -319,10 +319,11 @@ public class ScanRunner {
                 // Vercel Security Checkpoint -- must be checked BEFORE CF branch
                 String vercelMitigated = probeResp.headers().firstValue("x-vercel-mitigated").orElse("");
                 boolean isVercel = "challenge".equalsIgnoreCase(vercelMitigated)
-                        || probeBody.contains("Vercel Security Checkpoint");
+                        || ((probeResp.statusCode() == 403 || probeResp.statusCode() == 503)
+                                && probeBody.contains("Vercel Security Checkpoint"));
 
                 if (isVercel) {
-                    ctx.wafState().markWafDetected(baselineProvider.isEmpty() ? "Vercel" : baselineProvider);
+                    ctx.wafState().markWafDetected("Vercel");
                     ctx.wafState().markBlockType(WafState.WafBlockType.VERCEL_CHALLENGE);
                     ctx.wafState().markJsChallenge("Vercel Security Checkpoint");
                     safeLog.accept("[!] Phase 1.5: Vercel Security Checkpoint detectado (HTTP " + probeResp.statusCode()
