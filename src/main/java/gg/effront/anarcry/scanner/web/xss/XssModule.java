@@ -273,11 +273,9 @@ public class XssModule implements Scanner {
     }
 
     private boolean isNonExecutableReflection(ProbeResult probe, String canary) {
-        if (!probe.csp().isEmpty() && (probe.csp().contains("'nonce-") || probe.csp().contains("'strict-dynamic'"))) {
-            return true;
-        }
         String body = probe.body();
-        if (body.contains("self.__next_f") || body.contains("__next_f.push")) {
+        boolean inRscPayload = body.contains("self.__next_f") || body.contains("__next_f.push");
+        if (inRscPayload) {
             return true;
         }
         int idx = body.indexOf(canary);
@@ -287,6 +285,11 @@ public class XssModule implements Scanner {
             if (before.contains("\":\"") || before.contains("\\\"")) {
                 return true;
             }
+        }
+        boolean hasStrictCsp = !probe.csp().isEmpty()
+                && (probe.csp().contains("'nonce-") || probe.csp().contains("'strict-dynamic'"));
+        if (hasStrictCsp && idx < 0) {
+            return true;
         }
         return false;
     }

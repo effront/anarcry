@@ -185,8 +185,7 @@ public class JwtModule implements Scanner {
                         }
                         HttpRequest noauthReq = HttpRequest.newBuilder().uri(URI.create(base + path))
                                 .timeout(Duration.ofSeconds(5)).GET().build();
-                        HttpResponse<Void> noauthResp = Http.send(ctx, hc, noauthReq,
-                                HttpResponse.BodyHandlers.discarding(), id());
+                        HttpResponse<Void> noauthResp = hc.send(noauthReq, HttpResponse.BodyHandlers.discarding());
                         if (noauthResp.statusCode() == 200) {
                             log.accept("[~] JWT: " + path + " nao requer auth -- skip alg:none");
                             continue;
