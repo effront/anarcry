@@ -49,7 +49,7 @@ public class XssModule implements Scanner {
     private record XssPayload(String template, String marker) {
     }
 
-    private record ProbeResult(int status, String contentType, String body) {
+    private record ProbeResult(int status, String contentType, String body, String csp) {
         boolean isUsable() {
             return status >= 200 && status < 400 && contentType != null && contentType.contains("text/html");
         }
@@ -190,17 +190,25 @@ public class XssModule implements Scanner {
 
                     if (anyUnescaped) {
                         String endpoint = path + "?" + param + "=" + canary;
-                        log.accept(
-                                "[~] XSS MEDIUM: canary refletido, nenhum payload confirmou execução em " + endpoint);
-                        local.add(Finding.of(id(), endpoint,
-                                "Reflected XSS (Potencial) -- Reflexão de Input Sem Contexto Executável",
-                                Severity.MEDIUM,
+                        boolean nonExec = isNonExecutableReflection(canaryProbe, canary);
+                        Severity sev = nonExec ? Severity.INFO : Severity.MEDIUM;
+                        String sevLabel = nonExec ? "INFO" : "MEDIUM";
+                        log.accept("[~] XSS " + sevLabel + ": canary refletido, nenhum payload confirmou execução em "
+                                + endpoint);
+                        String title = nonExec
+                                ? "Reflexão de Input em Contexto Não-Executável (JSON/RSC)"
+                                : "Reflected XSS (Potencial) -- Reflexão de Input Sem Contexto Executável";
+                        String impact = nonExec
+                                ? "Input refletido em contexto não-executável (JSON serialization, RSC payload "
+                                        + "ou CSP com nonce). Reflexão não resulta em execução de script."
+                                : "Input refletido detectado, mas nenhum payload resultou em evento handler "
+                                        + "executável neste contexto. Bypass pode ser possível em atributo, "
+                                        + "script block ou via codificação alternativa (HTML entities, Unicode).";
+                        local.add(Finding.of(id(), endpoint, title, sev,
                                 "Canary '" + canary + "' refletido em " + base + endpoint + " | "
                                         + phase2Payloads.size() + " payloads testados sem execução confirmada; "
                                         + "contexto de injeção requer análise manual",
-                                "Input refletido detectado, mas nenhum payload resultou em evento handler "
-                                        + "executável neste contexto. Bypass pode ser possível em atributo, "
-                                        + "script block ou via codificação alternativa (HTML entities, Unicode).",
+                                impact,
                                 "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "=" + canary
                                         + "'",
                                 "Revisar o contexto de reflexão manualmente. "
@@ -248,7 +256,7 @@ public class XssModule implements Scanner {
         return List.copyOf(payloads);
     }
 
-    private static final ProbeResult EMPTY_PROBE = new ProbeResult(0, "", "");
+    private static final ProbeResult EMPTY_PROBE = new ProbeResult(0, "", "", "");
 
     private ProbeResult probe(ScanContext ctx, HttpClient hc, String url) {
         try {
@@ -256,10 +264,33 @@ public class XssModule implements Scanner {
                     .build();
             HttpResponse<String> r = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
             String ct = r.headers().firstValue("content-type").orElse("");
+            String csp = r.headers().firstValue("content-security-policy").orElse("");
             String body = r.body() != null ? r.body() : "";
-            return new ProbeResult(r.statusCode(), ct, body);
+            return new ProbeResult(r.statusCode(), ct, body, csp);
         } catch (Exception e) {
             return EMPTY_PROBE;
         }
+    }
+
+    private boolean isNonExecutableReflection(ProbeResult probe, String canary) {
+        String body = probe.body();
+        boolean inRscPayload = body.contains("self.__next_f") || body.contains("__next_f.push");
+        if (inRscPayload) {
+            return true;
+        }
+        int idx = body.indexOf(canary);
+        if (idx >= 0) {
+            int start = Math.max(0, idx - 30);
+            String before = body.substring(start, idx);
+            if (before.contains("\":\"") || before.contains("\\\"")) {
+                return true;
+            }
+        }
+        boolean hasStrictCsp = !probe.csp().isEmpty()
+                && (probe.csp().contains("'nonce-") || probe.csp().contains("'strict-dynamic'"));
+        if (hasStrictCsp && idx < 0) {
+            return true;
+        }
+        return false;
     }
 }

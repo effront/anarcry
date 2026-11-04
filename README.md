@@ -105,7 +105,7 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.9.4.jar
+java -jar build/libs/anarcry-1.9.5.jar
 ```
 
 Or use the launcher (auto-builds if source changed):
@@ -123,7 +123,7 @@ With `.env.local` for pre-configured targets:
 Launch in GUI mode (Swing + FlatLaf):
 
 ```bash
-java -jar build/libs/anarcry-1.9.4.jar --gui
+java -jar build/libs/anarcry-1.9.5.jar --gui
 ```
 
 ---
@@ -458,6 +458,15 @@ Built-in LLM-powered security analyst available in both TUI and GUI. Supports fo
 
 ## 10 - Changelog
 
+### v1.9.5
+
+- **Headers/HSTS redirect fix**: migrated HeadersModule and HSTSModule HTTPS probe from `HttpURLConnection` to `HttpClient` via `Http.send()` -- follows 308 redirects to final response, injects session cookies, and uses shared WAF/circuit breaker pipeline (fixes false positives on naked domain 308 redirects)
+- **JWT alg:none server-side validation**: passive alg:none detection downgraded to INFO; active probe now does 3-step baseline comparison (valid token 200, no-token != 200, alg:none 200) to confirm server actually accepts unsigned tokens -- eliminates false positives from unauthenticated endpoints
+- **XSS non-executable reflection downgrade**: reflection-without-execution now reports INFO instead of MEDIUM when canary appears in non-executable context (Next.js RSC payload, JSON serialization, CSP with nonce/strict-dynamic)
+
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
+
 ### v1.9.4
 
 - **Vercel WAF detection + bypass**: Vercel Security Checkpoint detected via `x-vercel-mitigated` header and body content, with dedicated `VERCEL_CHALLENGE` block type (threshold 5) and 4-signal WAF signature (x-vercel-mitigated, x-vercel-challenge-token, x-vercel-id, body content)
@@ -466,9 +475,6 @@ Built-in LLM-powered security analyst available in both TUI and GUI. Supports fo
 - **Vercel in isWafBlocked()**: header-aware overload recognizes Vercel 403 + `x-vercel-mitigated: challenge` -- circuit breaker now detects Vercel blocks at runtime instead of letting modules waste requests on the challenge page
 - **Dynamic post-scan finding labels**: managed/Vercel challenge findings use `challengeType()` or block type name instead of hardcoded "Cloudflare" -- only emitted when challenge was NOT solved
 - **Body-based detection hardened**: Vercel body check requires 403/503 status code to avoid false-positive challenge handling on normal pages containing "Vercel Security Checkpoint"
-
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v1.9.3
 

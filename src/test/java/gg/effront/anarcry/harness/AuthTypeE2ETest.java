@@ -220,8 +220,8 @@ class AuthTypeE2ETest {
         });
         assertTrue(
                 findings.stream()
-                        .anyMatch(f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("none")),
-                "JwtModule must detect alg:none on JWT auth");
+                        .anyMatch(f -> f.severity() == Severity.INFO && f.title().toLowerCase().contains("none")),
+                "JwtModule must detect alg:none passivo on JWT auth");
     }
 
     @Test
