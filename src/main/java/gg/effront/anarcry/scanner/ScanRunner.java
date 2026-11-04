@@ -4,6 +4,7 @@ import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.RequestRecord;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.util.BrowserTransport;
+import gg.effront.anarcry.scanner.util.ChallengeSolver;
 import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.StealthHttpClient;
@@ -315,7 +316,45 @@ public class ScanRunner {
                 // Classify challenge type (CF-specific: managed/jsd/interactive/turnstile)
                 String cfType = WafEvasion.parseCfChallengeType(probeBody, probeResp.headers().map(), probeUrl);
 
-                if (!cfType.isEmpty()) {
+                // Vercel Security Checkpoint -- must be checked BEFORE CF branch
+                String vercelMitigated = probeResp.headers().firstValue("x-vercel-mitigated").orElse("");
+                boolean isVercel = "challenge".equalsIgnoreCase(vercelMitigated)
+                        || ((probeResp.statusCode() == 403 || probeResp.statusCode() == 503)
+                                && probeBody.contains("Vercel Security Checkpoint"));
+
+                if (isVercel) {
+                    ctx.wafState().markWafDetected("Vercel");
+                    ctx.wafState().markBlockType(WafState.WafBlockType.VERCEL_CHALLENGE);
+                    ctx.wafState().markJsChallenge("Vercel Security Checkpoint");
+                    safeLog.accept("[!] Phase 1.5: Vercel Security Checkpoint detectado (HTTP " + probeResp.statusCode()
+                            + ")");
+
+                    safeLog.accept("[*] Phase 1.5: tentando ChallengeSolver (headless Chromium + WASM)...");
+                    ChallengeSolver.Result csResult = ChallengeSolver.solve(ctx.targetUrl(), safeLog);
+
+                    if (csResult != null && csResult.cookies() != null && !csResult.cookies().isBlank()) {
+                        ctx.wafState().setChallengeCookies(csResult.cookies());
+                        safeLog.accept("[+] Phase 1.5: Vercel challenge resolvido -- cookies de clearance extraidos");
+                        safeLog.accept("[+] Phase 1.5: cookies serao injetados em todos os requests via Http.send()");
+
+                        BrowserTransport browserTx = BrowserTransport.create(ctx.targetUrl(), safeLog);
+                        if (browserTx != null) {
+                            ctx.wafState().setBrowserTransport(browserTx);
+                            safeLog.accept("[+] Phase 1.5: BrowserTransport ativado como transport complementar");
+                        }
+                    } else {
+                        safeLog.accept("[-] Phase 1.5: ChallengeSolver falhou ou Playwright indisponivel");
+                        safeLog.accept("[*] Fallback: abra o alvo no browser, resolva o challenge, e extraia cookies:");
+                        safeLog.accept("[*]   1. No console do browser: document.cookie");
+                        safeLog.accept("[*]   2. Cole o valor no campo 'Session Cookie' do AnarCry");
+                        safeLog.accept("[*]   3. Mude Auth Type para Cookie e reinicie o scan");
+
+                        if (!ctx.config().sessionCookie().isBlank()) {
+                            safeLog.accept("[+] Session Cookie detectado -- tentando usar como clearance");
+                            ctx.wafState().setChallengeCookies(ctx.config().sessionCookie());
+                        }
+                    }
+                } else if (!cfType.isEmpty()) {
                     if (!ctx.wafState().isWafDetected()) {
                         ctx.wafState().markWafDetected(baselineProvider.isEmpty() ? "cloudflare" : baselineProvider);
                     }
@@ -368,7 +407,16 @@ public class ScanRunner {
 
         if (ctx.wafState().isWafDetected()) {
             WafState.WafBlockType bt = ctx.wafState().blockType();
-            if (ctx.wafState().isManaged()) {
+            if (ctx.wafState().isVercelChallenge()) {
+                // Vercel challenge was already handled in the detection block above
+                if (ctx.wafState().hasChallengeCookies()) {
+                    safeLog.accept("[*] Phase 1.5: Vercel challenge resolvido -- pulando evasion probing");
+                } else {
+                    safeLog.accept(
+                            "[*] Phase 1.5: Vercel challenge nao resolvido -- scan pode produzir falsos positivos");
+                    safeLog.accept("[*] Alternativa: abra o alvo no Chrome, copie os cookies e cole em Session Cookie");
+                }
+            } else if (ctx.wafState().isManaged()) {
                 // Managed challenge or Turnstile -- evasion/stealth won't help
                 safeLog.accept("[*] Phase 1.5: " + bt + " detectado -- pulando evasion strategy probing");
                 safeLog.accept("[*] Alternativa: abra o alvo no Chrome, copie os cookies e cole em Session Cookie");
@@ -513,19 +561,26 @@ public class ScanRunner {
 
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
-        // Post-scan: emit INFO finding for managed challenges
-        if (ctx.wafState().isManaged()) {
+        // Post-scan: emit INFO finding for unsolved managed/vercel challenges
+        boolean unsolvedChallenge = (ctx.wafState().isManaged() || ctx.wafState().isVercelChallenge())
+                && !ctx.wafState().hasChallengeCookies();
+        if (unsolvedChallenge) {
             WafState.WafBlockType wafBt = ctx.wafState().blockType();
-            String typeName = wafBt == WafState.WafBlockType.TURNSTILE
-                    ? "Cloudflare Turnstile"
-                    : "Cloudflare Managed Challenge";
-            String wafFinding = typeName + " -- Bypass Automatizado Nao Aplicavel";
+            String challengeLabel = ctx.wafState().challengeType();
+            if (challengeLabel.isEmpty()) {
+                challengeLabel = switch (wafBt) {
+                    case TURNSTILE -> "Cloudflare Turnstile";
+                    case VERCEL_CHALLENGE -> "Vercel Security Checkpoint";
+                    default -> ctx.wafState().wafProduct() + " Managed Challenge";
+                };
+            }
+            String wafFinding = challengeLabel + " -- Bypass Automatizado Nao Aplicavel";
             String dedupKey = "WAF|" + ctx.targetUrl() + "|" + wafFinding;
             if (seenFindings.add(dedupKey)) {
                 Finding f = Finding.of("WAF", ctx.targetUrl(), wafFinding, Severity.INFO,
-                        "Alvo protegido por " + typeName + " (provider: " + ctx.wafState().wafProduct()
+                        "Alvo protegido por " + challengeLabel + " (provider: " + ctx.wafState().wafProduct()
                                 + ", block type: " + wafBt + ")",
-                        "O target utiliza " + typeName + " que exige interacao de browser real. "
+                        "O target utiliza " + challengeLabel + " que exige interacao de browser real. "
                                 + "Estrategias de evasion de payload (encoding, case mutation, etc.) "
                                 + "nao sao efetivas contra este tipo de protecao.",
                         "Verificar manualmente via browser se o alvo apresenta challenge page.",

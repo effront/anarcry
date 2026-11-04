@@ -17,6 +17,8 @@ public final class WafState {
         MANAGED_CHALLENGE,
         /** Pure JS challenge -- BrowserTransport may solve it. */
         JS_CHALLENGE,
+        /** Vercel Security Checkpoint -- solvable via headless (WASM + mouse sim). */
+        VERCEL_CHALLENGE,
         /** Interactive captcha (Turnstile) -- out of scope for automated bypass. */
         TURNSTILE
     }
@@ -24,6 +26,7 @@ public final class WafState {
     private static final int DEFAULT_THRESHOLD = 8;
     private static final int WAF_RULE_THRESHOLD = 25;
     private static final int MANAGED_CHALLENGE_THRESHOLD = 3;
+    private static final int VERCEL_CHALLENGE_THRESHOLD = 5;
 
     private final AtomicBoolean wafDetected = new AtomicBoolean(false);
     private final AtomicReference<String> wafProduct = new AtomicReference<>("");
@@ -153,6 +156,11 @@ public final class WafState {
         return blockType.get() == WafBlockType.RULE_BLOCK;
     }
 
+    /** Returns true if blockType is VERCEL_CHALLENGE. */
+    public boolean isVercelChallenge() {
+        return blockType.get() == WafBlockType.VERCEL_CHALLENGE;
+    }
+
     /**
      * Returns the effective circuit breaker threshold based on the current block
      * type. Managed challenges get a lower threshold (3) since every request will
@@ -161,6 +169,9 @@ public final class WafState {
     public int effectiveThreshold() {
         if (isManaged()) {
             return MANAGED_CHALLENGE_THRESHOLD;
+        }
+        if (isVercelChallenge()) {
+            return VERCEL_CHALLENGE_THRESHOLD;
         }
         return isRuleBlock() ? WAF_RULE_THRESHOLD : DEFAULT_THRESHOLD;
     }

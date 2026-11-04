@@ -46,11 +46,12 @@ public final class WafEvasion {
     }
 
     private static final Pattern WAF_SERVER = Pattern
-            .compile("(?i)(cloudflare|akamai|incapsula|sucuri|ddos-guard|awselb|imperva|f5|barracuda)");
+            .compile("(?i)(cloudflare|akamai|incapsula|sucuri|ddos-guard|awselb|imperva|f5|barracuda|vercel)");
 
     private static final Pattern WAF_BODY = Pattern
             .compile("(?i)(blocked|access denied|attention required|request blocked|"
-                    + "web application firewall|security policy|not acceptable)");
+                    + "web application firewall|security policy|not acceptable|"
+                    + "vercel security checkpoint|we're verifying your browser)");
 
     private static final Pattern CF_WAF_BODY = Pattern.compile("(?i)(attention required|just a moment|cf-error-details|"
             + "cf-challenge-|cloudflare ray id|enable javascript.*cookies|"
@@ -101,7 +102,12 @@ public final class WafEvasion {
                             new WafSignal(SignalType.CONTENT, "initGeetest", 90))),
             new WafSignature("shape", "Shape Security", "waf",
                     List.of(new WafSignal(SignalType.CONTENT, "shapesecurity", 50))),
-            new WafSignature("sucuri", "Sucuri", "waf", List.of(new WafSignal(SignalType.CONTENT, "sucuri", 50))));
+            new WafSignature("sucuri", "Sucuri", "waf", List.of(new WafSignal(SignalType.CONTENT, "sucuri", 50))),
+            new WafSignature("vercel", "Vercel", "waf",
+                    List.of(new WafSignal(SignalType.HEADER, "x-vercel-mitigated", 100),
+                            new WafSignal(SignalType.HEADER, "x-vercel-challenge-token", 100),
+                            new WafSignal(SignalType.HEADER, "x-vercel-id", 60),
+                            new WafSignal(SignalType.CONTENT, "Vercel Security Checkpoint", 95))));
 
     private static final Pattern CF_CTYPE_PATTERN = Pattern.compile("cType['\"]?\\s*[:=]\\s*['\"]([A-Za-z_-]+)['\"]");
 
@@ -259,6 +265,14 @@ public final class WafEvasion {
             return true;
         }
         return body != null && WAF_BODY.matcher(body).find();
+    }
+
+    public static boolean isWafBlocked(int statusCode, String serverHeader, String body,
+            java.util.Map<String, List<String>> headers) {
+        if (statusCode == 403 && "challenge".equalsIgnoreCase(firstHeader(headers, "x-vercel-mitigated"))) {
+            return true;
+        }
+        return isWafBlocked(statusCode, serverHeader, body);
     }
 
     public static boolean isCloudflarePresent(Map<String, List<String>> headers) {
