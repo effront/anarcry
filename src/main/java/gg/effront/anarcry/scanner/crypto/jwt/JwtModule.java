@@ -74,14 +74,15 @@ public class JwtModule implements Scanner {
 
         // ── Análise local ──────────────────────────────────────────────────
 
-        // 1. alg:none
+        // 1. alg:none (observacao passiva -- probe ativa valida server-side)
         if (alg.equalsIgnoreCase("none") || alg.isBlank()) {
-            log.accept("[!] JWT: alg:none detectado -- CRÍTICO");
-            findings.add(Finding.of("JWT", "(token)", "JWT alg:none aceito", Severity.CRITICAL, evidence,
-                    "Token sem assinatura -- qualquer payload pode ser aceito pelo servidor",
+            log.accept("[~] JWT: alg:none no token -- observacao passiva");
+            findings.add(Finding.of("JWT", "(token)", "Token usa alg:none (sem assinatura)", Severity.INFO, evidence,
+                    "Token fornecido nao possui assinatura -- verificar se servidor aceita tokens nao assinados"
+                            + " (probe ativa testa aceitacao server-side)",
                     "echo -n '{\"alg\":\"none\",\"typ\":\"JWT\"}' | base64url + '.' + echo -n '{\"sub\":\"admin\"}' |"
                             + "base64url + '.'",
-                    "Rejeitar tokens com alg:none na validação do servidor", _cweId, _cweTitle, _cvssVector, _score));
+                    "Rejeitar tokens com alg:none na validacao do servidor", _cweId, _cweTitle, _cvssVector, _score));
         }
 
         // 2. HS256 brute-force
@@ -167,26 +168,44 @@ public class JwtModule implements Scanner {
             try {
                 HttpClient hc = HttpClientFactory.noRedirect();
 
-                // Probe A: alg:none ativo (existente)
+                // Probe A: alg:none ativo (com baseline para eliminar falso positivo)
                 String noneHdr = Base64.getUrlEncoder().withoutPadding()
                         .encodeToString("{\"alg\":\"none\",\"typ\":\"JWT\"}".getBytes());
                 String noneToken = noneHdr + "." + parts[1] + ".";
-                log.accept("[~] JWT: probe ativa alg:none → " + base);
+                log.accept("[~] JWT: probe ativa alg:none -> " + base);
                 outer1 : for (String path : List.of("/api/me", "/api/user", "/api/profile")) {
                     try {
+                        HttpRequest baseReq = HttpRequest.newBuilder().uri(URI.create(base + path))
+                                .header("Authorization", "Bearer " + token).timeout(Duration.ofSeconds(5)).GET()
+                                .build();
+                        HttpResponse<Void> baseResp = Http.send(ctx, hc, baseReq,
+                                HttpResponse.BodyHandlers.discarding(), id());
+                        if (baseResp.statusCode() != 200) {
+                            continue;
+                        }
+                        HttpRequest noauthReq = HttpRequest.newBuilder().uri(URI.create(base + path))
+                                .timeout(Duration.ofSeconds(5)).GET().build();
+                        HttpResponse<Void> noauthResp = Http.send(ctx, hc, noauthReq,
+                                HttpResponse.BodyHandlers.discarding(), id());
+                        if (noauthResp.statusCode() == 200) {
+                            log.accept("[~] JWT: " + path + " nao requer auth -- skip alg:none");
+                            continue;
+                        }
                         HttpRequest req = HttpRequest.newBuilder().uri(URI.create(base + path))
                                 .header("Authorization", "Bearer " + noneToken).timeout(Duration.ofSeconds(5)).GET()
                                 .build();
                         HttpResponse<Void> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.discarding(), id());
-                        log.accept("[~] JWT: probe alg:none " + path + " → HTTP " + resp.statusCode());
+                        log.accept("[~] JWT: probe alg:none " + path + " -> HTTP " + resp.statusCode());
                         if (resp.statusCode() == 200) {
                             log.accept("[!] JWT: alg:none aceito ativamente em " + base + path);
                             findings.add(Finding.of("JWT", base + path, "JWT alg:none aceito ativamente",
                                     Severity.CRITICAL,
-                                    "Probe em " + base + path + " → HTTP 200 com alg:none | " + evidence,
+                                    "Probe em " + base + path + " -> HTTP 200 com alg:none"
+                                            + " (baseline: 200, sem token: " + noauthResp.statusCode() + ") | "
+                                            + evidence,
                                     "Servidor aceita tokens sem assinatura -- qualquer payload pode ser forjado",
                                     "curl -H 'Authorization: Bearer " + noneToken + "' " + base + path,
-                                    "Rejeitar tokens com alg:none na camada de validação do servidor", _cweId,
+                                    "Rejeitar tokens com alg:none na camada de validacao do servidor", _cweId,
                                     _cweTitle, _cvssVector, _score));
                             break outer1;
                         }

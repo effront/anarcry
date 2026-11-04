@@ -100,8 +100,8 @@ class ScanHarnessTest {
         });
         assertTrue(
                 findings.stream()
-                        .anyMatch(f -> f.severity() == Severity.CRITICAL && f.title().toLowerCase().contains("none")),
-                "Deve detectar alg:none como CRITICAL");
+                        .anyMatch(f -> f.severity() == Severity.INFO && f.title().toLowerCase().contains("none")),
+                "Deve detectar alg:none passivo como INFO");
     }
 
     @Test

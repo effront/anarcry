@@ -7,11 +7,16 @@ import gg.effront.anarcry.model.RequestRecord;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
-import gg.effront.anarcry.scanner.util.TlsUtil;
+import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
-import javax.net.ssl.HttpsURLConnection;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -39,25 +44,13 @@ public class HSTSModule implements Scanner {
         boolean hstsAdequate = false;
         log.accept("[~] HSTS: verificando policy HTTPS em " + ctx.targetUrl());
         try {
-            HttpsURLConnection https = (HttpsURLConnection) new URL(ctx.targetUrl()).openConnection();
-            https.setSSLSocketFactory(TlsUtil.sslContext(TlsUtil.trustAll()).getSocketFactory());
-            https.setHostnameVerifier((h, s) -> true);
-            https.setInstanceFollowRedirects(true);
-            https.setConnectTimeout(5000);
-            https.setReadTimeout(8000);
-            https.setRequestProperty("User-Agent", gg.effront.anarcry.Version.userAgent());
-
-            Map<String, List<String>> headers;
-            int status;
-            try {
-                status = https.getResponseCode();
-                headers = https.getHeaderFields();
-            } finally {
-                https.disconnect();
-            }
-
-            ctx.requestLog()
-                    .accept(new RequestRecord("GET", ctx.targetUrl(), status, 0, System.currentTimeMillis(), id()));
+            HttpClient hc = HttpClientFactory.http2();
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(ctx.targetUrl()))
+                    .timeout(Duration.ofSeconds(8)).header("User-Agent", gg.effront.anarcry.Version.userAgent()).GET()
+                    .build();
+            HttpResponse<Void> response = Http.send(ctx, hc, request, HttpResponse.BodyHandlers.discarding(), id());
+            int status = response.statusCode();
+            Map<String, List<String>> headers = response.headers().map();
 
             if (ctx.wafState().isWafDetected() && (status == 403 || status == 406 || status == 429)) {
                 log.accept("[~] HSTS: HTTPS probe retornou HTTP " + status

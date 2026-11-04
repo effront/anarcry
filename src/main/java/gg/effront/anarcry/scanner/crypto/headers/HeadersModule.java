@@ -3,15 +3,17 @@ package gg.effront.anarcry.scanner.crypto.headers;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
-import gg.effront.anarcry.model.RequestRecord;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
-import gg.effront.anarcry.scanner.util.TlsUtil;
+import gg.effront.anarcry.scanner.util.Http;
+import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
-import javax.net.ssl.HttpsURLConnection;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -39,35 +41,14 @@ public class HeadersModule implements Scanner {
 
         log.accept("[~] HEADERS: conectando em " + ctx.targetUrl());
 
-        HttpURLConnection conn;
-        if (ctx.isHttps()) {
-            HttpsURLConnection https = (HttpsURLConnection) new URL(ctx.targetUrl()).openConnection();
-            https.setSSLSocketFactory(TlsUtil.sslContext(TlsUtil.trustAll()).getSocketFactory());
-            https.setHostnameVerifier((h, s) -> true);
-            conn = https;
-        } else {
-            conn = (HttpURLConnection) new URL(ctx.targetUrl()).openConnection();
-        }
-
-        conn.setConnectTimeout(5000);
-        conn.setReadTimeout(10000);
-        conn.setInstanceFollowRedirects(true);
-        conn.setRequestProperty("User-Agent", gg.effront.anarcry.Version.userAgent());
-
-        final Map<String, List<String>> headers;
-        final String evidence;
-        final int code;
-        try {
-            conn.connect();
-            code = conn.getResponseCode();
-            log.accept("[~] HEADERS: HTTP " + code);
-            headers = conn.getHeaderFields();
-            evidence = "HTTP " + code + " -- " + ctx.targetUrl();
-            ctx.requestLog().accept(new RequestRecord("GET", ctx.targetUrl(), code,
-                    Math.max(0, conn.getContentLengthLong()), System.currentTimeMillis(), id()));
-        } finally {
-            conn.disconnect();
-        }
+        HttpClient hc = HttpClientFactory.http2();
+        HttpRequest request = HttpRequest.newBuilder().uri(URI.create(ctx.targetUrl())).timeout(Duration.ofSeconds(10))
+                .header("User-Agent", gg.effront.anarcry.Version.userAgent()).GET().build();
+        HttpResponse<String> response = Http.send(ctx, hc, request, HttpResponse.BodyHandlers.ofString(), id());
+        final int code = response.statusCode();
+        log.accept("[~] HEADERS: HTTP " + code);
+        final Map<String, List<String>> headers = response.headers().map();
+        final String evidence = "HTTP " + code + " -- " + ctx.targetUrl();
 
         if (code == 403) {
             String server = getHeader(headers, "Server");
