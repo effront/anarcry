@@ -15,11 +15,13 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class FormLoginHarvester implements Harvester {
 
     private static final int TIMEOUT_SECONDS = 15;
     private static final long SESSION_TTL_SECONDS = 3600;
+    private static final Set<String> SUPPORTED_METHODS = Set.of("GET", "POST");
 
     @Override
     public AuthProvider provider() {
@@ -54,18 +56,33 @@ public class FormLoginHarvester implements Harvester {
                 throw new AuthException("No login form found at " + loginUrl);
             }
 
+            validateActionScope(form.action(), targetUrl);
+
+            String method = form.method() != null ? form.method().toUpperCase() : "POST";
+            if (!SUPPORTED_METHODS.contains(method)) {
+                throw new AuthException("Unsupported form method: " + method);
+            }
+
             Map<String, String> postData = new LinkedHashMap<>(form.hiddenFields());
             if (form.usernameField() != null) {
                 postData.put(form.usernameField(), username);
             }
             postData.put(form.passwordField(), password);
 
-            String body = encodeForm(postData);
-            HttpRequest.Builder reqBuilder = HttpRequest.newBuilder().uri(URI.create(form.action()))
-                    .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
-                    .header("Content-Type", "application/x-www-form-urlencoded")
-                    .header("Origin", extractOrigin(form.action())).header("Referer", loginUrl)
-                    .POST(HttpRequest.BodyPublishers.ofString(body));
+            String encoded = encodeForm(postData);
+            HttpRequest.Builder reqBuilder;
+            if ("GET".equals(method)) {
+                String sep = form.action().contains("?") ? "&" : "?";
+                URI getUri = URI.create(form.action() + sep + encoded);
+                reqBuilder = HttpRequest.newBuilder().uri(getUri).timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
+                        .header("Referer", loginUrl).GET();
+            } else {
+                reqBuilder = HttpRequest.newBuilder().uri(URI.create(form.action()))
+                        .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .header("Origin", extractOrigin(form.action())).header("Referer", loginUrl)
+                        .POST(HttpRequest.BodyPublishers.ofString(encoded));
+            }
 
             String preflightCookies = extra != null ? extra.get("preflightCookies") : null;
             if (preflightCookies != null && !preflightCookies.isBlank()) {
@@ -81,6 +98,7 @@ public class FormLoginHarvester implements Harvester {
                     String location = loginResp.headers().firstValue("location").orElse(null);
                     if (location != null) {
                         String redirectUrl = URI.create(form.action()).resolve(location).toString();
+                        validateActionScope(redirectUrl, targetUrl);
                         HttpRequest redirectReq = HttpRequest.newBuilder().uri(URI.create(redirectUrl))
                                 .timeout(Duration.ofSeconds(TIMEOUT_SECONDS)).GET().build();
                         String redirectCookies = collectSetCookies(loginResp);
@@ -256,6 +274,44 @@ public class FormLoginHarvester implements Harvester {
                     .append(URLEncoder.encode(v, StandardCharsets.UTF_8));
         });
         return sb.toString();
+    }
+
+    // Pre-scan auth: raw HttpClient is intentional - no ScanContext exists yet, so
+    // Http.send()
+    // (which needs circuit breaker/WAF state) cannot be used. Scope validation is
+    // enforced here instead.
+    private static void validateActionScope(String actionUrl, String targetUrl) throws AuthException {
+        try {
+            URI action = URI.create(actionUrl);
+            URI target = URI.create(targetUrl);
+            String actionHost = action.getHost();
+            String targetHost = target.getHost();
+            if (actionHost == null || targetHost == null) {
+                throw new AuthException("Invalid URL: cannot extract host from action or target");
+            }
+            String actionRoot = rootDomain(actionHost);
+            String targetRoot = rootDomain(targetHost);
+            if (!actionRoot.equalsIgnoreCase(targetRoot)) {
+                throw new AuthException(
+                        "Form action " + actionUrl + " is outside scanner scope (target: " + targetUrl + ")");
+            }
+            String scheme = action.getScheme();
+            if (scheme == null || (!scheme.equals("https") && !scheme.equals("http"))) {
+                throw new AuthException("Form action uses unsupported scheme: " + scheme);
+            }
+        } catch (AuthException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AuthException("Invalid form action URL: " + actionUrl, e);
+        }
+    }
+
+    private static String rootDomain(String host) {
+        String[] parts = host.split("\\.");
+        if (parts.length <= 2) {
+            return host;
+        }
+        return parts[parts.length - 2] + "." + parts[parts.length - 1];
     }
 
     private static String extractOrigin(String url) {

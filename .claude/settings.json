@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/bullet/PROJETOS/AnarCry/hooks/hooks/pre-tool-use.js"
+            "command": "node hooks/hooks/pre-tool-use.js"
           }
         ]
       }
@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /home/bullet/PROJETOS/AnarCry/hooks/hooks/session-start.js"
+            "command": "node hooks/hooks/session-start.js"
           }
         ]
       }

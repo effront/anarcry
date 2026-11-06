@@ -6,6 +6,8 @@ import java.util.function.Function;
 
 public class CredentialStore {
 
+    private static final long SESSION_TTL_SECONDS = 3600;
+
     private volatile String activeToken;
     private volatile String refreshToken;
     private volatile Instant expiresAt;
@@ -66,9 +68,13 @@ public class CredentialStore {
     }
 
     public void updateToken(String newToken) {
+        updateToken(newToken, SESSION_TTL_SECONDS);
+    }
+
+    public void updateToken(String newToken, long expiresInSeconds) {
         if (newToken != null && !newToken.isBlank()) {
             this.activeToken = newToken;
-            this.expiresAt = Instant.now().plusSeconds(3600);
+            this.expiresAt = Instant.now().plusSeconds(expiresInSeconds);
         }
     }
 

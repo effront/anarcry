@@ -98,7 +98,8 @@ function buildContext(domain, cwd) {
       `ScanContext carrega config + credentials. ScanRunner orquestra phases.`,
   };
 
-  return `${base}\n${domains[domain] || domains.general}\n`;
+  const msg = Object.hasOwn(domains, domain) ? domains[domain] : domains.general;
+  return `${base}\n${msg}\n`;
 }
 
 module.exports = { buildContext };
