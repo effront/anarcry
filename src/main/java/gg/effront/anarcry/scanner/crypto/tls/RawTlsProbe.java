@@ -51,7 +51,10 @@ public final class RawTlsProbe {
             return Optional.empty();
         }
         byte[] clientHello = buildClientHello(host, ciphers);
-        try (Socket sock = new Socket()) {
+        // Raw socket is intentional: sends a handcrafted TLS ClientHello to probe
+        // cipher suites.
+        try (Socket sock = new Socket()) { // nosemgrep:
+                                           // java.lang.security.audit.crypto.unencrypted-socket.unencrypted-socket
             sock.setSoTimeout(TIMEOUT_MS);
             InetSocketAddress resolved = new InetSocketAddress(host, port);
             if (resolved.isUnresolved() || !isSafeAddress(resolved.getAddress())) {

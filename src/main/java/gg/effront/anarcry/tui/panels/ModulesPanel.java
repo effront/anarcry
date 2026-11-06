@@ -11,15 +11,24 @@ import com.googlecode.lanterna.gui2.LinearLayout;
 import com.googlecode.lanterna.gui2.Panel;
 import gg.effront.anarcry.model.AuthType;
 import gg.effront.anarcry.model.RequestRecord;
+import gg.effront.anarcry.scanner.DiscoveredPaths;
 import gg.effront.anarcry.scanner.ScanConfig;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.ScanRunner;
 import gg.effront.anarcry.scanner.SuppressionLoader;
+import gg.effront.anarcry.scanner.auth.AuthException;
+import gg.effront.anarcry.scanner.auth.CredentialStore;
+import gg.effront.anarcry.scanner.auth.ProviderDetector;
+import gg.effront.anarcry.scanner.auth.harvester.Harvester;
+import gg.effront.anarcry.scanner.auth.harvester.HarvesterRegistry;
+import gg.effront.anarcry.scanner.util.WafState;
 import gg.effront.anarcry.tui.PasteableTextBox;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
+
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -55,6 +64,7 @@ public class ModulesPanel extends Panel {
     private final CheckBox xssCheck;
     private final CheckBox lfiCheck;
     private final CheckBox cmdInjectionCheck;
+    private final CheckBox exploitationCheck;
     private final PasteableTextBox targetBox;
     private final PasteableTextBox jwtTokenBox;
     private final PasteableTextBox jwtToken2Box;
@@ -164,6 +174,14 @@ public class ModulesPanel extends Panel {
         addComponent(idorCheck);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
+        Label postLabel = new Label("── POST-SCAN ───────────");
+        postLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.MAGENTA);
+        addComponent(postLabel);
+        exploitationCheck = new CheckBox("Exploitation (validate findings)");
+        exploitationCheck.setChecked(false);
+        addComponent(exploitationCheck);
+
+        addComponent(new EmptySpace(new TerminalSize(1, 1)));
         addComponent(new Label("─".repeat(width - 2)));
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
@@ -174,7 +192,7 @@ public class ModulesPanel extends Panel {
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
         addComponent(new Label("Auth Type:"));
-        authTypeCombo = new ComboBox<>("None", "JWT", "Cookie", "Bearer");
+        authTypeCombo = new ComboBox<>("None", "JWT", "Cookie", "Bearer", "Auto");
         authTypeCombo.setReadOnly(true);
         authTypeCombo.setSelectedIndex(0);
         authTypeCombo.addListener((selectedIndex, previousSelection, changedByUserInteraction) -> {
@@ -276,6 +294,10 @@ public class ModulesPanel extends Panel {
             case BEARER -> {
                 cred1Label.setText("Bearer Token:");
                 cred2Label.setText("Bearer Token 2 (IDOR):");
+            }
+            case AUTO -> {
+                cred1Label.setText("Email (or Refresh Token):");
+                cred2Label.setText("Password (blank if token):");
             }
         }
     }
@@ -411,13 +433,55 @@ public class ModulesPanel extends Panel {
         } catch (NumberFormatException ignored) {
             // keep default
         }
+        boolean exploit = exploitationCheck.isChecked();
         logPanel.log("[*] Iniciando scan em " + target + " (auth=" + selectedAuthType + ", concurrency=" + concurrency
-                + ") ...");
-        ScanContext baseCtx = selectedAuthType.buildContext(target, modules, cred1, cred2, requestLogCb);
-        ScanConfig cfg = new ScanConfig(0, selectedAuthType.usesCookie() ? cred1 : "",
-                selectedAuthType.usesCookie() ? cred2 : "", java.util.Set.of(), SuppressionLoader.loadFromCwd(), "",
-                concurrency);
-        scanRunner.run(new ScanContext(baseCtx.targetUrl(), baseCtx.jwtToken(), baseCtx.jwtToken2(), modules, cfg,
-                requestLogCb, baseCtx.discoveredPaths(), baseCtx.wafState()));
+                + ", exploit=" + exploit + ") ...");
+
+        CredentialStore credStore = null;
+        String jwt = "";
+        String jwt2 = "";
+        String cookie = "";
+        String cookie2 = "";
+
+        if (selectedAuthType == AuthType.AUTO) {
+            String username = cred1;
+            String password = cred2;
+            if (username.isBlank()) {
+                logPanel.log("[!] AUTO requer email ou refresh token");
+                return;
+            }
+            logPanel.log("[*] Detectando provider em " + target + " ...");
+            ProviderDetector.DiscoveryResult discovery = ProviderDetector.detect(target);
+            if (discovery == null) {
+                logPanel.log("[!] Nenhum provider detectado em " + target);
+                return;
+            }
+            logPanel.log("[+] Provider detectado: " + discovery.provider());
+            Optional<Harvester> harvester = HarvesterRegistry.forProvider(discovery.provider());
+            if (harvester.isEmpty()) {
+                logPanel.log("[!] Sem harvester para " + discovery.provider());
+                return;
+            }
+            try {
+                logPanel.log("[*] Harvesting credentials via " + discovery.provider() + " ...");
+                credStore = harvester.get().harvest(target, username, password, discovery.extra());
+                logPanel.log("[+] Token obtido (expira em " + credStore.remainingSeconds() + "s)");
+            } catch (AuthException e) {
+                logPanel.log("[!] Harvest falhou: " + e.getMessage());
+                return;
+            }
+        } else if (selectedAuthType.usesBearer()) {
+            jwt = cred1;
+            jwt2 = cred2;
+        } else if (selectedAuthType.usesCookie()) {
+            cookie = cred1;
+            cookie2 = cred2;
+        }
+
+        ScanConfig cfg = new ScanConfig(0, cookie, cookie2, Set.of(), SuppressionLoader.loadFromCwd(), "", concurrency,
+                exploit);
+        ScanContext ctx = new ScanContext(target, jwt, jwt2, modules, cfg, requestLogCb, new DiscoveredPaths(),
+                new WafState(), credStore);
+        scanRunner.run(ctx);
     }
 }

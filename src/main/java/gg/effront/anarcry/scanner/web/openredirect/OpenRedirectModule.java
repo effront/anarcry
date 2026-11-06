@@ -52,6 +52,26 @@ public class OpenRedirectModule implements Scanner {
         return "OpenRedirect";
     }
 
+    private static boolean locationRedirectsToEvil(String location) {
+        if (location == null || location.isBlank()) {
+            return false;
+        }
+        try {
+            String normalized = location.replace('\\', '/');
+            if (normalized.startsWith("//")) {
+                normalized = "https:" + normalized;
+            }
+            URI uri = URI.create(normalized);
+            String host = uri.getHost();
+            if (host == null) {
+                return false;
+            }
+            return host.equalsIgnoreCase(EVIL_HOST) || host.endsWith("." + EVIL_HOST);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     @Override
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
         List<Finding> findings = new ArrayList<>();
@@ -96,7 +116,7 @@ public class OpenRedirectModule implements Scanner {
                             String location = resp.headers().firstValue("location").orElse("").trim();
 
                             if ((status == 301 || status == 302 || status == 307 || status == 308)
-                                    && location.contains(EVIL_HOST)) {
+                                    && locationRedirectsToEvil(location)) {
                                 log.accept("[!!] OpenRedirect: MEDIUM -- " + payload.technique()
                                         + " bypass confirmado -> " + location);
                                 local.add(Finding.of("OpenRedirect", path + "?" + param,

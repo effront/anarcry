@@ -1,7 +1,8 @@
 # Semgrep ignore — AnarCry
 
-# Documentation: JWT examples are intentional (alg:none demo payloads, not real tokens)
+# Documentation and knowledge base: JWT examples are intentional (alg:none demo payloads, not real tokens)
 README.md
+src/main/resources/knowledge_base.json
 
 # Build output
 build/

@@ -54,7 +54,7 @@ class AuthTypeE2ETest {
 
     private static String defaultCredential(AuthType type) {
         return switch (type) {
-            case NONE -> "";
+            case NONE, AUTO -> "";
             case JWT -> SAMPLE_JWT;
             case COOKIE -> SAMPLE_COOKIE;
             case BEARER -> SAMPLE_BEARER;
@@ -85,8 +85,8 @@ class AuthTypeE2ETest {
 
     @Test
     @Order(1)
-    void authTypeHasFourValues() {
-        assertEquals(4, AuthType.values().length);
+    void authTypeHasFiveValues() {
+        assertEquals(5, AuthType.values().length);
         assertNotNull(AuthType.NONE);
         assertNotNull(AuthType.JWT);
         assertNotNull(AuthType.COOKIE);

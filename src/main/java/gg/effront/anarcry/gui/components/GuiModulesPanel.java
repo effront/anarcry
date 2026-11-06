@@ -52,6 +52,7 @@ public class GuiModulesPanel extends JPanel {
     private final Component cred1Strut;
     private final Component cred2Strut;
 
+    private final JCheckBox exploitationCheck;
     private final JButton startButton;
     private final JButton stopButton;
 
@@ -109,6 +110,14 @@ public class GuiModulesPanel extends JPanel {
         checksPanel.add(moduleCheck("LFI", true));
         checksPanel.add(moduleCheck("CmdInjection", true));
         checksPanel.add(moduleCheck("IDOR", false));
+
+        checksPanel.add(Box.createVerticalStrut(12));
+
+        addSection(checksPanel, "POST-SCAN", new Color(0xBB, 0x6B, 0xD9));
+        exploitationCheck = new JCheckBox("Exploitation (validate findings)", false);
+        exploitationCheck.setAlignmentX(Component.LEFT_ALIGNMENT);
+        exploitationCheck.setBorder(BorderFactory.createEmptyBorder(1, 12, 1, 0));
+        checksPanel.add(exploitationCheck);
 
         JScrollPane checksScroll = new JScrollPane(checksPanel);
         checksScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
@@ -270,10 +279,14 @@ public class GuiModulesPanel extends JPanel {
         stopButton.setEnabled(scanning);
     }
 
+    public boolean isExploitationEnabled() {
+        return exploitationCheck.isSelected();
+    }
+
     private void updateCredentialFields() {
         AuthType selected = getAuthType();
         boolean showCred1 = selected.hasAuth();
-        boolean showCred2 = selected == AuthType.JWT;
+        boolean showCred2 = selected == AuthType.JWT || selected == AuthType.AUTO;
 
         cred1Label.setVisible(showCred1);
         cred1Scroll.setVisible(showCred1);
@@ -298,6 +311,10 @@ public class GuiModulesPanel extends JPanel {
             case BEARER -> {
                 cred1Label.setText("Bearer Token:");
                 cred2Label.setText("Credential 2:");
+            }
+            case AUTO -> {
+                cred1Label.setText("Email (or Refresh Token):");
+                cred2Label.setText("Password (blank if token):");
             }
         }
 

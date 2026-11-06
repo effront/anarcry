@@ -1,5 +1,8 @@
 package gg.effront.anarcry.scanner;
 
+import gg.effront.anarcry.exploit.ExploitOrchestrator;
+import gg.effront.anarcry.exploit.ExploitStatus;
+import gg.effront.anarcry.exploit.ValidatedFinding;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.RequestRecord;
 import gg.effront.anarcry.model.Severity;
@@ -47,6 +50,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public class ScanRunner {
@@ -59,6 +63,8 @@ public class ScanRunner {
     private final Set<String> seenFindings = Collections.synchronizedSet(new HashSet<>());
     private final List<String> testedClean = Collections.synchronizedList(new ArrayList<>());
     private final List<String> testedModules = Collections.synchronizedList(new ArrayList<>());
+    private final List<Finding> accumulatedFindings = Collections.synchronizedList(new ArrayList<>());
+    private volatile List<ValidatedFinding> lastValidatedFindings = List.of();
     private final List<Scanner> customModules = new ArrayList<>();
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "anarcry-scan");
@@ -115,12 +121,18 @@ public class ScanRunner {
         return lastScanContext;
     }
 
+    public List<ValidatedFinding> lastValidatedFindings() {
+        return lastValidatedFindings;
+    }
+
     public void run(ScanContext ctx) {
         lastScanContext = ctx;
         executor.submit(() -> {
             try {
                 testedClean.clear();
                 testedModules.clear();
+                accumulatedFindings.clear();
+                lastValidatedFindings = List.of();
                 runScan(ctx);
             } catch (Exception e) {
                 logCb.accept("[!] Scan falhou: " + e.getMessage());
@@ -150,7 +162,8 @@ public class ScanRunner {
             }
         };
         ScanContext ctx = new ScanContext(origCtx.targetUrl(), origCtx.jwtToken(), origCtx.jwtToken2(),
-                origCtx.enabledModules(), origCtx.config(), safeReqLog, origCtx.discoveredPaths(), origCtx.wafState());
+                origCtx.enabledModules(), origCtx.config(), safeReqLog, origCtx.discoveredPaths(), origCtx.wafState(),
+                origCtx.credentialStore());
         ctx.wafState().setRuntimeLog(safeLog);
         List<Scanner> modules = new ArrayList<>();
         if (ctx.has("TLS")) {
@@ -260,6 +273,7 @@ public class ScanRunner {
                             safeLog.accept("[~] suppressed: " + f.module() + " -- " + f.title());
                         } else {
                             findingCb.accept(f);
+                            accumulatedFindings.add(f);
                             total[0]++;
                         }
                     } else {
@@ -542,6 +556,7 @@ public class ScanRunner {
                                     safeLog.accept("[~] suppressed: " + f.module() + " -- " + f.title());
                                 } else {
                                     findingCb.accept(f);
+                                    accumulatedFindings.add(f);
                                     synchronized (total) {
                                         total[0]++;
                                     }
@@ -560,6 +575,26 @@ public class ScanRunner {
         }
 
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        // Phase 3: Exploitation (post-scan validation)
+        if (ctx.config().exploitationEnabled() && !accumulatedFindings.isEmpty()) {
+            safeLog.accept("[*] Phase 3: Exploitation -- validating " + accumulatedFindings.size() + " findings");
+            try {
+                ExploitOrchestrator exploiter = new ExploitOrchestrator();
+                AtomicBoolean cancel = new AtomicBoolean(false);
+                List<ValidatedFinding> validated = exploiter.run(List.copyOf(accumulatedFindings), ctx, safeLog,
+                        cancel);
+                lastValidatedFindings = List.copyOf(validated);
+
+                long confirmed = validated.stream().filter(vf -> vf.result().status() == ExploitStatus.CONFIRMED)
+                        .count();
+                long fp = validated.stream().filter(vf -> vf.result().status() == ExploitStatus.FALSE_POSITIVE).count();
+                safeLog.accept("[+] Phase 3: " + confirmed + " confirmed, " + fp + " false positives, "
+                        + validated.size() + " total");
+            } catch (Exception e) {
+                safeLog.accept("[!] Phase 3: exploitation failed: " + e.getMessage());
+            }
+        }
 
         // Post-scan: emit INFO finding for unsolved managed/vercel challenges
         boolean unsolvedChallenge = (ctx.wafState().isManaged() || ctx.wafState().isVercelChallenge())

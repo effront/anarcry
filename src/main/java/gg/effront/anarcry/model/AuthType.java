@@ -9,10 +9,10 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 public enum AuthType {
-    NONE, JWT, COOKIE, BEARER;
+    NONE, JWT, COOKIE, BEARER, AUTO;
 
     public boolean usesBearer() {
-        return this == JWT || this == BEARER;
+        return this == JWT || this == BEARER || this == AUTO;
     }
 
     public boolean usesCookie() {
@@ -20,11 +20,15 @@ public enum AuthType {
     }
 
     public boolean requiresJwtParsing() {
-        return this == JWT;
+        return this == JWT || this == AUTO;
     }
 
     public boolean hasAuth() {
         return this != NONE;
+    }
+
+    public boolean requiresHarvest() {
+        return this == AUTO;
     }
 
     public ScanContext buildContext(String target, Set<String> modules, String credential, String credential2,
@@ -43,6 +47,7 @@ public enum AuthType {
                         ScanConfig.DEFAULT_PROBE_CONCURRENCY);
                 yield new ScanContext(target, "", "", modules, cfg, requestLog, new DiscoveredPaths(), new WafState());
             }
+            case AUTO -> new ScanContext(target, "", modules);
         };
     }
 
