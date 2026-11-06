@@ -15,7 +15,8 @@ import java.util.Map;
 public final class ProviderDetector {
 
     public record DiscoveryResult(AuthProvider provider, String clientId, String apiKey, String authEndpoint,
-            String tokenEndpoint, Map<String, String> extra) {}
+            String tokenEndpoint, Map<String, String> extra) {
+    }
 
     private ProviderDetector() {
     }
@@ -23,8 +24,8 @@ public final class ProviderDetector {
     public static DiscoveryResult detect(String targetUrl) {
         try {
             HttpClient hc = HttpClientFactory.http2();
-            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(targetUrl))
-                    .timeout(Duration.ofSeconds(15)).GET().build();
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(targetUrl)).timeout(Duration.ofSeconds(15)).GET()
+                    .build();
             HttpResponse<String> resp = hc.send(req, HttpResponse.BodyHandlers.ofString());
             String body = resp.body() != null ? resp.body() : "";
             DiscoveryResult result = detectFromPage(targetUrl, body);
@@ -96,8 +97,8 @@ public final class ProviderDetector {
             String oidcUrl = base.getScheme() + "://" + base.getHost()
                     + (base.getPort() > 0 ? ":" + base.getPort() : "") + "/.well-known/openid-configuration";
             HttpClient hc = HttpClientFactory.http2();
-            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(oidcUrl))
-                    .timeout(Duration.ofSeconds(5)).GET().build();
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(oidcUrl)).timeout(Duration.ofSeconds(5)).GET()
+                    .build();
             HttpResponse<String> resp = hc.send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() == 200 && resp.body() != null && resp.body().contains("token_endpoint")) {
                 String tokenEndpoint = extractPattern(resp.body(), "\"token_endpoint\"\\s*:\\s*\"([^\"]+)\"");

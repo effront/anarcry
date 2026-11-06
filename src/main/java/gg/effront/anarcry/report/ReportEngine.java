@@ -550,12 +550,10 @@ public class ReportEngine {
         sb.append("|--------|------------|----------|--------|-------|-----|\n");
         for (ValidatedFinding vf : validated) {
             Finding f = vf.original();
-            sb.append("| ").append(vf.result().status())
-                    .append(" | ").append(String.format("%.0f%%", vf.result().confidence() * 100))
-                    .append(" | ").append(vf.adjustedSeverity())
-                    .append(" | ").append(escape(f.module()))
-                    .append(" | ").append(escape(f.title()))
-                    .append(" | ").append(escape(truncate(vf.result().poc(), 80)))
+            sb.append("| ").append(vf.result().status()).append(" | ")
+                    .append(String.format("%.0f%%", vf.result().confidence() * 100)).append(" | ")
+                    .append(vf.adjustedSeverity()).append(" | ").append(escape(f.module())).append(" | ")
+                    .append(escape(f.title())).append(" | ").append(escape(truncate(vf.result().poc(), 80)))
                     .append(" |\n");
         }
         sb.append("\n");
@@ -584,7 +582,9 @@ public class ReportEngine {
     }
 
     private static String truncate(String s, int max) {
-        if (s == null) return "";
+        if (s == null) {
+            return "";
+        }
         return s.length() <= max ? s : s.substring(0, max) + "...";
     }
 

@@ -174,8 +174,7 @@ class CredentialHarvesterTest {
         int authPort = authServer.getAddress().getPort();
 
         HttpServer pageServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        String pageWithLocalApi = FIREBASE_PAGE.replace(
-                "AIzaSyARDbQi_AWPlzwKQXbALXqAvtO13BoyeEw",
+        String pageWithLocalApi = FIREBASE_PAGE.replace("AIzaSyARDbQi_AWPlzwKQXbALXqAvtO13BoyeEw",
                 "AIzaSyARDbQi_AWPlzwKQXbALXqAvtO13BoyeEw");
         pageServer.createContext("/", exchange -> {
             byte[] body = pageWithLocalApi.getBytes(StandardCharsets.UTF_8);
@@ -187,9 +186,8 @@ class CredentialHarvesterTest {
 
         try {
             FirebaseConfig config = new FirebaseConfig("AIzaSyARDbQi_AWPlzwKQXbALXqAvtO13BoyeEw",
-                    "test-project.firebaseapp.com", "test-project", "test-project.appspot.com",
-                    "573040944768", "1:573040944768:web:464ea7a10ffd0fdbdb2865",
-                    "http://127.0.0.1:" + authPort + "/v1",
+                    "test-project.firebaseapp.com", "test-project", "test-project.appspot.com", "573040944768",
+                    "1:573040944768:web:464ea7a10ffd0fdbdb2865", "http://127.0.0.1:" + authPort + "/v1",
                     "http://127.0.0.1:" + authPort + "/v1");
 
             FirebaseAuthClient.AuthResult result = FirebaseAuthClient.signInWithPassword(config, "test@test.com",
@@ -221,11 +219,10 @@ class CredentialHarvesterTest {
     @Test
     @Order(41)
     void credentialStore_refresh() throws Exception {
-        CredentialStore store = new CredentialStore("token-1", "refresh-1", 1, AuthProvider.FIREBASE,
-                rt -> {
-                    assertEquals("refresh-1", rt);
-                    return new CredentialStore.RefreshResult("token-2", "refresh-2", 3600);
-                });
+        CredentialStore store = new CredentialStore("token-1", "refresh-1", 1, AuthProvider.FIREBASE, rt -> {
+            assertEquals("refresh-1", rt);
+            return new CredentialStore.RefreshResult("token-2", "refresh-2", 3600);
+        });
 
         Thread.sleep(1100);
         assertTrue(store.isExpired());

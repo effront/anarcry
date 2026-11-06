@@ -9,6 +9,6 @@ import java.util.Map;
 public interface Harvester {
     AuthProvider provider();
     boolean canHandle(String targetUrl, String pageSource);
-    CredentialStore harvest(String targetUrl, String username, String password,
-                           Map<String, String> extra) throws AuthException;
+    CredentialStore harvest(String targetUrl, String username, String password, Map<String, String> extra)
+            throws AuthException;
 }

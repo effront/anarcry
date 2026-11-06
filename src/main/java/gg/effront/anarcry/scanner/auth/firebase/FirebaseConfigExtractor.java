@@ -18,7 +18,8 @@ public final class FirebaseConfigExtractor {
             .compile("messagingSenderId\\s*[:=]\\s*[\"']([0-9]+)[\"']");
     private static final Pattern APP_ID = Pattern.compile("appId\\s*[:=]\\s*[\"']([0-9:a-f]+)[\"']");
 
-    private static final Pattern SCRIPT_SRC = Pattern.compile("<script[^>]+src=[\"']([^\"']+)[\"']", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SCRIPT_SRC = Pattern.compile("<script[^>]+src=[\"']([^\"']+)[\"']",
+            Pattern.CASE_INSENSITIVE);
 
     private FirebaseConfigExtractor() {
     }
@@ -36,8 +37,8 @@ public final class FirebaseConfigExtractor {
         try {
             HttpClient hc = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL)
                     .connectTimeout(Duration.ofSeconds(10)).build();
-            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(targetUrl))
-                    .timeout(Duration.ofSeconds(15)).GET().build();
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(targetUrl)).timeout(Duration.ofSeconds(15)).GET()
+                    .build();
             HttpResponse<String> resp = hc.send(req, HttpResponse.BodyHandlers.ofString());
             String body = resp.body() != null ? resp.body() : "";
 

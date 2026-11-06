@@ -40,8 +40,7 @@ public record ScanContext(String targetUrl, String jwtToken, String jwtToken2, S
     }
 
     public ScanContext(String targetUrl, String jwtToken, String jwtToken2, Set<String> enabledModules,
-            ScanConfig config, Consumer<RequestRecord> requestLog, DiscoveredPaths discoveredPaths,
-            WafState wafState) {
+            ScanConfig config, Consumer<RequestRecord> requestLog, DiscoveredPaths discoveredPaths, WafState wafState) {
         this(targetUrl, jwtToken, jwtToken2, enabledModules, config, requestLog, discoveredPaths, wafState, null);
     }
 

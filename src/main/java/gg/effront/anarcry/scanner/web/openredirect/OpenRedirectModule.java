@@ -53,7 +53,9 @@ public class OpenRedirectModule implements Scanner {
     }
 
     private static boolean locationRedirectsToEvil(String location) {
-        if (location == null || location.isBlank()) return false;
+        if (location == null || location.isBlank()) {
+            return false;
+        }
         try {
             String normalized = location.replace('\\', '/');
             if (normalized.startsWith("//")) {
@@ -61,7 +63,9 @@ public class OpenRedirectModule implements Scanner {
             }
             URI uri = URI.create(normalized);
             String host = uri.getHost();
-            if (host == null) return false;
+            if (host == null) {
+                return false;
+            }
             return host.equalsIgnoreCase(EVIL_HOST) || host.endsWith("." + EVIL_HOST);
         } catch (Exception e) {
             return false;

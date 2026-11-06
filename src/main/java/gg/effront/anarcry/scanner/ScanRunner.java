@@ -582,14 +582,13 @@ public class ScanRunner {
             try {
                 ExploitOrchestrator exploiter = new ExploitOrchestrator();
                 AtomicBoolean cancel = new AtomicBoolean(false);
-                List<ValidatedFinding> validated = exploiter.run(
-                        List.copyOf(accumulatedFindings), ctx, safeLog, cancel);
+                List<ValidatedFinding> validated = exploiter.run(List.copyOf(accumulatedFindings), ctx, safeLog,
+                        cancel);
                 lastValidatedFindings = List.copyOf(validated);
 
-                long confirmed = validated.stream()
-                        .filter(vf -> vf.result().status() == ExploitStatus.CONFIRMED).count();
-                long fp = validated.stream()
-                        .filter(vf -> vf.result().status() == ExploitStatus.FALSE_POSITIVE).count();
+                long confirmed = validated.stream().filter(vf -> vf.result().status() == ExploitStatus.CONFIRMED)
+                        .count();
+                long fp = validated.stream().filter(vf -> vf.result().status() == ExploitStatus.FALSE_POSITIVE).count();
                 safeLog.accept("[+] Phase 3: " + confirmed + " confirmed, " + fp + " false positives, "
                         + validated.size() + " total");
             } catch (Exception e) {

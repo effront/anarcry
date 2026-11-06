@@ -27,7 +27,7 @@ import gg.effront.anarcry.tui.PasteableTextBox;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
-import java.util.Map;
+
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -478,8 +478,8 @@ public class ModulesPanel extends Panel {
             cookie2 = cred2;
         }
 
-        ScanConfig cfg = new ScanConfig(0, cookie, cookie2, Set.of(), SuppressionLoader.loadFromCwd(), "",
-                concurrency, exploit);
+        ScanConfig cfg = new ScanConfig(0, cookie, cookie2, Set.of(), SuppressionLoader.loadFromCwd(), "", concurrency,
+                exploit);
         ScanContext ctx = new ScanContext(target, jwt, jwt2, modules, cfg, requestLogCb, new DiscoveredPaths(),
                 new WafState(), credStore);
         scanRunner.run(ctx);

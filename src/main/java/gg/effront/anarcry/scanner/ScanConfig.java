@@ -6,8 +6,7 @@ import java.util.List;
 import java.util.Set;
 
 public record ScanConfig(int delayMs, String sessionCookie, String sessionCookie2, Set<String> inScopeHosts,
-        List<Suppression> suppressions, String redirectRelayUrl, int probeConcurrency,
-        boolean exploitationEnabled) {
+        List<Suppression> suppressions, String redirectRelayUrl, int probeConcurrency, boolean exploitationEnabled) {
 
     public static final int DEFAULT_PROBE_CONCURRENCY = 12;
 

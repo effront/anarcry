@@ -13,7 +13,8 @@ public class CredentialStore {
     private final Duration refreshThreshold;
     private Function<String, RefreshResult> refreshFn;
 
-    public record RefreshResult(String token, String refreshToken, long expiresInSeconds) {}
+    public record RefreshResult(String token, String refreshToken, long expiresInSeconds) {
+    }
 
     public CredentialStore(String token, String refreshToken, long expiresInSeconds, AuthProvider provider,
             Function<String, RefreshResult> refreshFn) {

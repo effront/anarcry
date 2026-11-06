@@ -22,8 +22,8 @@ public class FirebaseHarvester implements Harvester {
     }
 
     @Override
-    public CredentialStore harvest(String targetUrl, String username, String password,
-            Map<String, String> extra) throws AuthException {
+    public CredentialStore harvest(String targetUrl, String username, String password, Map<String, String> extra)
+            throws AuthException {
         FirebaseConfig config;
         String pageSource = extra != null ? extra.get("pageSource") : null;
         if (pageSource != null) {

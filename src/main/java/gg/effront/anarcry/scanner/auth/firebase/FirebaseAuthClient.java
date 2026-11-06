@@ -15,7 +15,8 @@ public final class FirebaseAuthClient {
     private static final Gson GSON = new Gson();
     private static final HttpClient HC = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
-    public record AuthResult(String idToken, String refreshToken, long expiresIn, String localId, String email) {}
+    public record AuthResult(String idToken, String refreshToken, long expiresIn, String localId, String email) {
+    }
 
     private FirebaseAuthClient() {
     }
@@ -50,13 +51,13 @@ public final class FirebaseAuthClient {
         String url = config.secureTokenUrl() + "/token?key=" + config.apiKey();
         String formBody = "grant_type=refresh_token&refresh_token=" + refreshToken;
         try {
-            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(10))
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(10))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .POST(HttpRequest.BodyPublishers.ofString(formBody)).build();
             HttpResponse<String> resp = HC.send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() != 200) {
-                throw new AuthException("Firebase token refresh failed (HTTP " + resp.statusCode() + "): " + resp.body());
+                throw new AuthException(
+                        "Firebase token refresh failed (HTTP " + resp.statusCode() + "): " + resp.body());
             }
             JsonObject json = GSON.fromJson(resp.body(), JsonObject.class);
             return new AuthResult(json.get("id_token").getAsString(), json.get("refresh_token").getAsString(),
@@ -104,8 +105,7 @@ public final class FirebaseAuthClient {
         try {
             HttpResponse<String> resp = sendJson(url, body);
             if (resp.statusCode() != 200) {
-                throw new AuthException(
-                        "Firebase auth failed (HTTP " + resp.statusCode() + "): " + resp.body());
+                throw new AuthException("Firebase auth failed (HTTP " + resp.statusCode() + "): " + resp.body());
             }
             JsonObject json = GSON.fromJson(resp.body(), JsonObject.class);
             return new AuthResult(json.has("idToken") ? json.get("idToken").getAsString() : "",
@@ -135,8 +135,8 @@ public final class FirebaseAuthClient {
 
     private static HttpResponse<String> sendJson(String url, JsonObject body) throws Exception {
         HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(10))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(body))).build();
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(body)))
+                .build();
         return HC.send(req, HttpResponse.BodyHandlers.ofString());
     }
 }

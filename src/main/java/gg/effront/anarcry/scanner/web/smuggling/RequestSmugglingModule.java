@@ -243,7 +243,8 @@ public class RequestSmugglingModule implements Scanner {
     private static final int TETE_CONFIRM_THRESHOLD = 2;
     private static final int TETE_ATTEMPTS = 3;
 
-    private record TeTeResult(String variant, boolean desyncConfirmed) {}
+    private record TeTeResult(String variant, boolean desyncConfirmed) {
+    }
 
     private TeTeResult probeTeTeObfuscation(ScanContext ctx, String host, int port, Consumer<String> log) {
         List<String> variants = List.of("xchunked", "chunked, chunked", "chunked\t");
@@ -272,10 +273,8 @@ public class RequestSmugglingModule implements Scanner {
     private boolean confirmTeTeDesync(ScanContext ctx, String host, int port, String variant) {
         String smuggled = "GET /smuggle-probe HTTP/1.1\r\nHost: " + host + "\r\n\r\n";
         String hexLen = Integer.toHexString(smuggled.length());
-        String probe = "POST / HTTP/1.1\r\n" + "Host: " + host + "\r\n"
-                + "Content-Length: 0\r\n"
-                + "Transfer-Encoding: " + variant + "\r\n" + "\r\n"
-                + hexLen + "\r\n" + smuggled + "0\r\n\r\n";
+        String probe = "POST / HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "Content-Length: 0\r\n"
+                + "Transfer-Encoding: " + variant + "\r\n" + "\r\n" + hexLen + "\r\n" + smuggled + "0\r\n\r\n";
         try (Socket socket = createSocket(ctx, host, port, PROBE_TIMEOUT_MS)) {
             OutputStream out = socket.getOutputStream();
             out.write(probe.getBytes(StandardCharsets.US_ASCII));
@@ -286,17 +285,23 @@ public class RequestSmugglingModule implements Scanner {
             long deadline = System.currentTimeMillis() + PROBE_TIMEOUT_MS;
             while (totalRead < buf.length && System.currentTimeMillis() < deadline) {
                 int remaining = (int) (deadline - System.currentTimeMillis());
-                if (remaining <= 0) break;
+                if (remaining <= 0) {
+                    break;
+                }
                 socket.setSoTimeout(remaining);
                 try {
                     int n = in.read(buf, totalRead, buf.length - totalRead);
-                    if (n <= 0) break;
+                    if (n <= 0) {
+                        break;
+                    }
                     totalRead += n;
                 } catch (java.net.SocketTimeoutException e) {
                     break;
                 }
             }
-            if (totalRead == 0) return false;
+            if (totalRead == 0) {
+                return false;
+            }
             String resp = new String(buf, 0, totalRead, StandardCharsets.US_ASCII);
             int count = 0;
             int idx = 0;
