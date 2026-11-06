@@ -13,7 +13,41 @@
       "Bash(git log*)",
       "Bash(git diff*)",
       "Bash(git branch*)",
-      "Bash(git show*)"
+      "Bash(git show*)",
+      "Bash(semgrep *)",
+      "Bash(chmod *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(gh pr create*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'cd /home/bullet/PROJETOS/AnarCry && echo \"[hook] Running pre-PR lint gate...\" && ./gradlew spotlessCheck checkstyleMain spotbugsMain --no-daemon -q 2>&1 && { command -v semgrep &>/dev/null && ERRORS=$(semgrep scan --config=auto --json --exclude build/ --exclude .gradle/ --exclude gradle/ --exclude src/test/ --exclude knowledge-base/ --exclude docs/ --exclude \".env*\" 2>/dev/null | jq \"[.results[] | select(.extra.severity == \\\"ERROR\\\")] | length\") && [ \"$ERRORS\" -gt 0 ] && echo \"FAIL: Semgrep found $ERRORS ERROR issues\" && exit 1 || true; } && echo \"[hook] All checks passed.\"'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/bullet/PROJETOS/AnarCry/hooks/hooks/pre-tool-use.js"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/bullet/PROJETOS/AnarCry/hooks/hooks/session-start.js"
+          }
+        ]
+      }
     ]
   }
 }

@@ -15,6 +15,10 @@ docs/archive/
 .vscode/
 .DS_Store
 
+# Environment (secrets, API keys, tokens)
+.env*
+!.env.example
+
 # Misc
 anarchrypto/
 public/
