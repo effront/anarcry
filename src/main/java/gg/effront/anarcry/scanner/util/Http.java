@@ -37,6 +37,10 @@ public class Http {
         if (!ctx.config().sessionCookie().isBlank()) {
             cookies = ctx.config().sessionCookie();
         }
+        if (creds != null && creds.isCookieBased() && creds.sessionCookieName() != null) {
+            String credCookie = creds.sessionCookieName() + "=" + creds.activeToken();
+            cookies = cookies.isEmpty() ? credCookie : cookies + "; " + credCookie;
+        }
         String challengeCookies = ctx.wafState().challengeCookies();
         if (!challengeCookies.isEmpty()) {
             cookies = cookies.isEmpty() ? challengeCookies : cookies + "; " + challengeCookies;
@@ -60,6 +64,11 @@ public class Http {
         cb.checkAndThrow();
 
         HttpResponse<T> resp = dispatch(ctx, hc, req, handler);
+
+        if (creds != null && creds.isCookieBased() && creds.sessionCookieName() != null) {
+            rotateCookie(resp, creds);
+        }
+
         if (ctx.config().delayMs() > 0) {
             try {
                 Thread.sleep(ctx.config().delayMs());
@@ -278,6 +287,20 @@ public class Http {
         HttpRequest.Builder rb = HttpRequest.newBuilder(original, (n, v) -> true);
         rb.header("Authorization", "Bearer " + freshToken);
         return rb.build();
+    }
+
+    private static <T> void rotateCookie(HttpResponse<T> resp, CredentialStore creds) {
+        String cookieName = creds.sessionCookieName();
+        String prefix = cookieName + "=";
+        resp.headers().allValues("set-cookie").stream().filter(c -> c.startsWith(prefix)).findFirst()
+                .ifPresent(cookie -> {
+                    String value = cookie.substring(prefix.length());
+                    int semi = value.indexOf(';');
+                    if (semi > 0) {
+                        value = value.substring(0, semi);
+                    }
+                    creds.updateToken(value);
+                });
     }
 
     private static String escapeJsonStr(String s) {

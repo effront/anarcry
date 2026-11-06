@@ -28,7 +28,7 @@ class CredentialHarvesterTest {
             <body>
             <script>
             const firebaseConfig = {
-                apiKey: "AIzaSyFAKE_TEST_KEY_NOT_REAL_000000",
+                apiKey: "AIzaSyFAKE_TEST_KEY_NOT_REAL_0000000000",
                 authDomain: "test-project.firebaseapp.com",
                 projectId: "test-project",
                 storageBucket: "test-project.appspot.com",
@@ -50,7 +50,7 @@ class CredentialHarvesterTest {
     void firebaseConfigExtractor_extractsFromHtml() {
         FirebaseConfig config = FirebaseConfigExtractor.extract(FIREBASE_PAGE);
         assertNotNull(config);
-        assertEquals("AIzaSyFAKE_TEST_KEY_NOT_REAL_000000", config.apiKey());
+        assertEquals("AIzaSyFAKE_TEST_KEY_NOT_REAL_0000000000", config.apiKey());
         assertEquals("test-project.firebaseapp.com", config.authDomain());
         assertEquals("test-project", config.projectId());
         assertEquals("test-project.appspot.com", config.storageBucket());
@@ -77,7 +77,7 @@ class CredentialHarvesterTest {
         ProviderDetector.DiscoveryResult result = ProviderDetector.detectFromPage("https://example.com", FIREBASE_PAGE);
         assertNotNull(result);
         assertEquals(AuthProvider.FIREBASE, result.provider());
-        assertEquals("AIzaSyFAKE_TEST_KEY_NOT_REAL_000000", result.apiKey());
+        assertEquals("AIzaSyFAKE_TEST_KEY_NOT_REAL_0000000000", result.apiKey());
         assertTrue(result.authEndpoint().contains("signInWithPassword"));
         assertTrue(result.extra().containsKey("projectId"));
     }
@@ -174,8 +174,8 @@ class CredentialHarvesterTest {
         int authPort = authServer.getAddress().getPort();
 
         HttpServer pageServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        String pageWithLocalApi = FIREBASE_PAGE.replace("AIzaSyFAKE_TEST_KEY_NOT_REAL_000000",
-                "AIzaSyFAKE_TEST_KEY_NOT_REAL_000000");
+        String pageWithLocalApi = FIREBASE_PAGE.replace("AIzaSyFAKE_TEST_KEY_NOT_REAL_0000000000",
+                "AIzaSyFAKE_TEST_KEY_NOT_REAL_0000000000");
         pageServer.createContext("/", exchange -> {
             byte[] body = pageWithLocalApi.getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, body.length);
@@ -185,7 +185,7 @@ class CredentialHarvesterTest {
         pageServer.start();
 
         try {
-            FirebaseConfig config = new FirebaseConfig("AIzaSyFAKE_TEST_KEY_NOT_REAL_000000",
+            FirebaseConfig config = new FirebaseConfig("AIzaSyFAKE_TEST_KEY_NOT_REAL_0000000000",
                     "test-project.firebaseapp.com", "test-project", "test-project.appspot.com", "573040944768",
                     "1:573040944768:web:464ea7a10ffd0fdbdb2865", "http://127.0.0.1:" + authPort + "/v1",
                     "http://127.0.0.1:" + authPort + "/v1");

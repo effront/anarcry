@@ -2,6 +2,7 @@ package gg.effront.anarcry.scanner.auth;
 
 import gg.effront.anarcry.scanner.auth.firebase.FirebaseConfig;
 import gg.effront.anarcry.scanner.auth.firebase.FirebaseConfigExtractor;
+import gg.effront.anarcry.scanner.auth.harvester.FormParser;
 import gg.effront.anarcry.scanner.auth.harvester.HarvesterRegistry;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
@@ -89,6 +90,18 @@ public final class ProviderDetector {
         DiscoveryResult oidcResult = probeOidc(targetUrl);
         if (oidcResult != null) {
             return oidcResult;
+        }
+
+        if (FormParser.looksLikeLoginPage(pageSource)) {
+            FormParser.LoginForm form = FormParser.findLoginForm(pageSource, targetUrl);
+            if (form != null) {
+                Map<String, String> formExtra = new HashMap<>();
+                if (form.usernameField() != null) {
+                    formExtra.put("usernameField", form.usernameField());
+                }
+                formExtra.put("passwordField", form.passwordField());
+                return new DiscoveryResult(AuthProvider.FORM, null, null, form.action(), null, formExtra);
+            }
         }
 
         return null;
