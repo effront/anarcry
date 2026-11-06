@@ -4,11 +4,13 @@
 # use weak TLS for version probing, include crypto keys in JWT attack
 # probes, and execute SSH via ProcessBuilder for infra detection.
 # These patterns are core scanner functionality, not vulnerabilities.
-engines:
-  semgrep:
-    exclude_paths:
-      - "src/main/java/gg/effront/anarcry/scanner/**"
-      - "src/main/java/gg/effront/anarcry/EnvLoader.java"
-      - "SECURITY.md"
+
+# Paths excluded from ALL Codacy analysis engines.
+# Scanner/exploit code triggers SAST security rules by design -
+# the tool IS an offensive security scanner.
 exclude_paths:
   - "docs/**"
+  - "src/main/java/gg/effront/anarcry/scanner/**"
+  - "src/main/java/gg/effront/anarcry/exploit/**"
+  - "src/main/java/gg/effront/anarcry/EnvLoader.java"
+  - "SECURITY.md"
