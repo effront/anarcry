@@ -25,13 +25,13 @@ if (args.length < 2 || dashDash === -1) {
 
 const filterType = args[0];
 const cmdArgs = args.slice(dashDash + 1);
-let fullCommand = cmdArgs.join(' ');
+const fullCommand = cmdArgs.join(' ');
 
 if (filterType === 'semgrep') {
-  if (!/(--json\b|-o\s+json)/.test(fullCommand)) fullCommand += ' --json';
+  if (!cmdArgs.includes('--json')) cmdArgs.push('--json');
 }
 
-const result = spawnSync('sh', ['-c', fullCommand], {
+const result = spawnSync(cmdArgs[0], cmdArgs.slice(1), {
   encoding: 'utf8',
   stdio: ['inherit', 'pipe', 'pipe'],
   env: { ...process.env },
@@ -87,8 +87,8 @@ function render(raw, outcome) {
 }
 
 function applyFilter(raw, outcome) {
+  if (!Object.hasOwn(FILTERS, filterType)) return raw;
   const filter = FILTERS[filterType];
-  if (!filter) return raw;
 
   try {
     const compressed = filter.compress(raw, filterType, outcome);

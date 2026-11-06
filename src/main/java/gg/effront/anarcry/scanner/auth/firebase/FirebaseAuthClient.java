@@ -5,10 +5,13 @@ import com.google.gson.JsonObject;
 import gg.effront.anarcry.scanner.auth.AuthException;
 
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.UUID;
 
 public final class FirebaseAuthClient {
 
@@ -49,7 +52,8 @@ public final class FirebaseAuthClient {
 
     public static AuthResult refreshToken(FirebaseConfig config, String refreshToken) throws AuthException {
         String url = config.secureTokenUrl() + "/token?key=" + config.apiKey();
-        String formBody = "grant_type=refresh_token&refresh_token=" + refreshToken;
+        String formBody = "grant_type=refresh_token&refresh_token="
+                + URLEncoder.encode(refreshToken, StandardCharsets.UTF_8);
         try {
             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(10))
                     .header("Content-Type", "application/x-www-form-urlencoded")
@@ -86,12 +90,14 @@ public final class FirebaseAuthClient {
     }
 
     public static boolean isEmailPasswordEnabled(FirebaseConfig config) {
+        String probeId = UUID.randomUUID().toString().replace("-", "");
         try {
-            AuthResult result = signUp(config, "anarcry-probe-" + System.currentTimeMillis() + "@test.invalid",
-                    "AnarCryPr0be!" + System.currentTimeMillis());
+            AuthResult result = signUp(config, "anarcry-probe-" + probeId + "@test.invalid",
+                    UUID.randomUUID().toString());
             try {
                 deleteAccount(config, result.idToken());
-            } catch (AuthException ignored) {
+            } catch (AuthException e) {
+                System.err.println("[FirebaseAuthClient] Probe cleanup failed: " + e.getMessage());
             }
             return true;
         } catch (AuthException e) {

@@ -20,7 +20,8 @@ function handle(input) {
     payload = JSON.parse(input) || {};
   } catch {}
 
-  const cwd = payload.cwd || process.cwd();
+  const path = require('path');
+  const cwd = path.resolve(payload.cwd || process.cwd());
   if (!isAnarcryProject(cwd)) process.exit(0);
 
   const domain = detect(cwd);

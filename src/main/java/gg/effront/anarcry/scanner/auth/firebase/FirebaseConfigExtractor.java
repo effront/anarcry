@@ -1,5 +1,7 @@
 package gg.effront.anarcry.scanner.auth.firebase;
 
+import gg.effront.anarcry.scanner.util.HttpClientFactory;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -35,8 +37,7 @@ public final class FirebaseConfigExtractor {
 
     public static FirebaseConfig extractFromUrl(String targetUrl) {
         try {
-            HttpClient hc = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL)
-                    .connectTimeout(Duration.ofSeconds(10)).build();
+            HttpClient hc = HttpClientFactory.http2();
             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(targetUrl)).timeout(Duration.ofSeconds(15)).GET()
                     .build();
             HttpResponse<String> resp = hc.send(req, HttpResponse.BodyHandlers.ofString());
