@@ -23,7 +23,8 @@ public class Http {
         CredentialStore creds = ctx.credentialStore();
         if (creds != null && creds.isExpiringSoon()) {
             try {
-                creds.refresh();
+                String freshToken = creds.refresh();
+                req = rebuildWithToken(req, freshToken);
             } catch (Exception e) {
                 Consumer<String> log = ctx.wafState().runtimeLog();
                 if (log != null) {
@@ -264,6 +265,19 @@ public class Http {
             }
         });
         return builder.build();
+    }
+
+    private static HttpRequest rebuildWithToken(HttpRequest original, String freshToken) {
+        if (freshToken == null || freshToken.isBlank()) {
+            return original;
+        }
+        boolean hasAuth = original.headers().firstValue("Authorization").isPresent();
+        if (!hasAuth) {
+            return original;
+        }
+        HttpRequest.Builder rb = HttpRequest.newBuilder(original, (n, v) -> true);
+        rb.header("Authorization", "Bearer " + freshToken);
+        return rb.build();
     }
 
     private static String escapeJsonStr(String s) {

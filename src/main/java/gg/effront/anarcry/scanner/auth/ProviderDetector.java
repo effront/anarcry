@@ -2,6 +2,7 @@ package gg.effront.anarcry.scanner.auth;
 
 import gg.effront.anarcry.scanner.auth.firebase.FirebaseConfig;
 import gg.effront.anarcry.scanner.auth.firebase.FirebaseConfigExtractor;
+import gg.effront.anarcry.scanner.auth.harvester.HarvesterRegistry;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
 import java.net.URI;
@@ -31,7 +32,7 @@ public final class ProviderDetector {
             HttpResponse<String> resp = hc.send(req, HttpResponse.BodyHandlers.ofString());
             String body = resp.body() != null ? resp.body() : "";
             DiscoveryResult result = detectFromPage(targetUrl, body);
-            if (result != null) {
+            if (result != null && HarvesterRegistry.isSupported(result.provider())) {
                 return result;
             }
             FirebaseConfig fbConfig = FirebaseConfigExtractor.extractFromUrl(targetUrl);
