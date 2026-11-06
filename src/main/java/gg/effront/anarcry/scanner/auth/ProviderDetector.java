@@ -11,6 +11,8 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class ProviderDetector {
 
@@ -46,7 +48,7 @@ public final class ProviderDetector {
         String lower = pageSource.toLowerCase();
 
         if (lower.contains("firebaseapp.com") || lower.contains("/__/auth/")
-                || lower.contains("firebase") && lower.contains("apikey")) {
+                || (lower.contains("firebase") && lower.contains("apikey"))) {
             FirebaseConfig config = FirebaseConfigExtractor.extract(pageSource);
             if (config != null) {
                 return buildFirebaseResult(config);
@@ -124,7 +126,7 @@ public final class ProviderDetector {
     }
 
     private static String extractPattern(String text, String regex) {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile(regex).matcher(text);
+        Matcher m = Pattern.compile(regex).matcher(text);
         return m.find() ? m.group(1) : null;
     }
 }
