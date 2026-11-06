@@ -2,6 +2,8 @@ package gg.effront.anarcry.report;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import gg.effront.anarcry.exploit.ExploitStatus;
+import gg.effront.anarcry.exploit.ValidatedFinding;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.KnowledgeEntry;
@@ -507,6 +509,83 @@ public class ReportEngine {
             default ->
                 throw new IllegalArgumentException("Unknown platform: " + platform + ". Use 'h1' or 'bugcrowd'.");
         };
+    }
+
+    // -------------------------------------------------------------------------
+    // Validated finding export (post-exploitation)
+    // -------------------------------------------------------------------------
+
+    public String exportValidated(List<ValidatedFinding> validated, String targetUrl) throws IOException {
+        return exportValidated(validated, targetUrl, List.of(), List.of());
+    }
+
+    public String exportValidated(List<ValidatedFinding> validated, String targetUrl, List<String> testedModules,
+            List<String> testedClean) throws IOException {
+        List<Finding> origFindings = validated.stream().map(ValidatedFinding::original).toList();
+        String basePath = export(origFindings, targetUrl, testedModules, testedClean);
+
+        String timestamp = LocalDateTime.now().format(FMT);
+        String base = "anarcry-exploit-" + timestamp;
+        Files.createDirectories(REPORTS_DIR);
+        Path mdPath = REPORTS_DIR.resolve(base + ".md");
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("# AnarCry Exploitation Report\n\n");
+        sb.append("**Target:** ").append(targetUrl).append("  \n");
+        sb.append("**Date:** ").append(timestamp).append("  \n");
+        sb.append("**Findings validated:** ").append(validated.size()).append("  \n");
+
+        long confirmed = validated.stream().filter(vf -> vf.result().status() == ExploitStatus.CONFIRMED).count();
+        long fp = validated.stream().filter(vf -> vf.result().status() == ExploitStatus.FALSE_POSITIVE).count();
+        long manual = validated.stream().filter(vf -> vf.result().status() == ExploitStatus.NEEDS_MANUAL).count();
+        long errors = validated.stream().filter(vf -> vf.result().status() == ExploitStatus.ERROR).count();
+
+        sb.append("**Confirmed:** ").append(confirmed).append("  \n");
+        sb.append("**False positives:** ").append(fp).append("  \n");
+        sb.append("**Needs manual:** ").append(manual).append("  \n");
+        sb.append("**Errors:** ").append(errors).append("\n\n");
+
+        sb.append("## Validated Findings\n\n");
+        sb.append("| Status | Confidence | Severity | Module | Title | PoC |\n");
+        sb.append("|--------|------------|----------|--------|-------|-----|\n");
+        for (ValidatedFinding vf : validated) {
+            Finding f = vf.original();
+            sb.append("| ").append(vf.result().status())
+                    .append(" | ").append(String.format("%.0f%%", vf.result().confidence() * 100))
+                    .append(" | ").append(vf.adjustedSeverity())
+                    .append(" | ").append(escape(f.module()))
+                    .append(" | ").append(escape(f.title()))
+                    .append(" | ").append(escape(truncate(vf.result().poc(), 80)))
+                    .append(" |\n");
+        }
+        sb.append("\n");
+
+        List<ValidatedFinding> confirmedList = validated.stream()
+                .filter(vf -> vf.result().status() == ExploitStatus.CONFIRMED).toList();
+        if (!confirmedList.isEmpty()) {
+            sb.append("## Confirmed Exploits (PoC)\n\n");
+            for (ValidatedFinding vf : confirmedList) {
+                Finding f = vf.original();
+                sb.append("### ").append(f.module()).append(": ").append(f.title()).append("\n\n");
+                sb.append("**Endpoint:** `").append(f.endpoint()).append("`  \n");
+                sb.append("**Confidence:** ").append(String.format("%.0f%%", vf.result().confidence() * 100))
+                        .append("  \n");
+                sb.append("**Impact:** ").append(vf.result().impact()).append("  \n\n");
+                sb.append("**Evidence:**\n```\n").append(safe(vf.result().evidence())).append("\n```\n\n");
+                sb.append("**PoC:**\n```\n").append(safe(vf.result().poc())).append("\n```\n\n");
+                sb.append("---\n\n");
+            }
+        }
+
+        sb.append("**Base scan report:** ").append(basePath).append("\n");
+
+        Files.writeString(mdPath, sb.toString());
+        return mdPath.toString();
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return "";
+        return s.length() <= max ? s : s.substring(0, max) + "...";
     }
 
     // -------------------------------------------------------------------------

@@ -183,7 +183,8 @@ public class AnarCryGui {
             String target = modulesPanel.getTarget();
             statusBar.setTarget(target);
             controller.startScan(target, modulesPanel.getAuthType(), modulesPanel.getJwt(), modulesPanel.getJwt2(),
-                    modulesPanel.getEnabledModules(), r -> siteMapView.addPath(r.url()));
+                    modulesPanel.getEnabledModules(), r -> siteMapView.addPath(r.url()),
+                    modulesPanel.isExploitationEnabled());
         };
 
         modulesPanel.setOnStart(startScanAction);

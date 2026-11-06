@@ -101,6 +101,20 @@ public class OAuthModule implements Scanner {
                     if (status == 404) {
                         continue;
                     }
+                    if (status >= 300 && status < 400) {
+                        try {
+                            HttpRequest followReq = HttpRequest.newBuilder().uri(URI.create(testUrl))
+                                    .timeout(Duration.ofSeconds(5)).GET().build();
+                            HttpResponse<Void> resolved = Http.send(ctx, hcFollow, followReq,
+                                    HttpResponse.BodyHandlers.discarding(), id());
+                            if (resolved.statusCode() == 404) {
+                                continue;
+                            }
+                        } catch (CircuitBreakerException cbe) {
+                            throw cbe;
+                        } catch (Exception ignored) {
+                        }
+                    }
                     if (ctx.wafState().isWafDetected() && (status == 403 || status == 406 || status == 429)) {
                         log.accept("[~] OAuth: " + path + " retornou HTTP " + status
                                 + " de WAF -- ignorando (falso positivo)");

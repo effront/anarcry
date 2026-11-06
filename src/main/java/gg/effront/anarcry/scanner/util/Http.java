@@ -2,6 +2,7 @@ package gg.effront.anarcry.scanner.util;
 
 import gg.effront.anarcry.model.RequestRecord;
 import gg.effront.anarcry.scanner.ScanContext;
+import gg.effront.anarcry.scanner.auth.CredentialStore;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -19,6 +20,18 @@ public class Http {
     @SuppressWarnings("unchecked")
     public static <T> HttpResponse<T> send(ScanContext ctx, HttpClient hc, HttpRequest req,
             HttpResponse.BodyHandler<T> handler, String moduleId) throws Exception {
+        CredentialStore creds = ctx.credentialStore();
+        if (creds != null && creds.isExpiringSoon()) {
+            try {
+                creds.refresh();
+            } catch (Exception e) {
+                Consumer<String> log = ctx.wafState().runtimeLog();
+                if (log != null) {
+                    log.accept("[!] Token refresh failed: " + e.getMessage());
+                }
+            }
+        }
+
         String cookies = "";
         if (!ctx.config().sessionCookie().isBlank()) {
             cookies = ctx.config().sessionCookie();

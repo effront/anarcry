@@ -93,21 +93,41 @@ public class RequestSmugglingModule implements Scanner {
         }
 
         // ── Phase 3: TE.TE obfuscation ──
-        String verdict = probeTeTeObfuscation(ctx, host, port, log);
-        if (verdict != null) {
-            log.accept("[!!] ReqSmuggling: HIGH -- TE.TE obfuscation aceito pelo servidor: " + verdict);
-            findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(),
-                    "HTTP Request Smuggling -- TE.TE obfuscation (" + verdict + ")", Severity.HIGH,
-                    "Probe com Transfer-Encoding obfuscado '" + verdict + "' causou timeout de " + PROBE_TIMEOUT_MS
-                            + "ms -- servidor processou TE obfuscado como chunked e ficou "
-                            + "aguardando chunk terminal (baseline respondeu em < " + BASELINE_TIMEOUT_MS + "ms)",
-                    "Frontend ou backend aceitou Transfer-Encoding com valor não-padrão -- "
-                            + "atacante pode usar a ambiguidade para smuggling de requests.",
-                    "printf 'POST / HTTP/1.1\\r\\nHost: " + host + "\\r\\n"
-                            + "Content-Length: 8\\r\\nTransfer-Encoding: " + verdict + "\\r\\n\\r\\n"
-                            + "5\\r\\nHELLO' | openssl s_client -connect " + host + ":" + port + " -quiet",
-                    "Rejeitar Transfer-Encoding com valores não-padrão (xchunked, identity com TE duplo etc.)", _cweId,
-                    _cweTitle, _cveVector, _score));
+        TeTeResult teTeResult = probeTeTeObfuscation(ctx, host, port, log);
+        if (teTeResult != null) {
+            String variant = teTeResult.variant();
+            if (teTeResult.desyncConfirmed()) {
+                log.accept("[!!] ReqSmuggling: HIGH -- TE.TE desync confirmado com obfuscation: " + variant);
+                findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(),
+                        "HTTP Request Smuggling -- TE.TE desync (" + variant + ")", Severity.HIGH,
+                        "Probe com Transfer-Encoding obfuscado '" + variant + "' confirmou desync: "
+                                + "request smuggled foi processado como request separado "
+                                + "(duas respostas HTTP na mesma conexao)",
+                        "Frontend ou backend aceitou Transfer-Encoding com valor nao-padrao "
+                                + "e interpretou o body de forma divergente -- desync confirmado com "
+                                + "request smuggling real.",
+                        "printf 'POST / HTTP/1.1\\r\\nHost: " + host + "\\r\\n"
+                                + "Content-Length: 8\\r\\nTransfer-Encoding: " + variant + "\\r\\n\\r\\n"
+                                + "5\\r\\nHELLO' | openssl s_client -connect " + host + ":" + port + " -quiet",
+                        "Rejeitar Transfer-Encoding com valores nao-padrao (xchunked, identity com TE duplo etc.)",
+                        _cweId, _cweTitle, _cveVector, _score));
+            } else {
+                log.accept("[~] ReqSmuggling: LOW -- TE parsing tolerance detectada (sem desync): " + variant);
+                findings.add(Finding.of("ReqSmuggling", ctx.targetUrl(),
+                        "TE parsing tolerance -- " + variant + " aceito (sem desync)", Severity.LOW,
+                        "Servidor aceitou Transfer-Encoding obfuscado '" + variant + "' como chunked valido "
+                                + "(timeout de " + PROBE_TIMEOUT_MS + "ms vs baseline < " + BASELINE_TIMEOUT_MS
+                                + "ms), mas teste de desync nao confirmou request smuggling -- "
+                                + "proxy e backend concordam na interpretacao",
+                        "Servidor tolera valores nao-padrao de Transfer-Encoding. "
+                                + "Sem desync confirmado, risco limitado a violacao de RFC 7230; "
+                                + "pode se tornar exploravel se a arquitetura de proxy mudar.",
+                        "printf 'POST / HTTP/1.1\\r\\nHost: " + host + "\\r\\n"
+                                + "Content-Length: 8\\r\\nTransfer-Encoding: " + variant + "\\r\\n\\r\\n"
+                                + "5\\r\\nHELLO' | openssl s_client -connect " + host + ":" + port + " -quiet",
+                        "Rejeitar Transfer-Encoding com valores nao-padrao (xchunked, identity com TE duplo etc.)",
+                        _cweId, _cweTitle, _cveVector, _score));
+            }
         }
 
         // ── Phase 4: Duplicate Content-Length ──
@@ -223,13 +243,11 @@ public class RequestSmugglingModule implements Scanner {
     private static final int TETE_CONFIRM_THRESHOLD = 2;
     private static final int TETE_ATTEMPTS = 3;
 
-    private String probeTeTeObfuscation(ScanContext ctx, String host, int port, Consumer<String> log) {
+    private record TeTeResult(String variant, boolean desyncConfirmed) {}
+
+    private TeTeResult probeTeTeObfuscation(ScanContext ctx, String host, int port, Consumer<String> log) {
         List<String> variants = List.of("xchunked", "chunked, chunked", "chunked\t");
         for (String variant : variants) {
-            // Body is "5\r\nHELLO" = 8 bytes. CL matches the raw body length so servers
-            // that ignore the obfuscated TE and use CL get a complete request and respond.
-            // Servers that treat the obfuscated TE as chunked see an incomplete chunk
-            // (missing terminating 0\r\n\r\n) and hang.
             String probe = "POST / HTTP/1.1\r\n" + "Host: " + host + "\r\n"
                     + "Content-Type: application/x-www-form-urlencoded\r\n" + "Content-Length: 8\r\n"
                     + "Transfer-Encoding: " + variant + "\r\n" + "\r\n" + "5\r\nHELLO";
@@ -244,10 +262,52 @@ public class RequestSmugglingModule implements Scanner {
                 }
             }
             if (timeouts >= TETE_CONFIRM_THRESHOLD) {
-                return variant;
+                boolean desync = confirmTeTeDesync(ctx, host, port, variant);
+                return new TeTeResult(variant, desync);
             }
         }
         return null;
+    }
+
+    private boolean confirmTeTeDesync(ScanContext ctx, String host, int port, String variant) {
+        String smuggled = "GET /smuggle-probe HTTP/1.1\r\nHost: " + host + "\r\n\r\n";
+        String hexLen = Integer.toHexString(smuggled.length());
+        String probe = "POST / HTTP/1.1\r\n" + "Host: " + host + "\r\n"
+                + "Content-Length: 0\r\n"
+                + "Transfer-Encoding: " + variant + "\r\n" + "\r\n"
+                + hexLen + "\r\n" + smuggled + "0\r\n\r\n";
+        try (Socket socket = createSocket(ctx, host, port, PROBE_TIMEOUT_MS)) {
+            OutputStream out = socket.getOutputStream();
+            out.write(probe.getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+            InputStream in = socket.getInputStream();
+            byte[] buf = new byte[8192];
+            int totalRead = 0;
+            long deadline = System.currentTimeMillis() + PROBE_TIMEOUT_MS;
+            while (totalRead < buf.length && System.currentTimeMillis() < deadline) {
+                int remaining = (int) (deadline - System.currentTimeMillis());
+                if (remaining <= 0) break;
+                socket.setSoTimeout(remaining);
+                try {
+                    int n = in.read(buf, totalRead, buf.length - totalRead);
+                    if (n <= 0) break;
+                    totalRead += n;
+                } catch (java.net.SocketTimeoutException e) {
+                    break;
+                }
+            }
+            if (totalRead == 0) return false;
+            String resp = new String(buf, 0, totalRead, StandardCharsets.US_ASCII);
+            int count = 0;
+            int idx = 0;
+            while ((idx = resp.indexOf("HTTP/", idx)) != -1) {
+                count++;
+                idx += 5;
+            }
+            return count >= 2;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private String rawSend(ScanContext ctx, String host, int port, String request, int timeoutMs) throws Exception {

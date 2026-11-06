@@ -9,8 +9,14 @@ import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.ScanEvent;
 import gg.effront.anarcry.scanner.ScanRunner;
 import gg.effront.anarcry.scanner.SuppressionLoader;
+import gg.effront.anarcry.scanner.auth.AuthException;
+import gg.effront.anarcry.scanner.auth.CredentialStore;
+import gg.effront.anarcry.scanner.auth.ProviderDetector;
+import gg.effront.anarcry.scanner.auth.harvester.Harvester;
+import gg.effront.anarcry.scanner.auth.harvester.HarvesterRegistry;
 import gg.effront.anarcry.scanner.util.WafState;
 
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -85,6 +91,11 @@ public class GuiController {
      */
     public void startScan(String target, AuthType authType, String cred1, String cred2, Set<String> modules,
             Consumer<RequestRecord> requestLogCb) {
+        startScan(target, authType, cred1, cred2, modules, requestLogCb, false);
+    }
+
+    public void startScan(String target, AuthType authType, String cred1, String cred2, Set<String> modules,
+            Consumer<RequestRecord> requestLogCb, boolean exploitationEnabled) {
 
         if (target == null || target.isBlank() || "https://".equals(target)) {
             logCb.accept("[!] Target nao informado");
@@ -96,17 +107,54 @@ public class GuiController {
             return;
         }
 
-        String jwt = authType.usesBearer() ? (cred1 != null ? cred1 : "") : "";
-        String jwt2 = authType.usesBearer() ? (cred2 != null ? cred2 : "") : "";
-        String cookie = authType.usesCookie() ? (cred1 != null ? cred1 : "") : "";
-        String cookie2 = authType.usesCookie() ? (cred2 != null ? cred2 : "") : "";
+        CredentialStore credStore = null;
+        String jwt = "";
+        String jwt2 = "";
+        String cookie = "";
+        String cookie2 = "";
+
+        if (authType == AuthType.AUTO) {
+            String username = cred1 != null ? cred1 : "";
+            String password = cred2 != null ? cred2 : "";
+            if (username.isBlank()) {
+                logCb.accept("[!] AUTO requer email ou refresh token");
+                return;
+            }
+            logCb.accept("[*] Detectando provider em " + target + " ...");
+            ProviderDetector.DiscoveryResult discovery = ProviderDetector.detect(target);
+            if (discovery == null) {
+                logCb.accept("[!] Nenhum provider detectado em " + target);
+                return;
+            }
+            logCb.accept("[+] Provider detectado: " + discovery.provider());
+            Optional<Harvester> harvester = HarvesterRegistry.forProvider(discovery.provider());
+            if (harvester.isEmpty()) {
+                logCb.accept("[!] Sem harvester para " + discovery.provider());
+                return;
+            }
+            try {
+                logCb.accept("[*] Harvesting credentials via " + discovery.provider() + " ...");
+                credStore = harvester.get().harvest(target, username, password, discovery.extra());
+                logCb.accept("[+] Token obtido (expira em " + credStore.remainingSeconds() + "s)");
+            } catch (AuthException e) {
+                logCb.accept("[!] Harvest falhou: " + e.getMessage());
+                return;
+            }
+        } else if (authType.usesBearer()) {
+            jwt = cred1 != null ? cred1 : "";
+            jwt2 = cred2 != null ? cred2 : "";
+        } else if (authType.usesCookie()) {
+            cookie = cred1 != null ? cred1 : "";
+            cookie2 = cred2 != null ? cred2 : "";
+        }
+
         if (!sessionCookie.isEmpty()) {
             cookie = sessionCookie;
         }
         ScanConfig cfg = new ScanConfig(0, cookie, cookie2, scopeHosts, SuppressionLoader.loadFromCwd(), "",
-                ScanConfig.DEFAULT_PROBE_CONCURRENCY);
+                ScanConfig.DEFAULT_PROBE_CONCURRENCY, exploitationEnabled);
         ScanContext ctx = new ScanContext(target, jwt, jwt2, modules, cfg, requestLogCb, new DiscoveredPaths(),
-                new WafState());
+                new WafState(), credStore);
         lastScanContext = ctx;
         scanRunner.run(ctx);
     }
