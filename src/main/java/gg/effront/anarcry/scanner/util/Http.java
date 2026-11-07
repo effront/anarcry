@@ -37,6 +37,10 @@ public class Http {
         if (!ctx.config().sessionCookie().isBlank()) {
             cookies = ctx.config().sessionCookie();
         }
+        if (creds != null && creds.isCookieBased() && creds.sessionCookieName() != null) {
+            String credCookie = creds.sessionCookieName() + "=" + creds.activeToken();
+            cookies = cookies.isEmpty() ? credCookie : cookies + "; " + credCookie;
+        }
         String challengeCookies = ctx.wafState().challengeCookies();
         if (!challengeCookies.isEmpty()) {
             cookies = cookies.isEmpty() ? challengeCookies : cookies + "; " + challengeCookies;
@@ -60,6 +64,11 @@ public class Http {
         cb.checkAndThrow();
 
         HttpResponse<T> resp = dispatch(ctx, hc, req, handler);
+
+        if (creds != null && creds.isCookieBased() && creds.sessionCookieName() != null) {
+            rotateCookie(resp, creds);
+        }
+
         if (ctx.config().delayMs() > 0) {
             try {
                 Thread.sleep(ctx.config().delayMs());
@@ -278,6 +287,45 @@ public class Http {
         HttpRequest.Builder rb = HttpRequest.newBuilder(original, (n, v) -> true);
         rb.header("Authorization", "Bearer " + freshToken);
         return rb.build();
+    }
+
+    private static <T> void rotateCookie(HttpResponse<T> resp, CredentialStore creds) {
+        String cookieName = creds.sessionCookieName();
+        String prefix = cookieName + "=";
+        resp.headers().allValues("set-cookie").stream().filter(c -> c.startsWith(prefix)).findFirst()
+                .ifPresent(cookie -> {
+                    String value = cookie.substring(prefix.length());
+                    int semi = value.indexOf(';');
+                    String attrs = semi > 0 ? cookie.substring(semi) : "";
+                    if (semi > 0) {
+                        value = value.substring(0, semi);
+                    }
+                    long expiry = parseMaxAge(attrs);
+                    creds.updateToken(value, expiry);
+                });
+    }
+
+    private static long parseMaxAge(String cookieAttrs) {
+        String lower = cookieAttrs.toLowerCase();
+        int idx = lower.indexOf("max-age=");
+        if (idx >= 0) {
+            int start = idx + 8;
+            int end = lower.indexOf(';', start);
+            String val = (end > 0 ? lower.substring(start, end) : lower.substring(start)).trim();
+            try {
+                long seconds = Long.parseLong(val);
+                if (seconds > 0) {
+                    return seconds;
+                }
+            } catch (NumberFormatException nfe) {
+                // non-numeric max-age, fall through to default
+            }
+        }
+        return 3600;
+    }
+
+    public static HttpResponse<String> sendSimple(HttpClient hc, HttpRequest req) throws Exception {
+        return hc.send(req, HttpResponse.BodyHandlers.ofString());
     }
 
     private static String escapeJsonStr(String s) {

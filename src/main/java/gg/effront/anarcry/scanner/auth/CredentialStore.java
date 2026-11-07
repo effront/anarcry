@@ -10,6 +10,7 @@ public class CredentialStore {
     private volatile String refreshToken;
     private volatile Instant expiresAt;
     private volatile AuthProvider provider;
+    private volatile String sessionCookieName;
     private final Duration refreshThreshold;
     private Function<String, RefreshResult> refreshFn;
 
@@ -24,6 +25,12 @@ public class CredentialStore {
         this.provider = provider;
         this.refreshThreshold = Duration.ofSeconds(60);
         this.refreshFn = refreshFn;
+    }
+
+    public CredentialStore(String token, String refreshToken, long expiresInSeconds, AuthProvider provider,
+            String sessionCookieName, Function<String, RefreshResult> refreshFn) {
+        this(token, refreshToken, expiresInSeconds, provider, refreshFn);
+        this.sessionCookieName = sessionCookieName;
     }
 
     public String activeToken() {
@@ -48,6 +55,21 @@ public class CredentialStore {
 
     public boolean isExpired() {
         return expiresAt != null && Instant.now().isAfter(expiresAt);
+    }
+
+    public boolean isCookieBased() {
+        return provider == AuthProvider.COOKIE || provider == AuthProvider.FORM;
+    }
+
+    public String sessionCookieName() {
+        return sessionCookieName;
+    }
+
+    public void updateToken(String newToken, long expiresInSeconds) {
+        if (newToken != null && !newToken.isBlank()) {
+            this.activeToken = newToken;
+            this.expiresAt = Instant.now().plusSeconds(expiresInSeconds);
+        }
     }
 
     public long remainingSeconds() {

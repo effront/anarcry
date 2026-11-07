@@ -2,6 +2,7 @@ package gg.effront.anarcry.scanner.auth;
 
 import gg.effront.anarcry.scanner.auth.firebase.FirebaseConfig;
 import gg.effront.anarcry.scanner.auth.firebase.FirebaseConfigExtractor;
+import gg.effront.anarcry.scanner.auth.harvester.FormParser;
 import gg.effront.anarcry.scanner.auth.harvester.HarvesterRegistry;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
@@ -16,6 +17,16 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class ProviderDetector {
+
+    private static final Pattern AUTH0_CLIENT_ID = Pattern.compile("clientId\\s*[:=]\\s*[\"']([^\"']+)[\"']");
+    private static final Pattern AUTH0_DOMAIN = Pattern.compile("([\\w-]+\\.auth0\\.com)");
+    private static final Pattern SUPABASE_ANON_KEY = Pattern
+            .compile("(?:supabaseKey|anon[_-]?key)\\s*[:=]\\s*[\"']([A-Za-z0-9._-]+)[\"']");
+    private static final Pattern SUPABASE_URL = Pattern.compile("(https://[\\w-]+\\.supabase\\.co)");
+    private static final Pattern KEYCLOAK_REALM = Pattern.compile("/auth/realms/([^/\"']+)");
+    private static final Pattern KEYCLOAK_BASE = Pattern.compile("(https?://[^/]+)/auth/realms/");
+    private static final Pattern OIDC_TOKEN = Pattern.compile("\"token_endpoint\"\\s*:\\s*\"([^\"]+)\"");
+    private static final Pattern OIDC_AUTH = Pattern.compile("\"authorization_endpoint\"\\s*:\\s*\"([^\"]+)\"");
 
     public record DiscoveryResult(AuthProvider provider, String clientId, String apiKey, String authEndpoint,
             String tokenEndpoint, Map<String, String> extra) {
@@ -40,6 +51,9 @@ public final class ProviderDetector {
                 return buildFirebaseResult(fbConfig);
             }
             return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
         } catch (Exception e) {
             return null;
         }
@@ -57,25 +71,24 @@ public final class ProviderDetector {
         }
 
         if (lower.contains(".auth0.com")) {
-            String clientId = extractPattern(pageSource, "clientId\\s*[:=]\\s*[\"']([^\"']+)[\"']");
-            String domain = extractPattern(pageSource, "([\\w-]+\\.auth0\\.com)");
+            String clientId = matchPattern(AUTH0_CLIENT_ID, pageSource);
+            String domain = matchPattern(AUTH0_DOMAIN, pageSource);
             return new DiscoveryResult(AuthProvider.AUTH0, clientId, null,
                     domain != null ? "https://" + domain + "/authorize" : null,
                     domain != null ? "https://" + domain + "/oauth/token" : null, Map.of());
         }
 
         if (lower.contains(".supabase.co")) {
-            String anonKey = extractPattern(pageSource,
-                    "(?:supabaseKey|anon[_-]?key)\\s*[:=]\\s*[\"']([A-Za-z0-9._-]+)[\"']");
-            String projectUrl = extractPattern(pageSource, "(https://[\\w-]+\\.supabase\\.co)");
+            String anonKey = matchPattern(SUPABASE_ANON_KEY, pageSource);
+            String projectUrl = matchPattern(SUPABASE_URL, pageSource);
             return new DiscoveryResult(AuthProvider.SUPABASE, null, anonKey,
                     projectUrl != null ? projectUrl + "/auth/v1/authorize" : null,
                     projectUrl != null ? projectUrl + "/auth/v1/token?grant_type=password" : null, Map.of());
         }
 
         if (lower.contains("/auth/realms/")) {
-            String realm = extractPattern(pageSource, "/auth/realms/([^/\"']+)");
-            String baseUrl = extractPattern(pageSource, "(https?://[^/]+)/auth/realms/");
+            String realm = matchPattern(KEYCLOAK_REALM, pageSource);
+            String baseUrl = matchPattern(KEYCLOAK_BASE, pageSource);
             return new DiscoveryResult(AuthProvider.KEYCLOAK, null, null,
                     baseUrl != null && realm != null
                             ? baseUrl + "/auth/realms/" + realm + "/protocol/openid-connect/auth"
@@ -91,6 +104,18 @@ public final class ProviderDetector {
             return oidcResult;
         }
 
+        if (FormParser.looksLikeLoginPage(pageSource)) {
+            FormParser.LoginForm form = FormParser.findLoginForm(pageSource, targetUrl);
+            if (form != null) {
+                Map<String, String> formExtra = new HashMap<>();
+                if (form.usernameField() != null) {
+                    formExtra.put("usernameField", form.usernameField());
+                }
+                formExtra.put("passwordField", form.passwordField());
+                return new DiscoveryResult(AuthProvider.FORM, null, null, form.action(), null, formExtra);
+            }
+        }
+
         return null;
     }
 
@@ -104,11 +129,14 @@ public final class ProviderDetector {
                     .build();
             HttpResponse<String> resp = hc.send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() == 200 && resp.body() != null && resp.body().contains("token_endpoint")) {
-                String tokenEndpoint = extractPattern(resp.body(), "\"token_endpoint\"\\s*:\\s*\"([^\"]+)\"");
-                String authEndpoint = extractPattern(resp.body(), "\"authorization_endpoint\"\\s*:\\s*\"([^\"]+)\"");
+                String tokenEndpoint = matchPattern(OIDC_TOKEN, resp.body());
+                String authEndpoint = matchPattern(OIDC_AUTH, resp.body());
                 return new DiscoveryResult(AuthProvider.OIDC, null, null, authEndpoint, tokenEndpoint, Map.of());
             }
-        } catch (Exception ignored) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            // OIDC discovery failed, not an OIDC provider
         }
         return null;
     }
@@ -126,8 +154,8 @@ public final class ProviderDetector {
                 config.secureTokenUrl() + "/token?key=" + config.apiKey(), extra);
     }
 
-    private static String extractPattern(String text, String regex) {
-        Matcher m = Pattern.compile(regex).matcher(text);
+    private static String matchPattern(Pattern pattern, String text) {
+        Matcher m = pattern.matcher(text);
         return m.find() ? m.group(1) : null;
     }
 }

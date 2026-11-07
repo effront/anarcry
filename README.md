@@ -458,6 +458,57 @@ Built-in LLM-powered security analyst available in both TUI and GUI. Supports fo
 
 ## 10 - Changelog
 
+### v2.0.1
+
+**Security Hardening + Static Analysis Cleanup**
+- **FormLoginHarvester scope validation**: form action URLs and redirect destinations validated against target root domain before sending credentials - prevents credential leakage to external domains
+- **FormLoginHarvester method handling**: honors parsed form method (GET/POST), rejects unsupported methods instead of silently forcing POST
+- **Http.sendSimple()**: lightweight HTTP helper for pre-scan auth flows that don't have ScanContext (FormLoginHarvester now routes through Http instead of raw HttpClient)
+- **Cookie rotation expiry**: Http.rotateCookie() parses max-age from Set-Cookie header instead of hardcoding 3600s default
+- **CredentialStore**: removed hardcoded expiry default - callers must pass explicit expiry duration
+- **FirebaseAuthClient**: URL-encode refresh tokens in form body, use UUID for probe credentials instead of predictable timestamps, log cleanup failures
+- **FirebaseConfigExtractor**: use shared HttpClientFactory instead of raw HttpClient (prevents thread pool leak)
+- **ProviderDetector**: precompiled regex patterns (was compiling per call), proper InterruptedException handling
+- **Hooks hardening**: command injection fix in ac-filter.js (exec form instead of sh -c), prototype pollution guards, path validation with traversal depth limits, canonical path resolution
+- **CI config**: exclude hooks/ from Codacy and Semgrep analysis (local CLI tooling, not application code)
+
+### v2.0.0
+
+**Credential Harvester - auto-auth pipeline**
+- **AuthType.AUTO**: new auth mode that detects the target's auth provider from page source (Firebase, Auth0, Supabase, Keycloak, OIDC) and authenticates automatically -- user provides email/password, scanner handles token extraction, refresh, and injection
+- **ProviderDetector**: passive fingerprinting of auth providers via JS bundle patterns (firebaseConfig, auth0 domain/clientId, supabase URL/key, Keycloak realm URLs, generic OIDC .well-known)
+- **FirebaseHarvester**: full Firebase Identity Toolkit integration -- signInWithPassword, automatic token refresh via refreshToken endpoint, cleanup via deleteAccount
+- **FormLoginHarvester**: generic form-based login for apps without a known auth provider -- parses login forms (FormParser), submits credentials, extracts JWT/session from response headers/cookies/body, supports CSRF token extraction and hidden field forwarding
+- **CredentialStore**: centralized token lifecycle manager -- holds activeToken/refreshToken, tracks expiry, auto-refresh before dispatch in Http.send(), thread-safe refresh with double-check locking
+- **Http.send() token refresh**: automatic pre-flight token refresh when CredentialStore reports expiring-soon (< 60s) -- scan sessions survive past token TTL without manual intervention
+- **TUI/GUI integration**: Auth Type selector updated with AUTO option, shows username/password fields instead of JWT when selected, provider detection result shown before scan starts
+
+**Exploitation Modules - post-scan validation (Phase 3)**
+- **ExploitOrchestrator**: 2-pass pipeline -- (1) FindingValidator runs generic FP detection on all findings, (2) specific exploiters run on survivors. Parallel execution via ProbeExecutor
+- **FindingValidator**: meta-exploiter that replays findings with baseline diffing (response with vs without payload), timing analysis, WAF FP detection, and error-based validation -- max 3 requests per finding
+- **FirebaseExploiter**: probes Firebase misconfig (signUp abuse, Firestore/RTDB/Storage public read/write, rate limit absence) using shared FirebaseAuthClient -- creates temp account, probes, cleans up. Max 50 requests
+- **AuthBypassExploiter**: JWT manipulation (alg:none, RS256-to-HS256, claim editing via TokenManipulator), privilege escalation probing (PrivEscProbe role/isAdmin injection), session fixation. Max 30 requests
+- **IdorExploiter**: enhanced IDOR validation -- discovers real IDs from /api/me or listing endpoints, attempts cross-user access with UUID/numeric ID substitution, parameter tampering, BOLA/BFLA, HTTP method override. Baseline diffing eliminates FP from public endpoints. Max 40 requests
+- **EndpointEnumExploiter**: framework detection (FrameworkDetector: Next.js, Nuxt, SvelteKit, Remix via headers/patterns), source map probing, API version enumeration, route fuzzing (RouteFuzzer with per-framework wordlists). Max 200 requests
+- **ValidatedFinding + ExploitResult**: findings carry exploit evidence (PoC curl, response diff, impact proof, confidence score). Status: CONFIRMED, FALSE_POSITIVE, NEEDS_MANUAL, ERROR
+- **ReportEngine validated exports**: exportValidated(), exportH1Validated(), exportBugcrowdValidated() -- confirmed findings with PoC sections, dismissed findings with FP justification
+- **ScanConfig.exploitationEnabled**: opt-in flag (default false) -- ScanRunner Phase 3 runs ExploitOrchestrator only when enabled
+- **ScanRunner Phase 3**: after all modules complete, findings collected into synchronized list, passed to ExploitOrchestrator for validation when exploitation is enabled
+
+**FP Reduction + Scanner Fixes**
+- **RequestSmugglingModule hardening**: multi-backend CL.TE/TE.CL/TE.TE detection with 4-stage pipeline (HTTP/1.0 downgrade, dual Content-Length, Transfer-Encoding obfuscation, H2 smuggling via CONNECT). Connection reuse detection and response correlation
+- **OpenRedirectModule enhancement**: URL-encoded and double-encoded payload variants, dataURI and javascript: scheme detection
+- **OAuthModule**: callback URL manipulation testing (open redirect via OAuth redirect_uri)
+- **Cookie rotation in Http.send()**: Set-Cookie headers from responses automatically update session cookies in ScanContext -- critical for targets with rotating session tokens (Fernet, signed cookies)
+
+**Known Gaps (identified during Duma Finance assessment)**
+- No rate limit detection module (burst requests to detect 429 absence)
+- No race condition / TOCTOU testing module
+- No business logic validation (sensitive operations without password, phone change without SMS OTP)
+- No financial precision testing (BigDecimal vs float, amount overflow/underflow)
+- No CSV/export injection testing beyond formula prefixes (HTML tag passthrough)
+- No actuator/admin endpoint enumeration beyond basic path check (Swagger UI, API docs, debug endpoints)
+
 ### v1.9.5
 
 - **Headers/HSTS redirect fix**: migrated HeadersModule and HSTSModule HTTPS probe from `HttpURLConnection` to `HttpClient` via `Http.send()` -- follows 308 redirects to final response, injects session cookies, and uses shared WAF/circuit breaker pipeline (fixes false positives on naked domain 308 redirects)
