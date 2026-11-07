@@ -3,6 +3,7 @@ package gg.effront.anarcry.scanner.auth.harvester;
 import gg.effront.anarcry.scanner.auth.AuthException;
 import gg.effront.anarcry.scanner.auth.AuthProvider;
 import gg.effront.anarcry.scanner.auth.CredentialStore;
+import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
 import java.net.URI;
@@ -89,7 +90,7 @@ public class FormLoginHarvester implements Harvester {
                 reqBuilder.header("Cookie", preflightCookies);
             }
 
-            HttpResponse<String> loginResp = hc.send(reqBuilder.build(), HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> loginResp = Http.sendSimple(hc, reqBuilder.build());
 
             Map.Entry<String, String> session = extractSessionCookie(loginResp, targetUrl);
             if (session == null) {
@@ -106,7 +107,7 @@ public class FormLoginHarvester implements Harvester {
                             redirectReq = HttpRequest.newBuilder(redirectReq, (n, v) -> true)
                                     .header("Cookie", redirectCookies).build();
                         }
-                        HttpResponse<String> redirectResp = hc.send(redirectReq, HttpResponse.BodyHandlers.ofString());
+                        HttpResponse<String> redirectResp = Http.sendSimple(hc, redirectReq);
                         session = extractSessionCookie(redirectResp, targetUrl);
                         if (session == null && !redirectCookies.isBlank()) {
                             session = parseMainCookie(redirectCookies, targetUrl);
@@ -178,7 +179,7 @@ public class FormLoginHarvester implements Harvester {
     private HttpResponse<String> fetchPage(HttpClient hc, String url) throws Exception {
         HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
                 .GET().build();
-        return hc.send(req, HttpResponse.BodyHandlers.ofString());
+        return Http.sendSimple(hc, req);
     }
 
     private void capturePreflight(HttpResponse<String> resp, Map<String, String> extra) {
@@ -276,10 +277,6 @@ public class FormLoginHarvester implements Harvester {
         return sb.toString();
     }
 
-    // Pre-scan auth: raw HttpClient is intentional - no ScanContext exists yet, so
-    // Http.send()
-    // (which needs circuit breaker/WAF state) cannot be used. Scope validation is
-    // enforced here instead.
     private static void validateActionScope(String actionUrl, String targetUrl) throws AuthException {
         try {
             URI action = URI.create(actionUrl);

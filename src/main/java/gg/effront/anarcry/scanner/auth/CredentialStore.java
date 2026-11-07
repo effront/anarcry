@@ -67,10 +67,6 @@ public class CredentialStore {
         return sessionCookieName;
     }
 
-    public void updateToken(String newToken) {
-        updateToken(newToken, SESSION_TTL_SECONDS);
-    }
-
     public void updateToken(String newToken, long expiresInSeconds) {
         if (newToken != null && !newToken.isBlank()) {
             this.activeToken = newToken;

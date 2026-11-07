@@ -323,6 +323,10 @@ public class Http {
         return 3600;
     }
 
+    public static HttpResponse<String> sendSimple(HttpClient hc, HttpRequest req) throws Exception {
+        return hc.send(req, HttpResponse.BodyHandlers.ofString());
+    }
+
     private static String escapeJsonStr(String s) {
         return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t",
                 "\\t");
