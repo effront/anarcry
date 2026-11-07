@@ -7,6 +7,7 @@ import gg.effront.anarcry.apiclient.io.CollectionWriter;
 import gg.effront.anarcry.apiclient.io.CurlImporter;
 import gg.effront.anarcry.apiclient.io.OpenApiImporter;
 import gg.effront.anarcry.apiclient.io.PostmanImporter;
+import gg.effront.anarcry.apiclient.model.Assertion;
 import gg.effront.anarcry.apiclient.model.AssertionResult;
 import gg.effront.anarcry.apiclient.model.AuthConfig;
 import gg.effront.anarcry.apiclient.model.BodyConfig;
@@ -19,7 +20,9 @@ import gg.effront.anarcry.apiclient.model.HttpRequestDef;
 import gg.effront.anarcry.apiclient.model.Param;
 import gg.effront.anarcry.apiclient.model.RequestItem;
 import gg.effront.anarcry.apiclient.model.RequestResult;
+import gg.effront.anarcry.apiclient.model.RequestSettings;
 import gg.effront.anarcry.apiclient.model.RunResult;
+import gg.effront.anarcry.apiclient.model.VarsDef;
 import gg.effront.anarcry.apiclient.runner.AssertionEngine;
 import gg.effront.anarcry.apiclient.runner.CollectionRunner;
 import gg.effront.anarcry.apiclient.runner.RequestExecutor;
@@ -27,10 +30,14 @@ import gg.effront.anarcry.apiclient.vars.Interpolator;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -42,7 +49,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.BorderFactory;
+import javax.swing.DropMode;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
@@ -53,13 +62,20 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.JSpinner;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
+import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
+import javax.swing.TransferHandler;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.table.DefaultTableModel;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
@@ -87,19 +103,29 @@ public class ApiClientView extends JPanel {
     private JTree collectionTree;
     private DefaultMutableTreeNode treeRoot;
     private DefaultTreeModel treeModel;
+    private JTextField sidebarSearchField;
     private JComboBox<String> methodCombo;
     private JTextField urlField;
     private JButton sendButton;
     private JComboBox<String> envCombo;
+    private JComboBox<String> bodyTypeCombo;
     private JTextArea headersArea;
     private RSyntaxTextArea bodyArea;
     private JTextArea paramsArea;
     private JComboBox<String> authTypeCombo;
     private JTextArea authFieldsArea;
+    private JTextArea varsPreArea;
+    private JTextArea varsPostArea;
+    private DefaultTableModel assertTableModel;
+    private JTextArea docsArea;
+    private JCheckBox settingsFollowRedirects;
+    private JSpinner settingsTimeout;
+    private JCheckBox settingsEncodeUrl;
     private JLabel responseStatus;
     private RSyntaxTextArea responseBody;
+    private JTabbedPane responseTabPane;
     private JTextArea responseHeaders;
-    private JTextArea assertionsArea;
+    private JTextArea assertionsResultArea;
     private JPanel requestTabsPanel;
 
     private Collection currentCollection;
@@ -119,22 +145,103 @@ public class ApiClientView extends JPanel {
         add(mainSplit, BorderLayout.CENTER);
     }
 
+    // ==================== SIDEBAR ====================
+
     private JPanel buildSidebar() {
         JPanel sidebar = new JPanel(new BorderLayout());
         sidebar.setPreferredSize(new Dimension(SIDEBAR_WIDTH, 0));
+
+        sidebarSearchField = new JTextField();
+        sidebarSearchField.putClientProperty("JTextField.placeholderText", "Filter requests...");
+        sidebarSearchField.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(0x55, 0x55, 0x55)),
+                BorderFactory.createEmptyBorder(4, 6, 4, 6)));
+        sidebarSearchField.getDocument().addDocumentListener(new DocumentListener() {
+
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                filterTree();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                filterTree();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                filterTree();
+            }
+        });
+        JPanel topBar = new JPanel(new BorderLayout());
+        topBar.add(sidebarSearchField, BorderLayout.CENTER);
+
+        JPanel sortBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 1));
+        sortBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(0x44, 0x44, 0x44)));
+        JButton sortAz = new JButton("A-Z");
+        sortAz.setFont(sortAz.getFont().deriveFont(10f));
+        sortAz.setMargin(new java.awt.Insets(1, 4, 1, 4));
+        sortAz.setToolTipText("Sort by name");
+        sortAz.addActionListener(e -> sortCollection(SortMode.NAME));
+        sortBar.add(sortAz);
+        JButton sortMethod = new JButton("MTD");
+        sortMethod.setFont(sortMethod.getFont().deriveFont(10f));
+        sortMethod.setMargin(new java.awt.Insets(1, 4, 1, 4));
+        sortMethod.setToolTipText("Sort by method");
+        sortMethod.addActionListener(e -> sortCollection(SortMode.METHOD));
+        sortBar.add(sortMethod);
+        JButton sortType = new JButton("TYP");
+        sortType.setFont(sortType.getFont().deriveFont(10f));
+        sortType.setMargin(new java.awt.Insets(1, 4, 1, 4));
+        sortType.setToolTipText("Sort by type (folders first)");
+        sortType.addActionListener(e -> sortCollection(SortMode.TYPE));
+        sortBar.add(sortType);
+        JButton expandAll = new JButton("+");
+        expandAll.setFont(expandAll.getFont().deriveFont(10f));
+        expandAll.setMargin(new java.awt.Insets(1, 6, 1, 6));
+        expandAll.setToolTipText("Expand all");
+        expandAll.addActionListener(e -> expandAllNodes());
+        sortBar.add(expandAll);
+        JButton collapseAll = new JButton("-");
+        collapseAll.setFont(collapseAll.getFont().deriveFont(10f));
+        collapseAll.setMargin(new java.awt.Insets(1, 6, 1, 6));
+        collapseAll.setToolTipText("Collapse all");
+        collapseAll.addActionListener(e -> collapseAllNodes());
+        sortBar.add(collapseAll);
+        topBar.add(sortBar, BorderLayout.SOUTH);
+
+        sidebar.add(topBar, BorderLayout.NORTH);
 
         treeRoot = new DefaultMutableTreeNode("No collection loaded");
         treeModel = new DefaultTreeModel(treeRoot);
         collectionTree = new JTree(treeModel);
         collectionTree.setRootVisible(true);
         collectionTree.addTreeSelectionListener(e -> onTreeSelection());
+        collectionTree.setDragEnabled(true);
+        collectionTree.setDropMode(DropMode.ON_OR_INSERT);
+        collectionTree.setTransferHandler(new TreeDragHandler());
         installTreeContextMenu();
 
-        DefaultTreeCellRenderer renderer = new DefaultTreeCellRenderer();
-        renderer.setLeafIcon(null);
-        renderer.setOpenIcon(null);
-        renderer.setClosedIcon(null);
-        collectionTree.setCellRenderer(renderer);
+        collectionTree.setCellRenderer(new DefaultTreeCellRenderer() {
+
+            @Override
+            public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean expanded,
+                    boolean leaf, int row, boolean hasFocus) {
+                super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
+                if (value instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof RequestItem ri) {
+                    setIcon(null);
+                    String method = ri.request().method();
+                    String hex = String.format("%06x", methodColor(method).getRGB() & 0xFFFFFF);
+                    setText("<html><b><font color='#" + hex + "'>" + method + "</font></b> " + escapeHtml(ri.name())
+                            + "</html>");
+                } else if (value instanceof DefaultMutableTreeNode node
+                        && !(node.getUserObject() instanceof RequestItem)) {
+                    setIcon(expanded ? getOpenIcon() : getClosedIcon());
+                    setText(String.valueOf(node.getUserObject()));
+                }
+                return this;
+            }
+        });
 
         sidebar.add(new JScrollPane(collectionTree), BorderLayout.CENTER);
 
@@ -164,6 +271,103 @@ public class ApiClientView extends JPanel {
         sidebar.add(buttons, BorderLayout.SOUTH);
         return sidebar;
     }
+
+    private void filterTree() {
+        if (currentCollection == null) {
+            return;
+        }
+        String query = sidebarSearchField.getText().trim().toLowerCase();
+        if (query.isEmpty()) {
+            populateTree();
+            return;
+        }
+        treeRoot = new DefaultMutableTreeNode(currentCollection.name());
+        addFilteredItems(treeRoot, currentCollection.items(), query);
+        treeModel.setRoot(treeRoot);
+        for (int i = 0; i < collectionTree.getRowCount(); i++) {
+            collectionTree.expandRow(i);
+        }
+    }
+
+    private void addFilteredItems(DefaultMutableTreeNode parent, List<CollectionItem> items, String query) {
+        for (CollectionItem item : items) {
+            switch (item) {
+                case Folder folder -> {
+                    DefaultMutableTreeNode folderNode = new DefaultMutableTreeNode(folder.name());
+                    addFilteredItems(folderNode, folder.items(), query);
+                    if (folderNode.getChildCount() > 0 || folder.name().toLowerCase().contains(query)) {
+                        parent.add(folderNode);
+                    }
+                }
+                case RequestItem req -> {
+                    String text = req.request().method() + " " + req.name() + " " + req.request().url();
+                    if (text.toLowerCase().contains(query)) {
+                        parent.add(new DefaultMutableTreeNode(req));
+                    }
+                }
+            }
+        }
+    }
+
+    private enum SortMode {
+        NAME, METHOD, TYPE
+    }
+
+    private void sortCollection(SortMode mode) {
+        if (currentCollection == null) {
+            return;
+        }
+        List<CollectionItem> sorted = sortItems(currentCollection.items(), mode);
+        currentCollection = new Collection(currentCollection.uid(), currentCollection.name(),
+                currentCollection.version(), currentCollection.environments(), sorted, currentCollection.root(),
+                currentCollection.settings());
+        populateTree();
+    }
+
+    private List<CollectionItem> sortItems(List<CollectionItem> items, SortMode mode) {
+        List<CollectionItem> result = new ArrayList<>(items);
+        java.util.Comparator<CollectionItem> cmp = switch (mode) {
+            case NAME -> java.util.Comparator.comparing(i -> itemName(i).toLowerCase());
+            case METHOD -> java.util.Comparator.comparing(this::itemMethodKey);
+            case TYPE -> java.util.Comparator.<CollectionItem, Integer>comparing(i -> i instanceof Folder ? 0 : 1)
+                    .thenComparing(i -> itemName(i).toLowerCase());
+        };
+        result.sort(cmp);
+        for (int i = 0; i < result.size(); i++) {
+            if (result.get(i) instanceof Folder f) {
+                result.set(i, new Folder(f.uid(), f.name(), sortItems(f.items(), mode), f.root()));
+            }
+        }
+        return result;
+    }
+
+    private static String itemName(CollectionItem item) {
+        return switch (item) {
+            case Folder f -> f.name();
+            case RequestItem r -> r.name();
+        };
+    }
+
+    private String itemMethodKey(CollectionItem item) {
+        return switch (item) {
+            case Folder f -> "0_" + f.name().toLowerCase();
+            case RequestItem r -> r.request().method() + "_" + r.name().toLowerCase();
+        };
+    }
+
+    private void expandAllNodes() {
+        for (int i = 0; i < collectionTree.getRowCount(); i++) {
+            collectionTree.expandRow(i);
+        }
+    }
+
+    private void collapseAllNodes() {
+        for (int i = collectionTree.getRowCount() - 1; i > 0; i--) {
+            collectionTree.collapseRow(i);
+        }
+    }
+
+    // ==================== RIGHT PANEL ====================
 
     private JPanel buildRightPanel() {
         JPanel right = new JPanel(new BorderLayout());
@@ -226,6 +430,8 @@ public class ApiClientView extends JPanel {
         return bar;
     }
 
+    // ==================== REQUEST EDITOR ====================
+
     private JTabbedPane buildRequestEditor() {
         JTabbedPane tabs = new JTabbedPane();
 
@@ -234,9 +440,17 @@ public class ApiClientView extends JPanel {
         headersArea.setText("User-Agent: " + gg.effront.anarcry.Version.userAgent() + "\nAccept: */*");
         tabs.addTab("Headers", new JScrollPane(headersArea));
 
+        JPanel bodyPanel = new JPanel(new BorderLayout());
+        bodyTypeCombo = new JComboBox<>(new String[]{"JSON", "Text", "XML", "FormUrlEncoded", "GraphQL", "None"});
+        bodyTypeCombo.addActionListener(e -> updateBodySyntax());
+        JPanel bodyTopBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        bodyTopBar.add(new JLabel("Type:"));
+        bodyTopBar.add(bodyTypeCombo);
+        bodyPanel.add(bodyTopBar, BorderLayout.NORTH);
         bodyArea = createSyntaxArea(false);
         bodyArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JSON);
-        tabs.addTab("Body", new RTextScrollPane(bodyArea));
+        bodyPanel.add(new RTextScrollPane(bodyArea), BorderLayout.CENTER);
+        tabs.addTab("Body", bodyPanel);
 
         paramsArea = new JTextArea(8, 40);
         paramsArea.setFont(monoFont());
@@ -251,35 +465,157 @@ public class ApiClientView extends JPanel {
         authPanel.add(new JScrollPane(authFieldsArea), BorderLayout.CENTER);
         tabs.addTab("Auth", authPanel);
 
+        JPanel varsPanel = new JPanel(new BorderLayout(0, 4));
+        varsPanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        JPanel varsTop = new JPanel(new BorderLayout());
+        varsTop.add(new JLabel("Pre-request variables:"), BorderLayout.NORTH);
+        varsPreArea = new JTextArea(3, 40);
+        varsPreArea.setFont(monoFont());
+        varsTop.add(new JScrollPane(varsPreArea), BorderLayout.CENTER);
+        JPanel varsBottom = new JPanel(new BorderLayout());
+        varsBottom.add(new JLabel("Post-response variables:"), BorderLayout.NORTH);
+        varsPostArea = new JTextArea(3, 40);
+        varsPostArea.setFont(monoFont());
+        varsBottom.add(new JScrollPane(varsPostArea), BorderLayout.CENTER);
+        varsPanel.add(varsTop, BorderLayout.NORTH);
+        varsPanel.add(varsBottom, BorderLayout.CENTER);
+        tabs.addTab("Vars", varsPanel);
+
+        JPanel assertPanel = new JPanel(new BorderLayout(0, 4));
+        assertPanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        assertTableModel = new DefaultTableModel(new String[]{"Expression", "Operator", "Expected", "Enabled"}, 0) {
+
+            @Override
+            public Class<?> getColumnClass(int col) {
+                return col == 3 ? Boolean.class : String.class;
+            }
+
+            @Override
+            public boolean isCellEditable(int row, int col) {
+                return true;
+            }
+        };
+        JTable assertTable = new JTable(assertTableModel);
+        assertTable.getColumnModel().getColumn(1).setPreferredWidth(60);
+        assertTable.getColumnModel().getColumn(3).setPreferredWidth(50);
+        assertPanel.add(new JScrollPane(assertTable), BorderLayout.CENTER);
+        JPanel assertBtns = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        JButton addAssert = new JButton("Add");
+        addAssert.addActionListener(e -> assertTableModel.addRow(new Object[]{"res.status", "eq", "200", true}));
+        assertBtns.add(addAssert);
+        JButton removeAssert = new JButton("Remove");
+        removeAssert.addActionListener(e -> {
+            int row = assertTable.getSelectedRow();
+            if (row >= 0) {
+                assertTableModel.removeRow(row);
+            }
+        });
+        assertBtns.add(removeAssert);
+        assertPanel.add(assertBtns, BorderLayout.SOUTH);
+        tabs.addTab("Assert", assertPanel);
+
+        docsArea = new JTextArea(8, 40);
+        docsArea.setFont(monoFont());
+        docsArea.setLineWrap(true);
+        docsArea.setWrapStyleWord(true);
+        tabs.addTab("Docs", new JScrollPane(docsArea));
+
+        JPanel settingsPanel = new JPanel(new java.awt.GridBagLayout());
+        settingsPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        java.awt.GridBagConstraints gbc = new java.awt.GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.anchor = java.awt.GridBagConstraints.WEST;
+        gbc.insets = new java.awt.Insets(4, 0, 4, 8);
+        settingsFollowRedirects = new JCheckBox("Follow Redirects", true);
+        settingsPanel.add(settingsFollowRedirects, gbc);
+        gbc.gridy++;
+        settingsEncodeUrl = new JCheckBox("Encode URL", true);
+        settingsPanel.add(settingsEncodeUrl, gbc);
+        gbc.gridy++;
+        JPanel timeoutRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        timeoutRow.add(new JLabel("Timeout (ms):"));
+        settingsTimeout = new JSpinner(new SpinnerNumberModel(30000, 0, 300000, 1000));
+        timeoutRow.add(settingsTimeout);
+        settingsPanel.add(timeoutRow, gbc);
+        gbc.gridy++;
+        gbc.weighty = 1.0;
+        settingsPanel.add(new JLabel(), gbc);
+        tabs.addTab("Settings", settingsPanel);
+
         return tabs;
     }
+
+    private void updateBodySyntax() {
+        String type = (String) bodyTypeCombo.getSelectedItem();
+        bodyArea.setSyntaxEditingStyle(switch (type) {
+            case "JSON" -> SyntaxConstants.SYNTAX_STYLE_JSON;
+            case "XML" -> SyntaxConstants.SYNTAX_STYLE_XML;
+            case "GraphQL" -> SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT;
+            default -> SyntaxConstants.SYNTAX_STYLE_NONE;
+        });
+    }
+
+    // ==================== RESPONSE VIEWER ====================
 
     private JPanel buildResponseViewer() {
         JPanel panel = new JPanel(new BorderLayout());
 
-        responseStatus = new JLabel("  No response yet");
-        panel.add(responseStatus, BorderLayout.NORTH);
+        JPanel statusBar = new JPanel(new BorderLayout());
+        responseStatus = new JLabel("");
+        JPanel respButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        JButton copyBtn = new JButton("Copy");
+        copyBtn.setFont(copyBtn.getFont().deriveFont(11f));
+        copyBtn.addActionListener(e -> {
+            String text = responseBody.getText();
+            if (!text.isEmpty()) {
+                java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                        .setContents(new java.awt.datatransfer.StringSelection(text), null);
+            }
+        });
+        JButton prettifyBtn = new JButton("Prettify");
+        prettifyBtn.setFont(prettifyBtn.getFont().deriveFont(11f));
+        prettifyBtn.addActionListener(e -> prettifyResponse());
+        respButtons.add(copyBtn);
+        respButtons.add(prettifyBtn);
+        statusBar.add(responseStatus, BorderLayout.CENTER);
+        statusBar.add(respButtons, BorderLayout.EAST);
+        panel.add(statusBar, BorderLayout.NORTH);
 
-        JTabbedPane tabs = new JTabbedPane();
+        responseTabPane = new JTabbedPane();
 
         responseBody = createSyntaxArea(true);
-        tabs.addTab("Body", new RTextScrollPane(responseBody));
+        responseTabPane.addTab("Body", new RTextScrollPane(responseBody));
 
         responseHeaders = new JTextArea(6, 40);
         responseHeaders.setEditable(false);
         responseHeaders.setFont(monoFont());
-        tabs.addTab("Headers", new JScrollPane(responseHeaders));
+        responseTabPane.addTab("Headers", new JScrollPane(responseHeaders));
 
-        assertionsArea = new JTextArea(6, 40);
-        assertionsArea.setEditable(false);
-        assertionsArea.setFont(monoFont());
-        tabs.addTab("Assertions", new JScrollPane(assertionsArea));
+        assertionsResultArea = new JTextArea(6, 40);
+        assertionsResultArea.setEditable(false);
+        assertionsResultArea.setFont(monoFont());
+        responseTabPane.addTab("Assertions", new JScrollPane(assertionsResultArea));
 
-        panel.add(tabs, BorderLayout.CENTER);
+        panel.add(responseTabPane, BorderLayout.CENTER);
         return panel;
     }
 
-    // --- Request tabs ---
+    private void prettifyResponse() {
+        String text = responseBody.getText();
+        if (text.isBlank()) {
+            return;
+        }
+        try {
+            com.google.gson.JsonElement el = com.google.gson.JsonParser.parseString(text);
+            responseBody.setText(new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(el));
+            responseBody.setCaretPosition(0);
+        } catch (Exception ex) {
+            // not JSON, ignore
+        }
+    }
+
+    // ==================== REQUEST TABS ====================
 
     private void openRequestTab(RequestItem item) {
         if (!openRequests.contains(item)) {
@@ -306,34 +642,62 @@ public class ApiClientView extends JPanel {
     private void refreshRequestTabs() {
         requestTabsPanel.removeAll();
         for (RequestItem req : openRequests) {
-            JButton tab = createRequestTabButton(req);
-            requestTabsPanel.add(tab);
+            requestTabsPanel.add(createRequestTabButton(req));
         }
         requestTabsPanel.revalidate();
         requestTabsPanel.repaint();
     }
 
-    private JButton createRequestTabButton(RequestItem item) {
+    private JPanel createRequestTabButton(RequestItem item) {
         String method = item.request().method();
         String label = method + " " + item.name();
-        if (label.length() > 28) {
-            label = label.substring(0, 25) + "...";
+        if (label.length() > 25) {
+            label = label.substring(0, 22) + "...";
         }
 
-        JButton btn = new JButton(label);
-        btn.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-        btn.setFocusable(false);
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        btn.setForeground(methodColor(method));
-        btn.setBackground(item == activeRequest ? TAB_ACTIVE_BG : TAB_INACTIVE_BG);
-        btn.setBorder(BorderFactory.createCompoundBorder(
+        JPanel tab = new JPanel(new BorderLayout(4, 0));
+        tab.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        tab.setBackground(item == activeRequest ? TAB_ACTIVE_BG : TAB_INACTIVE_BG);
+        tab.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(item == activeRequest ? methodColor(method) : TAB_INACTIVE_BG, 1),
-                BorderFactory.createEmptyBorder(2, 6, 2, 6)));
+                BorderFactory.createEmptyBorder(2, 6, 2, 2)));
 
-        btn.addMouseListener(new MouseAdapter() {
+        JLabel textLabel = new JLabel(label);
+        textLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        textLabel.setForeground(methodColor(method));
+        tab.add(textLabel, BorderLayout.CENTER);
+
+        JLabel closeLabel = new JLabel("×");
+        closeLabel.setFont(closeLabel.getFont().deriveFont(14f));
+        closeLabel.setForeground(Color.GRAY);
+        closeLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        closeLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+        closeLabel.addMouseListener(new MouseAdapter() {
 
             @Override
             public void mouseClicked(MouseEvent e) {
+                closeRequestTab(item);
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                closeLabel.setForeground(Color.WHITE);
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                closeLabel.setForeground(Color.GRAY);
+            }
+        });
+        tab.add(closeLabel, BorderLayout.EAST);
+
+        tab.addMouseListener(new MouseAdapter() {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getSource() == closeLabel) {
+                    return;
+                }
                 if (SwingUtilities.isMiddleMouseButton(e)) {
                     closeRequestTab(item);
                 } else {
@@ -343,7 +707,7 @@ public class ApiClientView extends JPanel {
                 }
             }
         });
-        return btn;
+        return tab;
     }
 
     private static Color methodColor(String method) {
@@ -357,7 +721,11 @@ public class ApiClientView extends JPanel {
         };
     }
 
-    // --- Tree context menu ---
+    private static String escapeHtml(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    // ==================== TREE CONTEXT MENU ====================
 
     private void installTreeContextMenu() {
         collectionTree.addMouseListener(new MouseAdapter() {
@@ -395,6 +763,23 @@ public class ApiClientView extends JPanel {
         newFolder.addActionListener(ev -> addNewFolderToNode(node));
         menu.add(newFolder);
 
+        if (node != treeRoot && node.getParent() != null) {
+            menu.addSeparator();
+
+            DefaultMutableTreeNode parent = (DefaultMutableTreeNode) node.getParent();
+            int idx = parent.getIndex(node);
+
+            JMenuItem moveUp = new JMenuItem("Move Up");
+            moveUp.setEnabled(idx > 0);
+            moveUp.addActionListener(ev -> moveNode(node, -1));
+            menu.add(moveUp);
+
+            JMenuItem moveDown = new JMenuItem("Move Down");
+            moveDown.setEnabled(idx < parent.getChildCount() - 1);
+            moveDown.addActionListener(ev -> moveNode(node, 1));
+            menu.add(moveDown);
+        }
+
         if (node.getUserObject() instanceof RequestItem) {
             menu.addSeparator();
 
@@ -417,6 +802,19 @@ public class ApiClientView extends JPanel {
         menu.add(rename);
 
         menu.show(collectionTree, e.getX(), e.getY());
+    }
+
+    private void moveNode(DefaultMutableTreeNode node, int direction) {
+        DefaultMutableTreeNode parent = (DefaultMutableTreeNode) node.getParent();
+        int idx = parent.getIndex(node);
+        int newIdx = idx + direction;
+        if (newIdx < 0 || newIdx >= parent.getChildCount()) {
+            return;
+        }
+        treeModel.removeNodeFromParent(node);
+        treeModel.insertNodeInto(node, parent, newIdx);
+        collectionTree.setSelectionPath(new TreePath(node.getPath()));
+        rebuildCollectionFromTree();
     }
 
     private void addNewRequestToNode(DefaultMutableTreeNode parentNode) {
@@ -513,7 +911,109 @@ public class ApiClientView extends JPanel {
         return items;
     }
 
-    // --- Tree selection ---
+    // ==================== DRAG AND DROP ====================
+
+    private static final DataFlavor TREE_NODE_FLAVOR = new DataFlavor(DefaultMutableTreeNode.class, "TreeNode");
+
+    private class TreeDragHandler extends TransferHandler {
+
+        @Override
+        public int getSourceActions(JComponent c) {
+            return MOVE;
+        }
+
+        @Override
+        protected Transferable createTransferable(JComponent c) {
+            TreePath path = collectionTree.getSelectionPath();
+            if (path == null) {
+                return null;
+            }
+            DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
+            if (node == treeRoot) {
+                return null;
+            }
+            return new NodeTransferable(node);
+        }
+
+        @Override
+        public boolean canImport(TransferSupport support) {
+            if (!support.isDrop() || !support.isDataFlavorSupported(TREE_NODE_FLAVOR)) {
+                return false;
+            }
+            JTree.DropLocation dl = (JTree.DropLocation) support.getDropLocation();
+            return dl.getPath() != null;
+        }
+
+        @Override
+        public boolean importData(TransferSupport support) {
+            if (!canImport(support)) {
+                return false;
+            }
+            try {
+                DefaultMutableTreeNode draggedNode = (DefaultMutableTreeNode) support.getTransferable()
+                        .getTransferData(TREE_NODE_FLAVOR);
+                JTree.DropLocation dl = (JTree.DropLocation) support.getDropLocation();
+                TreePath destPath = dl.getPath();
+                DefaultMutableTreeNode destParent = (DefaultMutableTreeNode) destPath.getLastPathComponent();
+                int childIndex = dl.getChildIndex();
+
+                if (destParent.getUserObject() instanceof RequestItem) {
+                    DefaultMutableTreeNode realParent = (DefaultMutableTreeNode) destParent.getParent();
+                    childIndex = realParent.getIndex(destParent);
+                    destParent = realParent;
+                }
+
+                if (isAncestor(draggedNode, destParent)) {
+                    return false;
+                }
+
+                treeModel.removeNodeFromParent(draggedNode);
+                if (childIndex < 0 || childIndex > destParent.getChildCount()) {
+                    childIndex = destParent.getChildCount();
+                }
+                treeModel.insertNodeInto(draggedNode, destParent, childIndex);
+                collectionTree.setSelectionPath(new TreePath(draggedNode.getPath()));
+                rebuildCollectionFromTree();
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        private boolean isAncestor(DefaultMutableTreeNode ancestor, DefaultMutableTreeNode node) {
+            javax.swing.tree.TreeNode current = node;
+            while (current != null) {
+                if (current == ancestor) {
+                    return true;
+                }
+                current = current.getParent();
+            }
+            return false;
+        }
+    }
+
+    private record NodeTransferable(DefaultMutableTreeNode node) implements Transferable {
+
+        @Override
+        public DataFlavor[] getTransferDataFlavors() {
+            return new DataFlavor[]{TREE_NODE_FLAVOR};
+        }
+
+        @Override
+        public boolean isDataFlavorSupported(DataFlavor flavor) {
+            return TREE_NODE_FLAVOR.equals(flavor);
+        }
+
+        @Override
+        public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException {
+            if (!isDataFlavorSupported(flavor)) {
+                throw new UnsupportedFlavorException(flavor);
+            }
+            return node;
+        }
+    }
+
+    // ==================== TREE SELECTION ====================
 
     private void onTreeSelection() {
         DefaultMutableTreeNode node = (DefaultMutableTreeNode) collectionTree.getLastSelectedPathComponent();
@@ -553,7 +1053,38 @@ public class ApiClientView extends JPanel {
         paramsArea.setText(params.toString());
 
         bodyArea.setText(extractBodyText(req.body()));
+        selectBodyType(req.body());
         populateAuth(req.auth());
+
+        if (item.vars() != null) {
+            StringBuilder pre = new StringBuilder();
+            for (VarsDef.VarEntry v : item.vars().pre()) {
+                pre.append(v.name()).append("=").append(v.value()).append("\n");
+            }
+            varsPreArea.setText(pre.toString());
+            StringBuilder post = new StringBuilder();
+            for (VarsDef.VarEntry v : item.vars().post()) {
+                post.append(v.name()).append("=").append(v.value()).append("\n");
+            }
+            varsPostArea.setText(post.toString());
+        } else {
+            varsPreArea.setText("");
+            varsPostArea.setText("");
+        }
+
+        assertTableModel.setRowCount(0);
+        if (item.assertions() != null) {
+            for (Assertion a : item.assertions()) {
+                assertTableModel.addRow(new Object[]{a.lhs(), a.op().symbol(), a.rhs(), a.enabled()});
+            }
+        }
+
+        docsArea.setText(item.docs() != null ? item.docs() : "");
+
+        RequestSettings settings = req.settings() != null ? req.settings() : RequestSettings.defaults();
+        settingsFollowRedirects.setSelected(settings.followRedirects());
+        settingsTimeout.setValue(settings.timeoutMs());
+        settingsEncodeUrl.setSelected(settings.encodeUrl());
     }
 
     private String extractBodyText(BodyConfig body) {
@@ -564,6 +1095,18 @@ public class ApiClientView extends JPanel {
             case BodyConfig.GraphQL g -> g.query();
             default -> "";
         };
+    }
+
+    private void selectBodyType(BodyConfig body) {
+        String type = switch (body) {
+            case BodyConfig.Json ignored -> "JSON";
+            case BodyConfig.Xml ignored -> "XML";
+            case BodyConfig.Text ignored -> "Text";
+            case BodyConfig.FormUrlEncoded ignored -> "FormUrlEncoded";
+            case BodyConfig.GraphQL ignored -> "GraphQL";
+            default -> "None";
+        };
+        bodyTypeCombo.setSelectedItem(type);
     }
 
     private void populateAuth(AuthConfig auth) {
@@ -578,7 +1121,7 @@ public class ApiClientView extends JPanel {
         authFieldsArea.setText(fields);
     }
 
-    // --- Env editor ---
+    // ==================== ENV EDITOR ====================
 
     private void openEnvEditor() {
         if (currentCollection == null) {
@@ -595,7 +1138,7 @@ public class ApiClientView extends JPanel {
         }
     }
 
-    // --- New request ---
+    // ==================== NEW REQUEST ====================
 
     private void addNewRequest() {
         HttpRequestDef req = HttpRequestDef.get("https://");
@@ -619,7 +1162,7 @@ public class ApiClientView extends JPanel {
         }
     }
 
-    // --- Save ---
+    // ==================== SAVE ====================
 
     private void saveCollection() {
         if (currentCollection == null) {
@@ -647,7 +1190,7 @@ public class ApiClientView extends JPanel {
         }
     }
 
-    // --- Send / Run ---
+    // ==================== SEND / RUN ====================
 
     private void sendRequest() {
         String method = (String) methodCombo.getSelectedItem();
@@ -661,7 +1204,7 @@ public class ApiClientView extends JPanel {
         responseStatus.setText("  Sending...");
         responseBody.setText("");
         responseHeaders.setText("");
-        assertionsArea.setText("");
+        assertionsResultArea.setText("");
 
         Thread.ofVirtual().name("apiclient-send").start(() -> {
             try {
@@ -709,10 +1252,16 @@ public class ApiClientView extends JPanel {
 
     private BodyConfig buildBody() {
         String text = bodyArea.getText();
-        if (text.isBlank()) {
+        String type = (String) bodyTypeCombo.getSelectedItem();
+        if (text.isBlank() || "None".equals(type)) {
             return new BodyConfig.None();
         }
-        return new BodyConfig.Json(text);
+        return switch (type) {
+            case "XML" -> new BodyConfig.Xml(text);
+            case "Text" -> new BodyConfig.Text(text);
+            case "GraphQL" -> new BodyConfig.GraphQL(text, null);
+            default -> new BodyConfig.Json(text);
+        };
     }
 
     private AuthConfig buildAuth() {
@@ -738,8 +1287,11 @@ public class ApiClientView extends JPanel {
     private void displayResult(RequestResult result) {
         if (result.response() != null) {
             var resp = result.response();
-            responseStatus.setText(String.format("  %d - %dms - %d bytes", resp.status(), resp.responseTimeMs(),
-                    resp.body().length()));
+            String statusText = resp.statusText() != null && !resp.statusText().isEmpty()
+                    ? resp.statusText()
+                    : String.valueOf(resp.status());
+            responseStatus.setText(String.format("  %d %s  %dms  %s", resp.status(), statusText, resp.responseTimeMs(),
+                    formatBytes(resp.body().length())));
 
             responseBody.setText(resp.body());
             responseBody.setCaretPosition(0);
@@ -748,9 +1300,15 @@ public class ApiClientView extends JPanel {
             responseBody.setSyntaxEditingStyle(detectSyntax(ct != null ? ct : ""));
 
             StringBuilder hdr = new StringBuilder();
-            resp.headers()
-                    .forEach((k, values) -> values.forEach(v -> hdr.append(k).append(": ").append(v).append("\n")));
+            int headerCount = 0;
+            for (var entry : resp.headers().entrySet()) {
+                for (String v : entry.getValue()) {
+                    hdr.append(entry.getKey()).append(": ").append(v).append("\n");
+                    headerCount++;
+                }
+            }
             responseHeaders.setText(hdr.toString());
+            responseTabPane.setTitleAt(1, "Headers " + headerCount);
         } else {
             responseStatus.setText("  No response");
         }
@@ -766,11 +1324,18 @@ public class ApiClientView extends JPanel {
                 }
                 sb.append("\n");
             }
-            assertionsArea.setText(sb.toString());
+            assertionsResultArea.setText(sb.toString());
         }
     }
 
-    // --- Load / Import ---
+    private static String formatBytes(int bytes) {
+        if (bytes < 1024) {
+            return bytes + "B";
+        }
+        return String.format("%.1fKB", bytes / 1024.0);
+    }
+
+    // ==================== LOAD / IMPORT ====================
 
     private void chooseAndLoadCollection() {
         JFileChooser chooser = new JFileChooser();
@@ -783,8 +1348,18 @@ public class ApiClientView extends JPanel {
 
     public void loadCollection(Path dir) {
         try {
-            CollectionLoader loader = new CollectionLoader();
-            currentCollection = loader.load(dir);
+            if (java.nio.file.Files.exists(dir.resolve("collection.json"))) {
+                CollectionLoader loader = new CollectionLoader();
+                currentCollection = loader.load(dir);
+            } else if (hasBruFiles(dir)) {
+                currentCollection = new BruImporter().importDirectory(dir);
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "No collection.json or .bru files found in:\n" + dir
+                                + "\n\nUse 'Import...' for Postman/OpenAPI files.",
+                        "Not a collection", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
             collectionPath = dir;
             openRequests.clear();
             activeRequest = null;
@@ -794,6 +1369,14 @@ public class ApiClientView extends JPanel {
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Failed to load collection: " + ex.getMessage(), "Error",
                     JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private boolean hasBruFiles(Path dir) {
+        try (var stream = java.nio.file.Files.walk(dir, 3)) {
+            return stream.anyMatch(p -> p.toString().endsWith(".bru"));
+        } catch (Exception e) {
+            return false;
         }
     }
 
@@ -971,7 +1554,7 @@ public class ApiClientView extends JPanel {
         JOptionPane.showMessageDialog(this, scroll, "Collection Run Result", JOptionPane.INFORMATION_MESSAGE);
     }
 
-    // --- Util ---
+    // ==================== UTIL ====================
 
     private RSyntaxTextArea createSyntaxArea(boolean readOnly) {
         RSyntaxTextArea area = new RSyntaxTextArea(12, 60);

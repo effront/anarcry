@@ -151,7 +151,14 @@ public class ApiClientPanel extends Panel {
 
     public void loadCollection(Path dir) {
         try {
-            collection = loader.load(dir);
+            if (Files.exists(dir.resolve("collection.json"))) {
+                collection = loader.load(dir);
+            } else if (hasBruFiles(dir)) {
+                collection = new gg.effront.anarcry.apiclient.io.BruImporter().importDirectory(dir);
+            } else {
+                log.accept("[!] No collection.json or .bru files in: " + dir);
+                return;
+            }
             flatRequests.clear();
             flatten(collection.items(), flatRequests);
             refreshCollectionList();
@@ -159,6 +166,14 @@ public class ApiClientPanel extends Panel {
             log.accept("[+] Loaded collection: " + collection.name() + " (" + flatRequests.size() + " requests)");
         } catch (Exception e) {
             log.accept("[!] Failed to load collection: " + e.getMessage());
+        }
+    }
+
+    private boolean hasBruFiles(Path dir) {
+        try (var stream = Files.walk(dir, 3)) {
+            return stream.anyMatch(p -> p.toString().endsWith(".bru"));
+        } catch (Exception e) {
+            return false;
         }
     }
 
