@@ -9,7 +9,7 @@ function compress(output, _type, outcome) {
   if (trimmed.startsWith('{')) {
     try {
       return compressJson(JSON.parse(output), outcome, output);
-    } catch {}
+    } catch { /* not valid JSON, fall through to text mode */ }
   }
 
   return compressText(output.split('\n'), outcome, output);

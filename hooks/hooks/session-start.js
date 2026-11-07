@@ -18,7 +18,7 @@ function handle(input) {
   let payload = {};
   try {
     payload = JSON.parse(input) || {};
-  } catch {}
+  } catch { /* malformed input, use empty payload */ }
 
   const path = require('path');
   const cwd = path.resolve(payload.cwd || process.cwd());

@@ -76,7 +76,7 @@ function getRewrite(command) {
   if (c.includes('ac-filter.js')) return null;
 
   const type = getFilterType(c);
-  if (type) return `node ${AC_FILTER} ${type} -- ${c}`;
+  if (type) return ['node', AC_FILTER, shellArg(type), '--', c].join(' ');
 
   return null;
 }

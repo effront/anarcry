@@ -137,7 +137,7 @@ public class FormLoginHarvester implements Harvester {
                         try {
                             return reLogin(finalLoginUrl, username, password, extra);
                         } catch (AuthException e) {
-                            throw new RuntimeException(e);
+                            throw new IllegalStateException(e);
                         }
                     });
         } catch (AuthException e) {

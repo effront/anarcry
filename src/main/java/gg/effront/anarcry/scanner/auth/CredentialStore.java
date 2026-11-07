@@ -6,8 +6,6 @@ import java.util.function.Function;
 
 public class CredentialStore {
 
-    private static final long SESSION_TTL_SECONDS = 3600;
-
     private volatile String activeToken;
     private volatile String refreshToken;
     private volatile Instant expiresAt;

@@ -16,6 +16,8 @@ public final class FormParser {
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern ATTR_PATTERN = Pattern.compile(
             "(name|type|value|action|method)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PASSWORD_INPUT = Pattern.compile("<input[^>]*type\\s*=\\s*[\"']password[\"'][^>]*>",
+            Pattern.CASE_INSENSITIVE);
 
     public record LoginForm(String action, String method, Map<String, String> hiddenFields, String usernameField,
             String passwordField) {
@@ -95,16 +97,15 @@ public final class FormParser {
     }
 
     private static boolean hasPasswordInput(String formBody) {
-        return Pattern.compile("<input[^>]*type\\s*=\\s*[\"']password[\"'][^>]*>", Pattern.CASE_INSENSITIVE)
-                .matcher(formBody).find();
+        return PASSWORD_INPUT.matcher(formBody).find();
     }
 
     private static String extractAttr(String tag, String attrName) {
-        Pattern p = Pattern.compile(attrName + "\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))",
-                Pattern.CASE_INSENSITIVE);
-        Matcher m = p.matcher(tag);
-        if (m.find()) {
-            return m.group(1) != null ? m.group(1) : m.group(2) != null ? m.group(2) : m.group(3);
+        Matcher m = ATTR_PATTERN.matcher(tag);
+        while (m.find()) {
+            if (m.group(1).equalsIgnoreCase(attrName)) {
+                return m.group(2) != null ? m.group(2) : m.group(3) != null ? m.group(3) : m.group(4);
+            }
         }
         return null;
     }

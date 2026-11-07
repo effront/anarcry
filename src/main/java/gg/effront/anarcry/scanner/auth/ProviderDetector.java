@@ -135,7 +135,8 @@ public final class ProviderDetector {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            // OIDC discovery failed, not an OIDC provider
         }
         return null;
     }

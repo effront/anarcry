@@ -69,6 +69,9 @@ public final class FirebaseAuthClient {
                     "");
         } catch (AuthException e) {
             throw e;
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new AuthException("Firebase token refresh interrupted", ie);
         } catch (Exception e) {
             throw new AuthException("Firebase token refresh error: " + e.getMessage(), e);
         }
@@ -96,8 +99,8 @@ public final class FirebaseAuthClient {
                     UUID.randomUUID().toString());
             try {
                 deleteAccount(config, result.idToken());
-            } catch (AuthException e) {
-                System.err.println("[FirebaseAuthClient] Probe cleanup failed: " + e.getMessage());
+            } catch (AuthException cleanupEx) {
+                // probe cleanup is best-effort; account will expire naturally
             }
             return true;
         } catch (AuthException e) {
@@ -121,6 +124,9 @@ public final class FirebaseAuthClient {
                     json.has("email") ? json.get("email").getAsString() : "");
         } catch (AuthException e) {
             throw e;
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new AuthException("Firebase auth interrupted", ie);
         } catch (Exception e) {
             throw new AuthException("Firebase auth error: " + e.getMessage(), e);
         }
@@ -134,6 +140,9 @@ public final class FirebaseAuthClient {
             }
         } catch (AuthException e) {
             throw e;
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new AuthException("Firebase API interrupted", ie);
         } catch (Exception e) {
             throw new AuthException("Firebase API error: " + e.getMessage(), e);
         }

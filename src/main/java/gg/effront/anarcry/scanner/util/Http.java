@@ -317,7 +317,8 @@ public class Http {
                 if (seconds > 0) {
                     return seconds;
                 }
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException nfe) {
+                // non-numeric max-age, fall through to default
             }
         }
         return 3600;

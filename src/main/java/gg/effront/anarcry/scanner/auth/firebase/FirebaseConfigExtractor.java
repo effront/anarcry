@@ -67,9 +67,16 @@ public final class FirebaseConfigExtractor {
                     if (config != null) {
                         return config;
                     }
-                } catch (Exception ignored) {
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return null;
+                } catch (Exception e) {
+                    // script fetch failed, try next
                 }
             }
+            return null;
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
             return null;
         } catch (Exception e) {
             return null;

@@ -15,7 +15,7 @@ function safeStart(cwd) {
     if (path.isAbsolute(resolved) && fs.statSync(resolved).isDirectory()) {
       return resolved;
     }
-  } catch {}
+  } catch { /* unresolvable path, use cwd */ }
   return process.cwd();
 }
 
@@ -36,7 +36,7 @@ function projectRoot(cwd) {
       if (resolvedGit.startsWith(dir) && fs.existsSync(gitPath)) {
         return dir;
       }
-    } catch {}
+    } catch { /* fs access failed, try parent */ }
     const parent = path.dirname(dir);
     if (parent === dir) return start;
     dir = parent;

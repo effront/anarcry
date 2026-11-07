@@ -42,9 +42,9 @@ function prune(now = Date.now()) {
       const full = path.join(DIR, name);
       try {
         if (now - fs.statSync(full).mtimeMs > MAX_AGE_MS) fs.unlinkSync(full);
-      } catch {}
+      } catch { /* stale file already gone */ }
     }
-  } catch {}
+  } catch { /* dir not readable */ }
 }
 
 module.exports = { read, write, prune, fileFor, DIR };
