@@ -40,6 +40,10 @@ public class FindingsView extends JPanel {
     private final JLabel countLabel;
     private Supplier<String> jwtSupplier = () -> "";
 
+    public void focusSearch() {
+        searchField.requestFocusInWindow();
+    }
+
     public FindingsView() {
         this(new FindingsTable());
     }

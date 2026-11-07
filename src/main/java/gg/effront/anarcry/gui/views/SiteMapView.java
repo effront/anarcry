@@ -8,7 +8,9 @@ import java.awt.Font;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.List;
 
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
@@ -133,6 +135,22 @@ public class SiteMapView extends JPanel {
             treeModel.reload();
             pathLabel.setText("  Select a path");
         });
+    }
+
+    public List<String> getPaths() {
+        List<String> paths = new ArrayList<>();
+        collectPaths(rootNode, "", paths);
+        return paths;
+    }
+
+    private void collectPaths(DefaultMutableTreeNode node, String prefix, List<String> out) {
+        Enumeration<?> children = node.children();
+        while (children.hasMoreElements()) {
+            DefaultMutableTreeNode child = (DefaultMutableTreeNode) children.nextElement();
+            String path = prefix + "/" + child.getUserObject();
+            out.add(rootUrl + path);
+            collectPaths(child, path, out);
+        }
     }
 
     private String buildFullPath(TreePath treePath) {

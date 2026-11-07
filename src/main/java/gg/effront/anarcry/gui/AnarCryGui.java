@@ -12,6 +12,7 @@ import gg.effront.anarcry.gui.views.DashboardView;
 import gg.effront.anarcry.gui.views.ExportDialog;
 import gg.effront.anarcry.gui.views.FindingDetailDialog;
 import gg.effront.anarcry.gui.views.FindingsView;
+import gg.effront.anarcry.gui.views.GlobalSearchDialog;
 import gg.effront.anarcry.gui.views.PreferencesDialog;
 import gg.effront.anarcry.gui.views.AssistantView;
 import gg.effront.anarcry.gui.views.ApiClientView;
@@ -76,6 +77,7 @@ public class AnarCryGui {
     private AssistantView assistantView;
 
     private JTabbedPane tabs;
+    private GlobalSearchDialog globalSearchDialog;
 
     private final List<Finding> allFindings = Collections.synchronizedList(new ArrayList<>());
     private final Map<Severity, Integer> severityCounts = new EnumMap<>(Severity.class);
@@ -238,6 +240,26 @@ public class AnarCryGui {
         tabs.addTab("API Client", apiClientView);
         tabs.addTab("Assistant", assistantView);
         tabs.setSelectedIndex(1);
+
+        globalSearchDialog = new GlobalSearchDialog(frame);
+        globalSearchDialog.setFindingsSupplier(() -> new ArrayList<>(allFindings));
+        globalSearchDialog.setSiteMapSupplier(() -> siteMapView.getPaths());
+        globalSearchDialog.setOnSelect(result -> {
+            switch (result.category()) {
+                case FINDING -> {
+                    tabs.setSelectedComponent(findingsView);
+                    findingsView.focusSearch();
+                }
+                case SITEMAP -> tabs.setSelectedComponent(siteMapView);
+                case API_REQUEST -> tabs.setSelectedComponent(apiClientView);
+            }
+        });
+
+        statusBar.setOnSearchClick(() -> globalSearchDialog.showSearch());
+
+        statusBar.setOnProxyClick(() -> new PreferencesDialog(frame, "Proxy").setVisible(true));
+
+        statusBar.setOnSettingsClick(() -> new PreferencesDialog(frame).setVisible(true));
 
         JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, modulesPanel, tabs);
         mainSplit.setDividerLocation(MODULES_PANEL_WIDTH);

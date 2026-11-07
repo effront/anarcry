@@ -43,6 +43,8 @@ public class GuiStatusBar extends JPanel {
     private final JLabel versionLabel;
 
     private Runnable onSearchClick;
+    private Runnable onProxyClick;
+    private Runnable onSettingsClick;
 
     private String rawTarget = "";
     private int modulesCompleted = 0;
@@ -67,6 +69,21 @@ public class GuiStatusBar extends JPanel {
         progressBar.setStringPainted(true);
         progressBar.setVisible(false);
 
+        JLabel settingsGear = clickableLabel("⚙");
+        settingsGear.setFont(settingsGear.getFont().deriveFont(16f));
+        settingsGear.setToolTipText("Preferences");
+        settingsGear.addMouseListener(new MouseAdapter() {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (onSettingsClick != null) {
+                    onSettingsClick.run();
+                }
+            }
+        });
+
+        left.add(settingsGear);
+        left.add(separator());
         left.add(criticalLabel);
         left.add(highLabel);
         left.add(mediumLabel);
@@ -93,6 +110,15 @@ public class GuiStatusBar extends JPanel {
 
         cookiesLabel = clickableLabel("Cookies(0)");
         proxyLabel = clickableLabel("Proxy: OFF");
+        proxyLabel.addMouseListener(new MouseAdapter() {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (onProxyClick != null) {
+                    onProxyClick.run();
+                }
+            }
+        });
 
         privacyToggle = new JToggleButton("Privacy: OFF");
         privacyToggle.setFocusable(false);
@@ -123,6 +149,14 @@ public class GuiStatusBar extends JPanel {
 
     public void setOnSearchClick(Runnable action) {
         this.onSearchClick = action;
+    }
+
+    public void setOnProxyClick(Runnable action) {
+        this.onProxyClick = action;
+    }
+
+    public void setOnSettingsClick(Runnable action) {
+        this.onSettingsClick = action;
     }
 
     public void setProxyEnabled(boolean on) {

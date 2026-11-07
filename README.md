@@ -32,6 +32,8 @@
 |  Security scanner for bug bounty. 25 attack modules, parallel execution,  |
 |  CVSS v3.1 auto-scoring, knowledge base with 26 entries, WAF detection    |
 |  (15 providers) + circuit breaker. TUI + Swing GUI + AI Assistant.        |
+|  Built-in API Client (Bruno-inspired) with collections, environments,     |
+|  auth injectors, variable interpolation, runner + assertions.             |
 +===========================================================================+
 ```
 
@@ -94,8 +96,9 @@
 |  07 - Architecture                                   |
 |  08 - Knowledge Base                                 |
 |  09 - AI Assistant                                   |
-|  10 - Changelog                                      |
-|  11 - Ethical Use                                    |
+|  10 - API Client                                     |
+|  11 - Changelog                                      |
+|  12 - Ethical Use                                    |
 +------------------------------------------------------+
 ```
 
@@ -456,7 +459,61 @@ Built-in LLM-powered security analyst available in both TUI and GUI. Supports fo
 
 ---
 
-## 10 - Changelog
+## 10 - API Client
+
+Built-in API client inspired by [Bruno](https://www.usebruno.com/) for manual API testing during pentests. Eliminates context-switching to external tools (Postman, curl) by sharing AnarCry's WAF-aware HTTP stack, credential store, and report engine.
+
+```
++===========================================================================+
+|  API CLIENT                                                               |
++===========================================================================+
+|  Collections     -- tree of folders/requests in JSON (Git-friendly)       |
+|  Environments    -- per-env variables (dev/staging/prod), secret masking  |
+|  Auth Injectors  -- Bearer, Basic, Digest, API Key, OAuth2 (CC/PKCE/      |
+|                     Password/Implicit), WSSE, AWS SigV4, NTLM, custom     |
+|  Variables       -- {{var}} interpolation with 6-layer resolution         |
+|                     (built-in > env > collection > folder > request >     |
+|                     runtime) + circular reference detection               |
+|  Request Builder -- method, URL, headers, body (JSON/form/multipart/      |
+|                     XML/GraphQL/file), query/path params                  |
+|  Runner          -- sequential execution with variable chaining           |
+|  Assertions      -- declarative validation (status, JSON path, header,    |
+|                     regex, timing, size)                                  |
+|  Import          -- Postman v2.1, OpenAPI 3.0, Bruno .bru, cURL           |
+|  Export          -- Markdown + JSON collection run reports                |
++===========================================================================+
+```
+
+**GUI (F8):** Collection tree, request tabs (color-coded by method), environment editor dialog, right-click context menu (new/duplicate/delete/rename), Send (Ctrl+Enter), Run All.
+
+**TUI (F8):** Simplified collection list, request builder, environment selector, Send/Run All, response viewer.
+
+---
+
+## 11 - Changelog
+
+### v2.1.0
+
+**API Client Module - Bruno-inspired collections, environments, runner**
+- **Collections**: tree of folders and requests persisted as JSON on filesystem (Git-friendly), load/save/import
+- **Environments**: per-env variables with secret masking, create/edit/delete via Environment Editor dialog
+- **Auth injectors**: 12 auth modes via sealed interfaces - Bearer, Basic, Digest, API Key, OAuth2 (CC/PKCE/Password/Implicit), WSSE, AWS SigV4, NTLM, custom headers
+- **Variable interpolation**: `{{var}}` in URL, headers, body, auth fields with 6-layer resolution (built-in > env > collection > folder > request > runtime) and circular reference detection
+- **RequestExecutor**: 7-phase pipeline (resolve vars > inject auth > build body > send > extract > assert > chain) using AnarCry's Http.send() for WAF stealth, cookie rotation, and circuit breaker
+- **CollectionRunner**: sequential execution with variable chaining between requests, jump-to-request support
+- **Assertions**: declarative response validation (status code, JSON path, header value, regex match, response time, body size)
+- **Import**: Postman v2.1 collections, OpenAPI 3.0 specs, Bruno .bru directories, cURL command parsing
+- **Report**: Markdown + JSON export of collection run results with assertion details
+
+**GUI/TUI Integration**
+- **API Client tab (F8)**: request tabs color-coded by method (GET=green, POST=yellow, DELETE=red), collection tree with right-click menu (new request/folder, duplicate, delete, rename), environment selector with "..." configure button
+- **Environment Editor**: modal dialog for managing environments and variables (name, value, secret toggle, enabled toggle)
+- **PreferencesDialog**: Bruno-style categorized settings (General, Display, Proxy, Certificates, Keybindings, About) - SSL/TLS toggle, proxy config for Burp/ZAP, client certificates table
+- **StatusBar shortcuts**: Search (jumps to Findings search), Cookies count, Proxy status, Privacy toggle, version display
+- **F-key shift**: API Client on F8, Assistant moved to F9
+
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v2.0.1
 
@@ -515,8 +572,6 @@ Built-in LLM-powered security analyst available in both TUI and GUI. Supports fo
 - **JWT alg:none server-side validation**: passive alg:none detection downgraded to INFO; active probe now does 3-step baseline comparison (valid token 200, no-token != 200, alg:none 200) to confirm server actually accepts unsigned tokens -- eliminates false positives from unauthenticated endpoints
 - **XSS non-executable reflection downgrade**: reflection-without-execution now reports INFO instead of MEDIUM when canary appears in non-executable context (Next.js RSC payload, JSON serialization, CSP with nonce/strict-dynamic)
 
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v1.9.4
 
@@ -663,7 +718,7 @@ Built-in LLM-powered security analyst available in both TUI and GUI. Supports fo
 
 ---
 
-## 11 - Ethical Use
+## 12 - Ethical Use
 
 AnarCry is designed for **authorized security testing** only:
 

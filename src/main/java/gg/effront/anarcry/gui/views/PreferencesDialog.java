@@ -5,6 +5,7 @@ import gg.effront.anarcry.gui.theme.AnarCryLaf;
 
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -34,7 +35,17 @@ import javax.swing.table.DefaultTableModel;
 
 public class PreferencesDialog extends JDialog {
 
-    private static final String[] CATEGORIES = {"General", "Display", "Proxy", "Certificates", "Keybindings", "About"};
+    private static final String[] CATEGORIES = {"General", "Themes", "Display", "Proxy", "Certificates", "License",
+            "Notifications", "Keybindings", "Support", "About"};
+
+    private static final Color[] CATEGORY_COLORS = {new Color(0x8B, 0x94, 0x9E), new Color(0xA8, 0x5C, 0xF0),
+            new Color(0x58, 0xA6, 0xFF), new Color(0x3F, 0xB9, 0x50), new Color(0xD2, 0x99, 0x22),
+            new Color(0xF8, 0x51, 0x49), new Color(0xE3, 0xB3, 0x41), new Color(0x6C, 0x9E, 0xD6),
+            new Color(0xCC, 0x66, 0x99), new Color(0x8B, 0x94, 0x9E)};
+
+    private JList<String> categoryList;
+    private CardLayout cards;
+    private JPanel cardPanel;
 
     private final JCheckBox sslVerification = new JCheckBox("SSL/TLS Certificate Verification");
     private final JCheckBox storeCookies = new JCheckBox("Store Cookies automatically", true);
@@ -63,26 +74,42 @@ public class PreferencesDialog extends JDialog {
     private int timeoutMinutes = 10;
 
     public PreferencesDialog(JFrame parent) {
+        this(parent, "General");
+    }
+
+    public PreferencesDialog(JFrame parent, String initialCategory) {
         super(parent, "Preferences", true);
-        setSize(650, 500);
+        setSize(750, 540);
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout());
 
         themeCombo.setSelectedItem(AnarCryLaf.isDark() ? "Dark" : "Light");
 
-        CardLayout cards = new CardLayout();
-        JPanel cardPanel = new JPanel(cards);
+        cards = new CardLayout();
+        cardPanel = new JPanel(cards);
         cardPanel.setBorder(BorderFactory.createEmptyBorder(12, 16, 8, 16));
 
         cardPanel.add(buildGeneralPanel(), "General");
+        cardPanel.add(buildThemesPanel(), "Themes");
         cardPanel.add(buildDisplayPanel(), "Display");
         cardPanel.add(buildProxyPanel(), "Proxy");
         cardPanel.add(buildCertificatesPanel(), "Certificates");
+        cardPanel.add(buildLicensePanel(), "License");
+        cardPanel.add(buildNotificationsPanel(), "Notifications");
         cardPanel.add(buildKeybindingsPanel(), "Keybindings");
+        cardPanel.add(buildSupportPanel(), "Support");
         cardPanel.add(buildAboutPanel(), "About");
 
-        JList<String> categoryList = new JList<>(CATEGORIES);
-        categoryList.setSelectedIndex(0);
+        int initialIdx = 0;
+        for (int i = 0; i < CATEGORIES.length; i++) {
+            if (CATEGORIES[i].equals(initialCategory)) {
+                initialIdx = i;
+                break;
+            }
+        }
+
+        categoryList = new JList<>(CATEGORIES);
+        categoryList.setSelectedIndex(initialIdx);
         categoryList.setFixedCellHeight(36);
         categoryList.setCellRenderer(new DefaultListCellRenderer() {
 
@@ -91,6 +118,10 @@ public class PreferencesDialog extends JDialog {
                     boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 setBorder(BorderFactory.createEmptyBorder(6, 12, 6, 8));
+                if (index >= 0 && index < CATEGORY_COLORS.length) {
+                    setIcon(new DotIcon(CATEGORY_COLORS[index]));
+                }
+                setIconTextGap(8);
                 return this;
             }
         });
@@ -101,11 +132,15 @@ public class PreferencesDialog extends JDialog {
         });
 
         JScrollPane listScroll = new JScrollPane(categoryList);
-        listScroll.setPreferredSize(new Dimension(150, 0));
+        listScroll.setPreferredSize(new Dimension(190, 0));
         listScroll.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, getBackground().darker()));
 
         add(listScroll, BorderLayout.WEST);
         add(cardPanel, BorderLayout.CENTER);
+
+        if (initialIdx > 0) {
+            cards.show(cardPanel, initialCategory);
+        }
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
         JButton applyBtn = new JButton("Apply");
@@ -187,11 +222,11 @@ public class PreferencesDialog extends JDialog {
         return p;
     }
 
-    private JPanel buildDisplayPanel() {
+    private JPanel buildThemesPanel() {
         JPanel p = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = gbc();
 
-        addSection(p, gbc, "DISPLAY");
+        addSection(p, gbc, "THEMES");
 
         gbc.gridy++;
         gbc.gridwidth = 1;
@@ -201,10 +236,18 @@ public class PreferencesDialog extends JDialog {
         gbc.weightx = 1.0;
         p.add(themeCombo, gbc);
 
-        gbc.gridx = 0;
+        addFiller(p, gbc);
+        return p;
+    }
+
+    private JPanel buildDisplayPanel() {
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = gbc();
+
+        addSection(p, gbc, "DISPLAY");
+
         gbc.gridy++;
-        gbc.fill = GridBagConstraints.NONE;
-        gbc.weightx = 0;
+        gbc.gridwidth = 1;
         p.add(new JLabel("Font size:"), gbc);
         gbc.gridx = 1;
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -367,9 +410,94 @@ public class PreferencesDialog extends JDialog {
         p.add(new JLabel("Security Scanner - Authorized testing only"), gbc);
 
         gbc.gridy++;
-        JLabel author = new JLabel("AnarCry by Yatari Security");
+        JLabel author = new JLabel("AnarCry by Effront");
         author.setForeground(author.getForeground().darker());
         p.add(author, gbc);
+
+        return p;
+    }
+
+    private JPanel buildLicensePanel() {
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.anchor = GridBagConstraints.CENTER;
+        gbc.insets = new Insets(12, 0, 6, 0);
+
+        JLabel title = new JLabel("LICENSE");
+        title.setFont(title.getFont().deriveFont(11f));
+        title.setForeground(title.getForeground().darker());
+        p.add(title, gbc);
+
+        gbc.gridy++;
+        gbc.insets = new Insets(16, 0, 4, 0);
+        p.add(new JLabel("AnarCry - Proprietary License"), gbc);
+
+        gbc.gridy++;
+        gbc.insets = new Insets(4, 0, 4, 0);
+        JLabel notice = new JLabel("Authorized security testing use only");
+        notice.setForeground(notice.getForeground().darker());
+        p.add(notice, gbc);
+
+        gbc.gridy++;
+        gbc.insets = new Insets(16, 0, 4, 0);
+        p.add(new JLabel("Effront - All rights reserved"), gbc);
+
+        return p;
+    }
+
+    private JPanel buildNotificationsPanel() {
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = gbc();
+
+        addSection(p, gbc, "NOTIFICATIONS");
+
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        JCheckBox scanComplete = new JCheckBox("Notify on scan complete", true);
+        p.add(scanComplete, gbc);
+
+        gbc.gridy++;
+        JCheckBox criticalFinding = new JCheckBox("Notify on critical finding", true);
+        p.add(criticalFinding, gbc);
+
+        gbc.gridy++;
+        JCheckBox updateAvailable = new JCheckBox("Check for updates");
+        p.add(updateAvailable, gbc);
+
+        addFiller(p, gbc);
+        return p;
+    }
+
+    private JPanel buildSupportPanel() {
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.anchor = GridBagConstraints.CENTER;
+        gbc.insets = new Insets(12, 0, 6, 0);
+
+        JLabel title = new JLabel("SUPPORT");
+        title.setFont(title.getFont().deriveFont(11f));
+        title.setForeground(title.getForeground().darker());
+        p.add(title, gbc);
+
+        gbc.gridy++;
+        gbc.insets = new Insets(16, 0, 4, 0);
+        p.add(new JLabel("Report issues or request features"), gbc);
+
+        gbc.gridy++;
+        gbc.insets = new Insets(12, 0, 4, 0);
+        JLabel docs = new JLabel("Documentation: docs.effront.gg/anarcry");
+        docs.setForeground(new Color(0x58, 0xA6, 0xFF));
+        p.add(docs, gbc);
+
+        gbc.gridy++;
+        gbc.insets = new Insets(4, 0, 4, 0);
+        JLabel repo = new JLabel("Repository: github.com/effront/anarcry");
+        repo.setForeground(new Color(0x58, 0xA6, 0xFF));
+        p.add(repo, gbc);
 
         return p;
     }
@@ -488,5 +616,33 @@ public class PreferencesDialog extends JDialog {
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.VERTICAL;
         p.add(new JLabel(), gbc);
+    }
+
+    private static class DotIcon implements javax.swing.Icon {
+
+        private final Color color;
+
+        DotIcon(Color color) {
+            this.color = color;
+        }
+
+        @Override
+        public void paintIcon(Component c, java.awt.Graphics g, int x, int y) {
+            java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+            g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.fillOval(x, y, 10, 10);
+            g2.dispose();
+        }
+
+        @Override
+        public int getIconWidth() {
+            return 10;
+        }
+
+        @Override
+        public int getIconHeight() {
+            return 10;
+        }
     }
 }
