@@ -458,6 +458,20 @@ Built-in LLM-powered security analyst available in both TUI and GUI. Supports fo
 
 ## 10 - Changelog
 
+### v2.0.1
+
+**Security Hardening + Static Analysis Cleanup**
+- **FormLoginHarvester scope validation**: form action URLs and redirect destinations validated against target root domain before sending credentials - prevents credential leakage to external domains
+- **FormLoginHarvester method handling**: honors parsed form method (GET/POST), rejects unsupported methods instead of silently forcing POST
+- **Http.sendSimple()**: lightweight HTTP helper for pre-scan auth flows that don't have ScanContext (FormLoginHarvester now routes through Http instead of raw HttpClient)
+- **Cookie rotation expiry**: Http.rotateCookie() parses max-age from Set-Cookie header instead of hardcoding 3600s default
+- **CredentialStore**: removed hardcoded expiry default - callers must pass explicit expiry duration
+- **FirebaseAuthClient**: URL-encode refresh tokens in form body, use UUID for probe credentials instead of predictable timestamps, log cleanup failures
+- **FirebaseConfigExtractor**: use shared HttpClientFactory instead of raw HttpClient (prevents thread pool leak)
+- **ProviderDetector**: precompiled regex patterns (was compiling per call), proper InterruptedException handling
+- **Hooks hardening**: command injection fix in ac-filter.js (exec form instead of sh -c), prototype pollution guards, path validation with traversal depth limits, canonical path resolution
+- **CI config**: exclude hooks/ from Codacy and Semgrep analysis (local CLI tooling, not application code)
+
 ### v2.0.0
 
 **Credential Harvester - auto-auth pipeline**
