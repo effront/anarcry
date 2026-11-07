@@ -1,11 +1,14 @@
 package gg.effront.anarcry.gui.components;
 
+import gg.effront.anarcry.Version;
 import gg.effront.anarcry.gui.PrivacyFilter;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.FlowLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
@@ -14,10 +17,6 @@ import javax.swing.JProgressBar;
 import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 
-/**
- * Bottom status bar displaying severity counts, module progress, current
- * target, and a privacy mode toggle on the right.
- */
 public class GuiStatusBar extends JPanel {
 
     private static final Color COLOR_CRITICAL = new Color(0xF8, 0x51, 0x49);
@@ -26,6 +25,8 @@ public class GuiStatusBar extends JPanel {
     private static final Color COLOR_LOW = new Color(0x58, 0xA6, 0xFF);
     private static final Color COLOR_SEPARATOR = new Color(0x8B, 0x94, 0x9E);
     private static final Color COLOR_PRIVACY_ON = new Color(0x3F, 0xB9, 0x50);
+    private static final Color COLOR_PROXY_ON = new Color(0x3F, 0xB9, 0x50);
+    private static final Color COLOR_VERSION = new Color(0x8B, 0x94, 0x9E);
 
     private final JLabel criticalLabel;
     private final JLabel highLabel;
@@ -36,6 +37,13 @@ public class GuiStatusBar extends JPanel {
     private final JProgressBar progressBar;
     private final JToggleButton privacyToggle;
 
+    private final JLabel searchLabel;
+    private final JLabel cookiesLabel;
+    private final JLabel proxyLabel;
+    private final JLabel versionLabel;
+
+    private Runnable onSearchClick;
+
     private String rawTarget = "";
     private int modulesCompleted = 0;
     private int modulesTotal = 0;
@@ -44,7 +52,6 @@ public class GuiStatusBar extends JPanel {
         super(new BorderLayout());
         setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
 
-        // -- Left panel: severity + modules + target + progress --
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
         left.setOpaque(false);
 
@@ -53,14 +60,7 @@ public class GuiStatusBar extends JPanel {
         mediumLabel = coloredLabel("M:0", COLOR_MEDIUM);
         lowLabel = coloredLabel("L:0", COLOR_LOW);
 
-        JLabel sep1 = new JLabel("|");
-        sep1.setForeground(COLOR_SEPARATOR);
-
         modulesLabel = new JLabel("Modules: 0/0");
-
-        JLabel sep2 = new JLabel("|");
-        sep2.setForeground(COLOR_SEPARATOR);
-
         targetLabel = new JLabel("");
 
         progressBar = new JProgressBar(0, 100);
@@ -71,15 +71,28 @@ public class GuiStatusBar extends JPanel {
         left.add(highLabel);
         left.add(mediumLabel);
         left.add(lowLabel);
-        left.add(sep1);
+        left.add(separator());
         left.add(modulesLabel);
-        left.add(sep2);
+        left.add(separator());
         left.add(targetLabel);
         left.add(progressBar);
 
-        // -- Right panel: privacy toggle --
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
         right.setOpaque(false);
+
+        searchLabel = clickableLabel("Search");
+        searchLabel.addMouseListener(new MouseAdapter() {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (onSearchClick != null) {
+                    onSearchClick.run();
+                }
+            }
+        });
+
+        cookiesLabel = clickableLabel("Cookies(0)");
+        proxyLabel = clickableLabel("Proxy: OFF");
 
         privacyToggle = new JToggleButton("Privacy: OFF");
         privacyToggle.setFocusable(false);
@@ -88,7 +101,19 @@ public class GuiStatusBar extends JPanel {
             PrivacyFilter.toggle();
             updatePrivacyLabel();
         });
+
+        versionLabel = new JLabel("v" + Version.get());
+        versionLabel.setForeground(COLOR_VERSION);
+
+        right.add(searchLabel);
+        right.add(separator());
+        right.add(cookiesLabel);
+        right.add(separator());
+        right.add(proxyLabel);
+        right.add(separator());
         right.add(privacyToggle);
+        right.add(separator());
+        right.add(versionLabel);
 
         add(left, BorderLayout.CENTER);
         add(right, BorderLayout.EAST);
@@ -96,7 +121,21 @@ public class GuiStatusBar extends JPanel {
         PrivacyFilter.addListener(() -> SwingUtilities.invokeLater(this::onPrivacyChanged));
     }
 
-    /** Update severity count labels. Safe to call from any thread. */
+    public void setOnSearchClick(Runnable action) {
+        this.onSearchClick = action;
+    }
+
+    public void setProxyEnabled(boolean on) {
+        SwingUtilities.invokeLater(() -> {
+            proxyLabel.setText(on ? "Proxy: ON" : "Proxy: OFF");
+            proxyLabel.setForeground(on ? COLOR_PROXY_ON : null);
+        });
+    }
+
+    public void setCookieCount(int count) {
+        SwingUtilities.invokeLater(() -> cookiesLabel.setText("Cookies(" + count + ")"));
+    }
+
     public void setSeverityCounts(int c, int h, int m, int l) {
         SwingUtilities.invokeLater(() -> {
             criticalLabel.setText("C:" + c);
@@ -106,7 +145,6 @@ public class GuiStatusBar extends JPanel {
         });
     }
 
-    /** Set total module count at scan start. Safe to call from any thread. */
     public void setModuleTotal(int total) {
         SwingUtilities.invokeLater(() -> {
             modulesTotal = total;
@@ -115,7 +153,6 @@ public class GuiStatusBar extends JPanel {
         });
     }
 
-    /** Increment completion counter by one. Safe to call from any thread. */
     public void moduleCompleted() {
         SwingUtilities.invokeLater(() -> {
             modulesCompleted++;
@@ -123,7 +160,6 @@ public class GuiStatusBar extends JPanel {
         });
     }
 
-    /** Reset progress to zero. Safe to call from any thread. */
     public void resetProgress() {
         SwingUtilities.invokeLater(() -> {
             modulesCompleted = 0;
@@ -144,9 +180,6 @@ public class GuiStatusBar extends JPanel {
         }
     }
 
-    /**
-     * @deprecated Use {@link #setModuleTotal(int)} + {@link #moduleCompleted()}.
-     */
     @Deprecated
     public void setModuleProgress(int done, int total) {
         SwingUtilities.invokeLater(() -> {
@@ -156,20 +189,15 @@ public class GuiStatusBar extends JPanel {
         });
     }
 
-    /** Update target label. Safe to call from any thread. */
     public void setTarget(String t) {
         rawTarget = t != null ? t : "";
         SwingUtilities.invokeLater(() -> targetLabel.setText(PrivacyFilter.apply(rawTarget)));
     }
 
-    /**
-     * Show or hide the indeterminate progress bar. Safe to call from any thread.
-     */
     public void setScanning(boolean scanning) {
         SwingUtilities.invokeLater(() -> progressBar.setVisible(scanning));
     }
 
-    /** Returns the privacy toggle button for external shortcut wiring. */
     public JToggleButton getPrivacyToggle() {
         return privacyToggle;
     }
@@ -183,16 +211,24 @@ public class GuiStatusBar extends JPanel {
         boolean on = PrivacyFilter.isEnabled();
         privacyToggle.setSelected(on);
         privacyToggle.setText(on ? "Privacy: ON" : "Privacy: OFF");
-        if (on) {
-            privacyToggle.setForeground(COLOR_PRIVACY_ON);
-        } else {
-            privacyToggle.setForeground(null);
-        }
+        privacyToggle.setForeground(on ? COLOR_PRIVACY_ON : null);
     }
 
     private static JLabel coloredLabel(String text, Color fg) {
         JLabel label = new JLabel(text);
         label.setForeground(fg);
         return label;
+    }
+
+    private static JLabel clickableLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return label;
+    }
+
+    private static JLabel separator() {
+        JLabel sep = new JLabel("|");
+        sep.setForeground(COLOR_SEPARATOR);
+        return sep;
     }
 }

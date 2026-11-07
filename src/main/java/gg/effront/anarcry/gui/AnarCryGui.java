@@ -14,6 +14,7 @@ import gg.effront.anarcry.gui.views.FindingDetailDialog;
 import gg.effront.anarcry.gui.views.FindingsView;
 import gg.effront.anarcry.gui.views.PreferencesDialog;
 import gg.effront.anarcry.gui.views.AssistantView;
+import gg.effront.anarcry.gui.views.ApiClientView;
 import gg.effront.anarcry.gui.views.RepeaterView;
 import gg.effront.anarcry.gui.views.ReportView;
 import gg.effront.anarcry.gui.views.SiteMapView;
@@ -71,6 +72,7 @@ public class AnarCryGui {
     private SiteMapView siteMapView;
     private RepeaterView repeaterView;
     private ReportView reportView;
+    private ApiClientView apiClientView;
     private AssistantView assistantView;
 
     private JTabbedPane tabs;
@@ -94,6 +96,7 @@ public class AnarCryGui {
         siteMapView = new SiteMapView();
         repeaterView = new RepeaterView();
         reportView = new ReportView();
+        apiClientView = new ApiClientView();
         assistantView = new AssistantView();
 
         resetSeverityCounts();
@@ -232,6 +235,7 @@ public class AnarCryGui {
         tabs.addTab("Repeater", repeaterView);
         tabs.addTab("Report", reportView);
         tabs.addTab("SiteMap", siteMapView);
+        tabs.addTab("API Client", apiClientView);
         tabs.addTab("Assistant", assistantView);
         tabs.setSelectedIndex(1);
 

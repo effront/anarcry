@@ -38,6 +38,7 @@ import gg.effront.anarcry.tui.chrome.StatusBar;
 import gg.effront.anarcry.tui.modes.Mode;
 import gg.effront.anarcry.tui.modes.RepeaterMode;
 import gg.effront.anarcry.tui.modes.TargetMode;
+import gg.effront.anarcry.tui.panels.ApiClientPanel;
 import gg.effront.anarcry.tui.panels.AssistantPanel;
 import gg.effront.anarcry.tui.panels.FindingsPanel;
 import gg.effront.anarcry.tui.panels.LogPanel;
@@ -87,6 +88,7 @@ public class AnarCryTui {
     private FindingsPanel findingsPanel;
     private SiteMapPanel siteMapPanel;
     private ModulesPanel modulesPanel;
+    private ApiClientPanel apiClientPanel;
     private AssistantPanel assistantPanel;
     private Consumer<RequestRecord> requestCb;
     private BasicWindow window;
@@ -264,9 +266,12 @@ public class AnarCryTui {
                     switchMode(Mode.SITEMAP);
                     hasBeenHandled.set(true);
                 } else if (kt == KeyType.F8) {
-                    switchMode(Mode.ASSISTANT);
+                    switchMode(Mode.API_CLIENT);
                     hasBeenHandled.set(true);
                 } else if (kt == KeyType.F9) {
+                    switchMode(Mode.ASSISTANT);
+                    hasBeenHandled.set(true);
+                } else if (kt == KeyType.F10) {
                     EventLogDrawer.show(gui, logHistory);
                     hasBeenHandled.set(true);
                 } else if (keyStroke instanceof MouseAction ma && ma.getActionType() == MouseActionType.CLICK_RELEASE
@@ -384,6 +389,7 @@ public class AnarCryTui {
             case REPEATER -> RepeaterMode.build(modulesPanel.getTarget(), modulesPanel.getJwt());
             case REPORT -> buildReportContent();
             case SITEMAP -> buildSiteMapContent();
+            case API_CLIENT -> buildApiClientContent();
             case ASSISTANT -> buildAssistantContent();
         };
     }
@@ -411,6 +417,17 @@ public class AnarCryTui {
         p.addComponent(siteMapPanel.withBorder(Borders.singleLine("SITE MAP -- F7  requisições HTTP interceptadas")),
                 BorderLayout.Location.CENTER);
         return p;
+    }
+
+    private Component buildApiClientContent() {
+        if (apiClientPanel == null) {
+            TerminalSize ts = gui.getScreen().getTerminalSize();
+            int h = Math.max(8, ts.getRows() - 4);
+            apiClientPanel = new ApiClientPanel(h, this::addToLog);
+        }
+        var wrapper = new Panel(new BorderLayout());
+        wrapper.addComponent(apiClientPanel, BorderLayout.Location.CENTER);
+        return wrapper;
     }
 
     private Component buildAssistantContent() {
