@@ -6,6 +6,8 @@ import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
+import gg.effront.anarcry.scanner.oast.OastCorrelator;
+import gg.effront.anarcry.scanner.oast.OastPayload;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.ProbeExecutor;
@@ -255,6 +257,35 @@ public class SsrfModule implements Scanner {
             });
         }
         findings.addAll(ProbeExecutor.run(mainTasks, concurrency, cancelMain));
+
+        // Phase 2b: OOB SSRF via OAST callback -- inject callback URLs as SSRF targets
+        OastCorrelator oast = ctx.oastCorrelator();
+        if (findings.isEmpty() && oast != null && !oast.callbackBaseUrl().isEmpty()) {
+            log.accept("[~] SSRF: injetando payloads OOB via OAST callback server");
+            boolean waf = ctx.wafState().isWafDetected();
+            List<String> oobParams = waf ? WAF_URL_PARAMS : urlParams;
+            for (String path : activePaths) {
+                for (String param : oobParams) {
+                    try {
+                        String payloadId = OastCorrelator.generatePayloadId();
+                        String oobCallbackUrl = oast.callbackUrl(payloadId);
+                        String encoded = URLEncoder.encode(oobCallbackUrl, "UTF-8");
+                        String url = baseUrl + path + "?" + param + "=" + encoded;
+
+                        oast.registerPayload(new OastPayload(payloadId, id(), path + "?" + param, param, oobCallbackUrl,
+                                System.currentTimeMillis()));
+
+                        HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(5))
+                                .GET().build();
+                        Http.send(ctx, hc, req, HttpResponse.BodyHandlers.discarding(), id());
+                    } catch (Exception e) {
+                        // OOB injection errors are non-fatal -- continue
+                    }
+                }
+            }
+            log.accept("[~] SSRF: " + oast.pendingCount() + " payloads OOB registrados"
+                    + " -- callbacks serao correlacionados apos Phase 2");
+        }
 
         // Phase 3: Redirect bypass -- parallelized by path
         if (findings.isEmpty()) {

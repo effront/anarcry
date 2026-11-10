@@ -64,6 +64,16 @@ public class ModulesPanel extends Panel {
     private final CheckBox xssCheck;
     private final CheckBox lfiCheck;
     private final CheckBox cmdInjectionCheck;
+    private final CheckBox csrfCheck;
+    private final CheckBox secretsCheck;
+    private final CheckBox raceConditionCheck;
+    private final CheckBox nosqliCheck;
+    private final CheckBox deserializationCheck;
+    private final CheckBox fileUploadCheck;
+    private final CheckBox subTakeoverCheck;
+    private final CheckBox webSocketCheck;
+    private final CheckBox protoPollutionCheck;
+    private final CheckBox cloudMisconfigCheck;
     private final CheckBox exploitationCheck;
     private final PasteableTextBox targetBox;
     private final PasteableTextBox jwtTokenBox;
@@ -133,6 +143,26 @@ public class ModulesPanel extends Panel {
         lfiCheck.setChecked(true);
         cmdInjectionCheck = new CheckBox("CmdInjection");
         cmdInjectionCheck.setChecked(true);
+        csrfCheck = new CheckBox("CSRF");
+        csrfCheck.setChecked(true);
+        secretsCheck = new CheckBox("Secrets");
+        secretsCheck.setChecked(true);
+        raceConditionCheck = new CheckBox("RaceCondition");
+        raceConditionCheck.setChecked(false);
+        nosqliCheck = new CheckBox("NoSQLi");
+        nosqliCheck.setChecked(true);
+        deserializationCheck = new CheckBox("Deserialization");
+        deserializationCheck.setChecked(true);
+        fileUploadCheck = new CheckBox("FileUpload");
+        fileUploadCheck.setChecked(false);
+        subTakeoverCheck = new CheckBox("SubTakeover");
+        subTakeoverCheck.setChecked(true);
+        webSocketCheck = new CheckBox("WebSocket");
+        webSocketCheck.setChecked(true);
+        protoPollutionCheck = new CheckBox("ProtoPollution");
+        protoPollutionCheck.setChecked(true);
+        cloudMisconfigCheck = new CheckBox("CloudMisconfig");
+        cloudMisconfigCheck.setChecked(true);
 
         Label reconLabel = new Label("── RECON ───────────────");
         reconLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.CYAN);
@@ -171,6 +201,16 @@ public class ModulesPanel extends Panel {
         addComponent(xssCheck);
         addComponent(lfiCheck);
         addComponent(cmdInjectionCheck);
+        addComponent(csrfCheck);
+        addComponent(secretsCheck);
+        addComponent(raceConditionCheck);
+        addComponent(nosqliCheck);
+        addComponent(deserializationCheck);
+        addComponent(fileUploadCheck);
+        addComponent(subTakeoverCheck);
+        addComponent(webSocketCheck);
+        addComponent(protoPollutionCheck);
+        addComponent(cloudMisconfigCheck);
         addComponent(idorCheck);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
@@ -413,6 +453,36 @@ public class ModulesPanel extends Panel {
         }
         if (cmdInjectionCheck.isChecked()) {
             modules.add("CmdInjection");
+        }
+        if (csrfCheck.isChecked()) {
+            modules.add("CSRF");
+        }
+        if (secretsCheck.isChecked()) {
+            modules.add("Secrets");
+        }
+        if (raceConditionCheck.isChecked()) {
+            modules.add("RaceCondition");
+        }
+        if (nosqliCheck.isChecked()) {
+            modules.add("NoSQLi");
+        }
+        if (deserializationCheck.isChecked()) {
+            modules.add("Deserialization");
+        }
+        if (fileUploadCheck.isChecked()) {
+            modules.add("FileUpload");
+        }
+        if (subTakeoverCheck.isChecked()) {
+            modules.add("SubTakeover");
+        }
+        if (webSocketCheck.isChecked()) {
+            modules.add("WebSocket");
+        }
+        if (protoPollutionCheck.isChecked()) {
+            modules.add("ProtoPollution");
+        }
+        if (cloudMisconfigCheck.isChecked()) {
+            modules.add("CloudMisconfig");
         }
 
         if (modules.isEmpty()) {

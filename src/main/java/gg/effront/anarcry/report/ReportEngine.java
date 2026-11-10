@@ -2,6 +2,7 @@ package gg.effront.anarcry.report;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import gg.effront.anarcry.Version;
 import gg.effront.anarcry.exploit.ExploitStatus;
 import gg.effront.anarcry.exploit.ValidatedFinding;
 import gg.effront.anarcry.model.Finding;
@@ -493,6 +494,132 @@ public class ReportEngine {
     }
 
     // -------------------------------------------------------------------------
+    // SARIF v2.1.0 export -- CI/CD integration (GitHub Code Scanning, GitLab SAST)
+    // -------------------------------------------------------------------------
+
+    public String exportSarif(List<Finding> findings, String targetUrl) throws IOException {
+        return exportSarif(findings, targetUrl, List.of(), List.of());
+    }
+
+    public String exportSarif(List<Finding> findings, String targetUrl, List<String> testedModules,
+            List<String> testedClean) throws IOException {
+        List<Finding> sorted = findings.stream().sorted(Comparator.comparingInt(f -> ORDER.indexOf(f.severity())))
+                .toList();
+
+        // Build top-level SARIF structure
+        Map<String, Object> sarif = new LinkedHashMap<>();
+        sarif.put("$schema",
+                "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json");
+        sarif.put("version", "2.1.0");
+
+        // Build the single run
+        Map<String, Object> run = new LinkedHashMap<>();
+
+        // Tool descriptor
+        Map<String, Object> driver = new LinkedHashMap<>();
+        driver.put("name", "AnarCry");
+        driver.put("version", Version.get());
+        driver.put("informationUri", "https://github.com/effront/anarcry");
+
+        // Rules -- one per unique module
+        Map<String, List<Finding>> byModule = groupByRootCause(sorted);
+        List<Map<String, Object>> rules = new ArrayList<>();
+        int ruleIndex = 0;
+        Map<String, Integer> ruleIndexMap = new LinkedHashMap<>();
+
+        for (var entry : byModule.entrySet()) {
+            String module = entry.getKey();
+            Finding rep = entry.getValue().getFirst();
+            KnowledgeEntry kbEntry = resolveKb(module);
+
+            Map<String, Object> rule = new LinkedHashMap<>();
+            rule.put("id", module);
+            rule.put("shortDescription", Map.of("text", rep.title()));
+
+            String fullDesc = kbEntry != null && kbEntry.description() != null && !kbEntry.description().isBlank()
+                    ? kbEntry.description()
+                    : rep.impact();
+            rule.put("fullDescription", Map.of("text", safe(fullDesc)));
+
+            String helpText = kbEntry != null && kbEntry.recommendation() != null && !kbEntry.recommendation().isBlank()
+                    ? kbEntry.recommendation()
+                    : rep.recommendation();
+            rule.put("help", Map.of("text", safe(helpText)));
+
+            Map<String, Object> ruleProps = new LinkedHashMap<>();
+            List<String> tags = new ArrayList<>();
+            tags.add(rep.cweId());
+            if (kbEntry != null && kbEntry.cweTitle() != null) {
+                tags.add(kbEntry.cweTitle());
+            }
+            ruleProps.put("tags", tags);
+            ruleProps.put("precision", "medium");
+            rule.put("properties", ruleProps);
+
+            rules.add(rule);
+            ruleIndexMap.put(module, ruleIndex++);
+        }
+        driver.put("rules", rules);
+        run.put("tool", Map.of("driver", driver));
+
+        // Results -- one per finding
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (Finding f : sorted) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("ruleId", f.module());
+            Integer ri = ruleIndexMap.get(f.module());
+            if (ri != null) {
+                result.put("ruleIndex", ri);
+            }
+            result.put("level", sarifLevel(f.severity()));
+            result.put("message", Map.of("text", f.title() + " -- " + safe(f.evidence())));
+
+            // Location
+            Map<String, Object> artifactLocation = new LinkedHashMap<>();
+            artifactLocation.put("uri", f.endpoint());
+            Map<String, Object> physicalLocation = Map.of("artifactLocation", artifactLocation);
+            result.put("locations", List.of(Map.of("physicalLocation", physicalLocation)));
+
+            // Custom properties
+            Map<String, Object> resultProps = new LinkedHashMap<>();
+            resultProps.put("cvssScore", f.cvssScore());
+            resultProps.put("cvssVector", safe(f.cvssVector()));
+            resultProps.put("severity", f.severity().name());
+            resultProps.put("impact", safe(f.impact()));
+            resultProps.put("reproduction", safe(f.reproduction()));
+            resultProps.put("cweId", f.cweId());
+            result.put("properties", resultProps);
+
+            results.add(result);
+        }
+        run.put("results", results);
+
+        // Invocation with target
+        Map<String, Object> invocation = new LinkedHashMap<>();
+        invocation.put("executionSuccessful", true);
+        invocation.put("commandLine", "anarcry --target " + targetUrl);
+        run.put("invocations", List.of(invocation));
+
+        sarif.put("runs", List.of(run));
+
+        // Write file
+        String json = GSON.toJson(sarif);
+        String timestamp = LocalDateTime.now().format(FMT);
+        Files.createDirectories(REPORTS_DIR);
+        Path path = REPORTS_DIR.resolve("sarif-report-" + timestamp + ".sarif.json");
+        Files.writeString(path, json);
+        return path.toString();
+    }
+
+    private static String sarifLevel(Severity severity) {
+        return switch (severity) {
+            case CRITICAL, HIGH -> "error";
+            case MEDIUM -> "warning";
+            case LOW, INFO -> "note";
+        };
+    }
+
+    // -------------------------------------------------------------------------
     // Unified platform export
     // -------------------------------------------------------------------------
 
@@ -506,8 +633,9 @@ public class ReportEngine {
         return switch (platform.toLowerCase()) {
             case "h1" -> exportH1(findings, targetUrl, programName, testedModules, testedClean);
             case "bugcrowd" -> exportBugcrowd(findings, targetUrl, testedModules, testedClean);
-            default ->
-                throw new IllegalArgumentException("Unknown platform: " + platform + ". Use 'h1' or 'bugcrowd'.");
+            case "sarif" -> exportSarif(findings, targetUrl, testedModules, testedClean);
+            default -> throw new IllegalArgumentException(
+                    "Unknown platform: " + platform + ". Use 'h1', 'bugcrowd', or 'sarif'.");
         };
     }
 

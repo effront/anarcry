@@ -27,6 +27,7 @@ public class Main {
         boolean headless = false;
         boolean tui = false;
         String target = null;
+        String format = "anarcry";
         int timeoutMinutes = HEADLESS_TIMEOUT_MINUTES;
 
         int idx = 0;
@@ -50,6 +51,9 @@ public class Main {
             } else if ("--timeout".equals(arg) && idx + 1 < args.length) {
                 timeoutMinutes = Integer.parseInt(args[idx + 1]);
                 idx += 2;
+            } else if ("--format".equals(arg) && idx + 1 < args.length) {
+                format = args[idx + 1];
+                idx += 2;
             } else {
                 idx++;
             }
@@ -66,7 +70,7 @@ public class Main {
         }
 
         if (headless) {
-            runHeadless(env, target, timeoutMinutes);
+            runHeadless(env, target, timeoutMinutes, format);
         } else if (tui) {
             new AnarCryTui().start(env);
         } else {
@@ -74,7 +78,8 @@ public class Main {
         }
     }
 
-    private static void runHeadless(EnvLoader env, String targetArg, int timeoutMinutes) throws Exception {
+    private static void runHeadless(EnvLoader env, String targetArg, int timeoutMinutes, String format)
+            throws Exception {
         String target = targetArg;
         String jwt1 = "";
         String jwt2 = "";
@@ -123,7 +128,14 @@ public class Main {
                 .forEach(f -> System.out.printf("  %-8s [%s] %s%n", f.severity(), f.module(), f.title()));
 
         if (!findings.isEmpty()) {
-            String report = new ReportEngine().export(new ArrayList<>(findings), target);
+            ReportEngine engine = new ReportEngine();
+            List<Finding> snapshot = new ArrayList<>(findings);
+            String report = switch (format.toLowerCase()) {
+                case "h1" -> engine.exportH1(snapshot, target, "AnarCry Scan");
+                case "bugcrowd" -> engine.exportBugcrowd(snapshot, target);
+                case "sarif" -> engine.exportSarif(snapshot, target);
+                default -> engine.export(snapshot, target);
+            };
             System.out.println("\n[*] Report: " + report);
         }
     }

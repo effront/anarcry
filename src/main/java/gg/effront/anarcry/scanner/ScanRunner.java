@@ -6,6 +6,9 @@ import gg.effront.anarcry.exploit.ValidatedFinding;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.RequestRecord;
 import gg.effront.anarcry.model.Severity;
+import gg.effront.anarcry.scanner.oast.OastConfig;
+import gg.effront.anarcry.scanner.oast.OastCorrelator;
+import gg.effront.anarcry.scanner.oast.OastServer;
 import gg.effront.anarcry.scanner.util.BrowserTransport;
 import gg.effront.anarcry.scanner.util.ChallengeSolver;
 import gg.effront.anarcry.scanner.util.CircuitBreakerException;
@@ -34,9 +37,19 @@ import gg.effront.anarcry.scanner.web.cachepoisoning.CachePoisoningModule;
 import gg.effront.anarcry.scanner.web.smuggling.RequestSmugglingModule;
 import gg.effront.anarcry.scanner.web.cmdinject.CommandInjectionModule;
 import gg.effront.anarcry.scanner.web.crawler.CrawlerModule;
+import gg.effront.anarcry.scanner.web.csrf.CsrfModule;
+import gg.effront.anarcry.scanner.web.deser.DeserializationModule;
 import gg.effront.anarcry.scanner.web.infra.InfraModule;
 import gg.effront.anarcry.scanner.web.lfi.LfiModule;
+import gg.effront.anarcry.scanner.web.nosqli.NoSqlInjectionModule;
+import gg.effront.anarcry.scanner.web.protopollution.PrototypePollutionModule;
+import gg.effront.anarcry.scanner.web.race.RaceConditionModule;
+import gg.effront.anarcry.scanner.web.secrets.SecretsModule;
+import gg.effront.anarcry.scanner.web.cloud.CloudMisconfigModule;
 import gg.effront.anarcry.scanner.web.sqli.SqlInjectionModule;
+import gg.effront.anarcry.scanner.web.subtakeover.SubdomainTakeoverModule;
+import gg.effront.anarcry.scanner.web.upload.FileUploadModule;
+import gg.effront.anarcry.scanner.web.websocket.WebSocketModule;
 import gg.effront.anarcry.scanner.web.xss.XssModule;
 
 import java.util.ArrayList;
@@ -235,11 +248,41 @@ public class ScanRunner {
         if (ctx.has("CmdInjection")) {
             modules.add(new CommandInjectionModule());
         }
+        if (ctx.has("CSRF")) {
+            modules.add(new CsrfModule());
+        }
         if (ctx.has("Crawler")) {
             modules.add(new CrawlerModule());
         }
+        if (ctx.has("RaceCondition")) {
+            modules.add(new RaceConditionModule());
+        }
         if (ctx.has("Infra")) {
             modules.add(new InfraModule());
+        }
+        if (ctx.has("Secrets")) {
+            modules.add(new SecretsModule());
+        }
+        if (ctx.has("NoSQLi")) {
+            modules.add(new NoSqlInjectionModule());
+        }
+        if (ctx.has("Deserialization")) {
+            modules.add(new DeserializationModule());
+        }
+        if (ctx.has("FileUpload")) {
+            modules.add(new FileUploadModule());
+        }
+        if (ctx.has("SubTakeover")) {
+            modules.add(new SubdomainTakeoverModule());
+        }
+        if (ctx.has("WebSocket")) {
+            modules.add(new WebSocketModule());
+        }
+        if (ctx.has("ProtoPollution")) {
+            modules.add(new PrototypePollutionModule());
+        }
+        if (ctx.has("CloudMisconfig")) {
+            modules.add(new CloudMisconfigModule());
         }
         modules.addAll(customModules);
 
@@ -512,69 +555,160 @@ public class ScanRunner {
         List<CompletableFuture<?>> futures = new ArrayList<>();
         ConcurrentHashMap<String, Thread> moduleThreads = new ConcurrentHashMap<>();
 
-        if (!scanners.isEmpty()) {
-            safeLog.accept("[*] Phase 2: " + scanners.size() + " scanner modules (parallel)");
-
-            for (int i = 0; i < scanners.size(); i++) {
-                final Scanner module = scanners.get(i);
-                final int moduleIndex = enricherCount + i + 1;
-                eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_START, module.id(), moduleIndex, moduleCount));
-                safeLog.accept("[*] Modulo " + module.id() + " iniciado");
-
-                CompletableFuture<List<Finding>> future = CompletableFuture.supplyAsync(() -> {
-                    moduleThreads.put(module.id(), Thread.currentThread());
-                    try {
-                        return module.scan(ctx, safeLog);
-                    } catch (Throwable e) {
-                        throw new RuntimeException(e);
-                    } finally {
-                        moduleThreads.remove(module.id());
-                    }
-                }, modulePool).orTimeout(MODULE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-
-                futures.add(future.handle((findings, ex) -> {
-                    if (ex != null) {
-                        Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                        if (cause instanceof TimeoutException) {
-                            safeLog.accept("[!] " + module.id() + " timeout apos " + MODULE_TIMEOUT_SECONDS
-                                    + "s -- abortando modulo");
-                            Thread t = moduleThreads.remove(module.id());
-                            if (t != null) {
-                                t.interrupt();
-                            }
-                        } else if (cause instanceof CircuitBreakerException) {
-                            safeLog.accept("[!] " + cause.getMessage());
-                        } else {
-                            safeLog.accept("[!] " + module.id() + " erro: " + ex.getMessage());
-                        }
-                    } else {
-                        recordModuleResult(module.id(), findings);
-                        for (Finding f : findings) {
-                            String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
-                            if (seenFindings.add(dedupKey)) {
-                                if (ctx.config().isSuppressed(f.module(), f.title(), ctx.host())) {
-                                    safeLog.accept("[~] suppressed: " + f.module() + " -- " + f.title());
-                                } else {
-                                    findingCb.accept(f);
-                                    accumulatedFindings.add(f);
-                                    synchronized (total) {
-                                        total[0]++;
-                                    }
-                                }
-                            } else {
-                                safeLog.accept(
-                                        "[~] dedup: ignorado finding duplicado -- " + f.module() + " " + f.title());
-                            }
-                        }
-                        safeLog.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
-                    }
-                    eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, module.id(), moduleIndex, moduleCount));
-                    return (Void) null;
-                }));
+        // OAST: start callback server before Phase 2 if enabled
+        OastCorrelator oastCorrelator = null;
+        OastServer oastServer = null;
+        ScanContext phase2Ctx = ctx;
+        if (ctx.config().oastEnabled()) {
+            try {
+                oastCorrelator = new OastCorrelator();
+                OastConfig oastCfg = ctx.config().oastConfig();
+                oastServer = new OastServer(oastCorrelator, oastCfg.externalUrl(), safeLog);
+                // Rebuild ScanContext with the OAST correlator so modules can register payloads
+                phase2Ctx = new ScanContext(ctx.targetUrl(), ctx.jwtToken(), ctx.jwtToken2(), ctx.enabledModules(),
+                        ctx.config(), ctx.requestLog(), ctx.discoveredPaths(), ctx.wafState(), ctx.credentialStore(),
+                        oastCorrelator);
+                safeLog.accept("[+] OAST: callback base URL -- " + oastServer.callbackBaseUrl());
+            } catch (Exception e) {
+                safeLog.accept("[!] OAST: falha ao iniciar callback server -- " + e.getMessage());
+                oastCorrelator = null;
+                oastServer = null;
             }
         }
+        final ScanContext scanCtx = phase2Ctx;
+        final OastServer oastServerRef = oastServer;
+        final OastCorrelator oastCorrelatorRef = oastCorrelator;
 
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        try {
+            if (!scanners.isEmpty()) {
+                safeLog.accept("[*] Phase 2: " + scanners.size() + " scanner modules (parallel)");
+
+                for (int i = 0; i < scanners.size(); i++) {
+                    final Scanner module = scanners.get(i);
+                    final int moduleIndex = enricherCount + i + 1;
+                    eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_START, module.id(), moduleIndex, moduleCount));
+                    safeLog.accept("[*] Modulo " + module.id() + " iniciado");
+
+                    CompletableFuture<List<Finding>> future = CompletableFuture.supplyAsync(() -> {
+                        moduleThreads.put(module.id(), Thread.currentThread());
+                        try {
+                            return module.scan(scanCtx, safeLog);
+                        } catch (Throwable e) {
+                            throw new RuntimeException(e);
+                        } finally {
+                            moduleThreads.remove(module.id());
+                        }
+                    }, modulePool).orTimeout(MODULE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+                    futures.add(future.handle((findings, ex) -> {
+                        if (ex != null) {
+                            Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                            if (cause instanceof TimeoutException) {
+                                safeLog.accept("[!] " + module.id() + " timeout apos " + MODULE_TIMEOUT_SECONDS
+                                        + "s -- abortando modulo");
+                                Thread t = moduleThreads.remove(module.id());
+                                if (t != null) {
+                                    t.interrupt();
+                                }
+                            } else if (cause instanceof CircuitBreakerException) {
+                                safeLog.accept("[!] " + cause.getMessage());
+                            } else {
+                                safeLog.accept("[!] " + module.id() + " erro: " + ex.getMessage());
+                            }
+                        } else {
+                            recordModuleResult(module.id(), findings);
+                            for (Finding f : findings) {
+                                String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
+                                if (seenFindings.add(dedupKey)) {
+                                    if (scanCtx.config().isSuppressed(f.module(), f.title(), scanCtx.host())) {
+                                        safeLog.accept("[~] suppressed: " + f.module() + " -- " + f.title());
+                                    } else {
+                                        findingCb.accept(f);
+                                        accumulatedFindings.add(f);
+                                        synchronized (total) {
+                                            total[0]++;
+                                        }
+                                    }
+                                } else {
+                                    safeLog.accept(
+                                            "[~] dedup: ignorado finding duplicado -- " + f.module() + " " + f.title());
+                                }
+                            }
+                            safeLog.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
+                        }
+                        eventCb.accept(
+                                new ScanEvent(ScanEvent.Type.MODULE_DONE, module.id(), moduleIndex, moduleCount));
+                        return (Void) null;
+                    }));
+                }
+            }
+
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+            // Phase 2.5: OAST callback wait and correlation
+            if (oastCorrelatorRef != null && oastCorrelatorRef.pendingCount() > 0) {
+                int waitSec = scanCtx.config().oastConfig().callbackWaitSeconds();
+                safeLog.accept("[*] Phase 2.5: OAST -- aguardando " + waitSec + "s por callbacks OOB ("
+                        + oastCorrelatorRef.pendingCount() + " payloads pendentes)...");
+                try {
+                    Thread.sleep(waitSec * 1000L);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    safeLog.accept("[!] OAST: espera interrompida");
+                }
+                safeLog.accept("[~] OAST: " + oastCorrelatorRef.callbackCount() + " callback(s) recebido(s)");
+
+                List<OastCorrelator.CorrelatedHit> hits = oastCorrelatorRef.correlate();
+                if (!hits.isEmpty()) {
+                    safeLog.accept("[!!] OAST: " + hits.size() + " hit(s) correlacionado(s)");
+                    for (OastCorrelator.CorrelatedHit hit : hits) {
+                        String dedupKey = hit.payload().moduleId() + "|" + hit.payload().targetEndpoint()
+                                + "|OOB Callback Confirmed (" + hit.payload().moduleId() + ")";
+                        if (seenFindings.add(dedupKey)) {
+                            Finding f = Finding.of(hit.payload().moduleId(), hit.payload().targetEndpoint(),
+                                    "OOB Callback Confirmed ("
+                                            + hit.payload().moduleId() + ") via " + hit.callback().protocol(),
+                                    Severity.HIGH,
+                                    "Payload ID: " + hit.payload().payloadId() + " | Parameter: "
+                                            + hit.payload().parameterName() + " | Full payload: "
+                                            + hit.payload().fullPayload() + " | Callback from: "
+                                            + hit.callback().sourceIp() + " via " + hit.callback().protocol()
+                                            + " | Request: " + hit.callback().requestData(),
+                                    "O servidor alvo fez uma requisicao out-of-band para o callback server "
+                                            + "do scanner, confirmando que o payload injetado no parametro '"
+                                            + hit.payload().parameterName() + "' foi processado pelo servidor. "
+                                            + "Isto confirma a vulnerabilidade de forma definitiva.",
+                                    "Injetar o payload '" + hit.payload().fullPayload() + "' no parametro '"
+                                            + hit.payload().parameterName() + "' do endpoint '"
+                                            + hit.payload().targetEndpoint() + "' e monitorar callbacks HTTP.",
+                                    "Validar e sanitizar todos os inputs que podem resultar em requisicoes "
+                                            + "server-side. Bloquear conexoes de saida do servidor para destinos "
+                                            + "nao-autorizados. Implementar allowlist de hosts/IPs permitidos.");
+                            if (!scanCtx.config().isSuppressed(f.module(), f.title(), scanCtx.host())) {
+                                findingCb.accept(f);
+                                accumulatedFindings.add(f);
+                                total[0]++;
+                            }
+                        }
+                    }
+                } else {
+                    safeLog.accept("[+] OAST: nenhum callback correlacionado");
+                }
+            } else if (oastCorrelatorRef != null) {
+                safeLog.accept("[~] OAST: nenhum payload OOB registrado pelos modulos -- pulando espera");
+            }
+
+        } finally {
+            // Cleanup: stop OAST server
+            if (oastServerRef != null) {
+                try {
+                    oastServerRef.close();
+                    safeLog.accept("[+] OAST: callback server encerrado");
+                } catch (Exception e) {
+                    safeLog.accept("[!] OAST: erro ao encerrar callback server -- " + e.getMessage());
+                }
+            }
+        }
 
         // Phase 3: Exploitation (post-scan validation)
         if (ctx.config().exploitationEnabled() && !accumulatedFindings.isEmpty()) {

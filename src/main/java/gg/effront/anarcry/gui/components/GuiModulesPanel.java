@@ -109,6 +109,16 @@ public class GuiModulesPanel extends JPanel {
         checksPanel.add(moduleCheck("XSS", true));
         checksPanel.add(moduleCheck("LFI", true));
         checksPanel.add(moduleCheck("CmdInjection", true));
+        checksPanel.add(moduleCheck("CSRF", true));
+        checksPanel.add(moduleCheck("Secrets", true));
+        checksPanel.add(moduleCheck("RaceCondition", false));
+        checksPanel.add(moduleCheck("NoSQLi", true));
+        checksPanel.add(moduleCheck("Deserialization", true));
+        checksPanel.add(moduleCheck("FileUpload", false));
+        checksPanel.add(moduleCheck("SubTakeover", true));
+        checksPanel.add(moduleCheck("WebSocket", true));
+        checksPanel.add(moduleCheck("ProtoPollution", true));
+        checksPanel.add(moduleCheck("CloudMisconfig", true));
         checksPanel.add(moduleCheck("IDOR", false));
 
         checksPanel.add(Box.createVerticalStrut(12));

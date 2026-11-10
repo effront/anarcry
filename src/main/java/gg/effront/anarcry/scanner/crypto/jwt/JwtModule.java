@@ -259,6 +259,19 @@ public class JwtModule implements Scanner {
                     new JwkInjectionProbe().probe(parts, ctx, base, hc, log).ifPresent(findings::add);
                 }
 
+                // Probe F: x5c self-signed certificate injection (RS256)
+                if (alg.equalsIgnoreCase("RS256")) {
+                    new X5cChainProbe().probe(parts, ctx, base, hc, log).ifPresent(findings::add);
+                }
+
+                // Probe G: x5u remote certificate fetch
+                new X5uCertProbe().probe(parts, ctx, base, hc, log).ifPresent(findings::add);
+
+                // Probe H: key confusion via JWKS public key (RS256)
+                if (alg.equalsIgnoreCase("RS256")) {
+                    new KeyConfusionProbe().probe(parts, ctx, base, hc, log).ifPresent(findings::add);
+                }
+
             } catch (Exception ex) {
                 log.accept("[~] JWT: probes ativas indisponíveis: " + ex.getMessage());
             }

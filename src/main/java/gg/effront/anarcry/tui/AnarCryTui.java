@@ -784,6 +784,10 @@ public class AnarCryTui {
             dialog.close();
             exportJson(snapshot);
         });
+        actions.addItem("[5] SARIF (CI/CD)", () -> {
+            dialog.close();
+            exportSarif(snapshot);
+        });
         panel.addComponent(actions);
 
         panel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
@@ -813,6 +817,10 @@ public class AnarCryTui {
                     } else if (c == '4') {
                         dialog.close();
                         exportJson(snapshot);
+                        deliver.set(false);
+                    } else if (c == '5') {
+                        dialog.close();
+                        exportSarif(snapshot);
                         deliver.set(false);
                     }
                 }
@@ -905,6 +913,17 @@ public class AnarCryTui {
             addToLog("[+] JSON export: " + path);
         } catch (Throwable t) {
             addToLog("[!] JSON export error: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
+    }
+
+    private void exportSarif(List<Finding> snapshot) {
+        String target = modulesPanel.getTarget();
+        try {
+            String file = new ReportEngine().exportSarif(snapshot, target.isBlank() ? "unknown" : target,
+                    scanRunner.testedModules(), scanRunner.testedClean());
+            addToLog("[+] SARIF report: " + file);
+        } catch (Throwable t) {
+            addToLog("[!] SARIF export error: " + t.getClass().getSimpleName() + ": " + t.getMessage());
         }
     }
 
