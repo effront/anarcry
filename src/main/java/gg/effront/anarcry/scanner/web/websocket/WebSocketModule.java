@@ -70,7 +70,8 @@ public class WebSocketModule implements Scanner {
             // Phase 4: Protocol detection // nosemgrep: detect-insecure-websocket
             if (!ctx.isHttps()) { // nosemgrep: detect-insecure-websocket
                 log.accept("[!] " + id() + ": unencrypted WebSocket (ws://) at " + path); // nosemgrep
-                findings.add(Finding.of(id(), path, "Unencrypted WebSocket (ws://) -- " + path, Severity.LOW, // nosemgrep
+                String title = "Unencrypted WebSocket (ws://) -- " + path; // nosemgrep
+                findings.add(Finding.of(id(), path, title, Severity.LOW,
                         "URL: ws://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "") + path // nosemgrep
                                 + " | Protocol: ws:// (plaintext)", // nosemgrep
                         "WebSocket traffic is transmitted in plaintext, allowing network-level attackers "
