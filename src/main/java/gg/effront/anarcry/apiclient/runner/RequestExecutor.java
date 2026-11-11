@@ -15,7 +15,10 @@ import gg.effront.anarcry.apiclient.model.RequestItem;
 import gg.effront.anarcry.apiclient.model.RequestResult;
 import gg.effront.anarcry.apiclient.model.RequestSettings;
 import gg.effront.anarcry.apiclient.model.ResponseData;
+import gg.effront.anarcry.apiclient.model.ScriptDef;
 import gg.effront.anarcry.apiclient.model.VarsDef;
+import gg.effront.anarcry.apiclient.script.ScriptEngine;
+import gg.effront.anarcry.apiclient.script.ScriptResult;
 import gg.effront.anarcry.apiclient.vars.Interpolator;
 import gg.effront.anarcry.apiclient.vars.VariableStore;
 
@@ -42,6 +45,7 @@ public class RequestExecutor {
     private final Interpolator interpolator;
     private final AuthInjectorRegistry authRegistry;
     private final AssertionEngine assertionEngine;
+    private final ScriptEngine scriptEngine;
 
     public RequestExecutor(HttpClient httpClient, Interpolator interpolator, AuthInjectorRegistry authRegistry,
             AssertionEngine assertionEngine) {
@@ -49,6 +53,7 @@ public class RequestExecutor {
         this.interpolator = interpolator;
         this.authRegistry = authRegistry;
         this.assertionEngine = assertionEngine;
+        this.scriptEngine = new ScriptEngine();
     }
 
     public RequestResult execute(RequestItem item, RunContext ctx, Collection collection, Consumer<String> log) {
@@ -60,6 +65,11 @@ public class RequestExecutor {
 
             // Phase 2: PRE-VARS - resolve pre-request variables
             resolvePreVars(item.vars().pre(), ctx.vars());
+
+            // Phase 2.5: PRE-REQUEST SCRIPT
+            ScriptDef scripts = item.scripts();
+            ScriptResult preScriptResult = scriptEngine.runPreRequest(scripts, merged, ctx.vars());
+            logScriptOutput(preScriptResult, "pre-request", log);
 
             // Phase 3: INTERPOLATE - {{var}} in URL, headers, body, auth, params
             HttpRequestDef interpolated = interpolateRequest(merged, ctx.vars());
@@ -73,11 +83,17 @@ public class RequestExecutor {
             // Phase 6: POST-VARS - extract from response
             resolvePostVars(item.vars().post(), response, ctx.vars());
 
+            // Phase 6.5: POST-RESPONSE SCRIPT + TESTS
+            ScriptResult postScriptResult = scriptEngine.runPostResponse(scripts, interpolated, response, ctx.vars());
+            logScriptOutput(postScriptResult, "post-response", log);
+            ctx.setLastScriptResult(postScriptResult);
+
             // Phase 7: ASSERTIONS
             List<AssertionResult> assertResults = assertionEngine.evaluate(item.assertions(), response, ctx.vars());
 
             long duration = (System.nanoTime() - start) / 1_000_000;
-            boolean passed = assertResults.stream().allMatch(AssertionResult::passed);
+            boolean passed = assertResults.stream().allMatch(AssertionResult::passed)
+                    && postScriptResult.testsFailed() == 0;
 
             return new RequestResult(item, interpolated, response, assertResults, duration, passed);
         } catch (Exception e) {
@@ -86,6 +102,23 @@ public class RequestExecutor {
             ResponseData errorResponse = new ResponseData(0, "Error: " + e.getMessage(), Map.of(), "", new byte[0],
                     duration, 0);
             return new RequestResult(item, item.request(), errorResponse, List.of(), duration, false);
+        }
+    }
+
+    private void logScriptOutput(ScriptResult result, String phase, Consumer<String> log) {
+        if (result == null) {
+            return;
+        }
+        for (String line : result.consoleLog()) {
+            log.accept("  [script:" + phase + "] " + line);
+        }
+        if (result.hasError()) {
+            log.accept("  [script:" + phase + "] ERROR: " + result.error());
+        }
+        for (ScriptResult.TestResult t : result.testResults()) {
+            String status = t.passed() ? "PASS" : "FAIL";
+            String msg = t.message().isEmpty() ? "" : " -- " + t.message();
+            log.accept("  [test] " + status + ": " + t.name() + msg);
         }
     }
 

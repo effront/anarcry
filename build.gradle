@@ -8,7 +8,7 @@ plugins {
 }
 
 group = 'gg.effront'
-version = '2.2.0'
+version = '2.2.1'
 
 java {
     toolchain {
@@ -26,6 +26,10 @@ dependencies {
     implementation 'com.github.zhkl0228:impersonator-okhttp:1.11.0'
     implementation 'com.microsoft.playwright:playwright:1.49.0'
     implementation 'com.google.code.gson:gson:2.11.0'
+
+    // Scripting (GraalJS)
+    implementation 'org.graalvm.polyglot:polyglot:24.1.1'
+    implementation 'org.graalvm.polyglot:js-community:24.1.1'
 
     // GUI (Swing + FlatLaf)
     implementation 'com.formdev:flatlaf:3.5.4'

@@ -1,6 +1,7 @@
 package gg.effront.anarcry.apiclient.runner;
 
 import gg.effront.anarcry.apiclient.model.RequestResult;
+import gg.effront.anarcry.apiclient.script.ScriptResult;
 import gg.effront.anarcry.apiclient.vars.VariableStore;
 
 import java.net.CookieManager;
@@ -17,6 +18,7 @@ public class RunContext {
     private final AtomicBoolean cancel;
     private volatile boolean stopRequested;
     private volatile String nextRequest;
+    private volatile ScriptResult lastScriptResult;
 
     public RunContext(VariableStore vars) {
         this.vars = vars;
@@ -63,5 +65,13 @@ public class RunContext {
 
     public void clearNextRequest() {
         this.nextRequest = null;
+    }
+
+    public void setLastScriptResult(ScriptResult result) {
+        this.lastScriptResult = result;
+    }
+
+    public ScriptResult lastScriptResult() {
+        return lastScriptResult;
     }
 }

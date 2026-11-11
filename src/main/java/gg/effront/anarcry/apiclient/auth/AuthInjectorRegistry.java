@@ -24,6 +24,10 @@ public class AuthInjectorRegistry {
         register(new DigestAuthInjector());
         register(new OAuth2Injector());
         register(new WsseInjector());
+        register(new NtlmInjector());
+        register(new OAuth1Injector());
+        register(new AwsV4Injector());
+        register(new EdgeGridInjector());
     }
 
     public void register(AuthInjector injector) {

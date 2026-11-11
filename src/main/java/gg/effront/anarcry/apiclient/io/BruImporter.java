@@ -16,6 +16,7 @@ import gg.effront.anarcry.apiclient.model.ParamsDef;
 import gg.effront.anarcry.apiclient.model.RequestItem;
 import gg.effront.anarcry.apiclient.model.RequestMeta;
 import gg.effront.anarcry.apiclient.model.RootConfig;
+import gg.effront.anarcry.apiclient.model.ScriptDef;
 import gg.effront.anarcry.apiclient.model.VarsDef;
 
 import java.io.IOException;
@@ -161,6 +162,9 @@ public class BruImporter {
         List<VarsDef.VarEntry> postVars = new ArrayList<>();
         List<Assertion> assertions = new ArrayList<>();
         String docs = "";
+        String preRequestScript = "";
+        String postResponseScript = "";
+        String testsScript = "";
         int seq = 0;
 
         for (Block block : parseBlocks(content)) {
@@ -270,6 +274,9 @@ public class BruImporter {
                         }
                     }
                 }
+                case "script:pre-request" -> preRequestScript = blockContent;
+                case "script:post-response" -> postResponseScript = blockContent;
+                case "tests" -> testsScript = blockContent;
                 case "docs" -> docs = blockContent;
                 default -> {
                 }
@@ -280,8 +287,9 @@ public class BruImporter {
                 body, null);
         VarsDef vars = new VarsDef(preVars, postVars);
         RequestMeta meta = RequestMeta.http(requestName, seq);
+        ScriptDef scripts = new ScriptDef(preRequestScript, postResponseScript, testsScript);
 
-        return new RequestItem(null, requestName, meta, request, vars, assertions, docs);
+        return new RequestItem(null, requestName, meta, request, vars, assertions, docs, scripts);
     }
 
     private Environment parseEnvironment(Path file) throws IOException {

@@ -4,7 +4,9 @@ import gg.effront.anarcry.apiclient.auth.AuthInjectorRegistry;
 import gg.effront.anarcry.apiclient.io.BruImporter;
 import gg.effront.anarcry.apiclient.io.CollectionLoader;
 import gg.effront.anarcry.apiclient.io.CollectionWriter;
+import gg.effront.anarcry.apiclient.io.CurlGenerator;
 import gg.effront.anarcry.apiclient.io.CurlImporter;
+import gg.effront.anarcry.apiclient.io.InsomniaImporter;
 import gg.effront.anarcry.apiclient.io.OpenApiImporter;
 import gg.effront.anarcry.apiclient.io.PostmanImporter;
 import gg.effront.anarcry.apiclient.model.AssertOp;
@@ -14,6 +16,7 @@ import gg.effront.anarcry.apiclient.model.AuthConfig;
 import gg.effront.anarcry.apiclient.model.BodyConfig;
 import gg.effront.anarcry.apiclient.model.Collection;
 import gg.effront.anarcry.apiclient.model.CollectionItem;
+import gg.effront.anarcry.apiclient.model.EnvVariable;
 import gg.effront.anarcry.apiclient.model.Environment;
 import gg.effront.anarcry.apiclient.model.Folder;
 import gg.effront.anarcry.apiclient.model.Header;
@@ -25,15 +28,20 @@ import gg.effront.anarcry.apiclient.model.RequestMeta;
 import gg.effront.anarcry.apiclient.model.RequestResult;
 import gg.effront.anarcry.apiclient.model.RequestSettings;
 import gg.effront.anarcry.apiclient.model.RunResult;
+import gg.effront.anarcry.apiclient.model.RunSummary;
+import gg.effront.anarcry.apiclient.model.ScriptDef;
 import gg.effront.anarcry.apiclient.model.VarsDef;
+import gg.effront.anarcry.apiclient.script.ScriptResult;
 import gg.effront.anarcry.apiclient.runner.AssertionEngine;
 import gg.effront.anarcry.apiclient.runner.CollectionRunner;
 import gg.effront.anarcry.apiclient.runner.RequestExecutor;
 import gg.effront.anarcry.apiclient.runner.RunContext;
 import gg.effront.anarcry.apiclient.vars.Interpolator;
 import gg.effront.anarcry.apiclient.vars.VariableStore;
+import gg.effront.anarcry.gui.components.KvTableEditor;
 
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
@@ -56,15 +64,18 @@ import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.DropMode;
 import javax.swing.JButton;
+import javax.swing.DefaultListModel;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPasswordField;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
@@ -114,11 +125,25 @@ public class ApiClientView extends JPanel {
     private JButton sendButton;
     private JComboBox<String> envCombo;
     private JComboBox<String> bodyTypeCombo;
-    private JTextArea headersArea;
+    private KvTableEditor headersEditor;
     private RSyntaxTextArea bodyArea;
-    private JTextArea paramsArea;
+    private KvTableEditor formBodyEditor;
+    private CardLayout bodyCardLayout;
+    private JPanel bodyCardPanel;
+    private KvTableEditor paramsEditor;
     private JComboBox<String> authTypeCombo;
-    private JTextArea authFieldsArea;
+    private CardLayout authCardLayout;
+    private JPanel authCards;
+    private JTextField authBearerToken;
+    private JTextField authBasicUser;
+    private JTextField authBasicPass;
+    private JTextField authApiKeyKey;
+    private JTextField authApiKeyValue;
+    private JComboBox<String> authApiKeyPlacement;
+    private JTextField authDigestUser;
+    private JTextField authDigestPass;
+    private JTextField authWsseUser;
+    private JTextField authWssePass;
     private JTextArea varsPreArea;
     private JTextArea varsPostArea;
     private DefaultTableModel assertTableModel;
@@ -131,8 +156,45 @@ public class ApiClientView extends JPanel {
     private JTabbedPane responseTabPane;
     private JTextArea responseHeaders;
     private JTextArea assertionsResultArea;
+    private DefaultTableModel cookiesTableModel;
+    private DefaultTableModel variablesTableModel;
     private JPanel requestTabsPanel;
     private JButton overflowButton;
+
+    private JTextField authOAuth2GrantType;
+    private JTextField authOAuth2TokenUrl;
+    private JTextField authOAuth2ClientId;
+    private JTextField authOAuth2ClientSecret;
+    private JTextField authOAuth2Scope;
+    private JTextField authOAuth2CallbackUrl;
+    private JTextField authOAuth2AuthUrl;
+    private JCheckBox authOAuth2Pkce;
+    private JTextField authNtlmUser;
+    private JTextField authNtlmPass;
+    private JTextField authNtlmDomain;
+    private JTextField authAwsAccessKey;
+    private JTextField authAwsSecretKey;
+    private JTextField authAwsSession;
+    private JTextField authAwsService;
+    private JTextField authAwsRegion;
+    private JTextField authOAuth1ConsumerKey;
+    private JTextField authOAuth1ConsumerSecret;
+    private JTextField authOAuth1AccessToken;
+    private JTextField authOAuth1TokenSecret;
+    private JTextField authEdgeAccessToken;
+    private JTextField authEdgeClientToken;
+    private JTextField authEdgeClientSecret;
+
+    private RSyntaxTextArea preRequestScriptArea;
+    private RSyntaxTextArea postResponseScriptArea;
+    private RSyntaxTextArea testsScriptArea;
+    private JTextArea scriptConsoleArea;
+    private JCheckBox proxyEnabled;
+    private JComboBox<String> proxyProtocolCombo;
+    private JTextField proxyHost;
+    private JSpinner proxyPort;
+    private JTextField proxyUser;
+    private JPasswordField proxyPass;
 
     private Collection currentCollection;
     private Path collectionPath;
@@ -142,6 +204,8 @@ public class ApiClientView extends JPanel {
     private final HttpClient httpClient;
     private final List<String> runLog = new ArrayList<>();
     private RunContext sessionContext;
+    private DefaultListModel<RequestResult> historyModel;
+    private JList<RequestResult> historyList;
 
     public ApiClientView() {
         super(new BorderLayout());
@@ -270,7 +334,50 @@ public class ApiClientView extends JPanel {
             }
         });
 
-        sidebar.add(new JScrollPane(collectionTree), BorderLayout.CENTER);
+        historyModel = new DefaultListModel<>();
+        historyList = new JList<>(historyModel);
+        historyList.setFont(monoFont());
+        historyList.setCellRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected,
+                    boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof RequestResult rr) {
+                    String method = rr.interpolatedRequest() != null ? rr.interpolatedRequest().method() : "?";
+                    int status = rr.response() != null ? rr.response().status() : 0;
+                    String url = rr.interpolatedRequest() != null ? rr.interpolatedRequest().url() : "";
+                    setText(method + " " + status + " " + url);
+                    setForeground(statusColor(status));
+                }
+                return this;
+            }
+        });
+        historyList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                RequestResult sel = historyList.getSelectedValue();
+                if (sel != null) {
+                    displayResult(sel);
+                }
+            }
+        });
+
+        JPanel historyPanel = new JPanel(new BorderLayout());
+        JLabel historyLabel = new JLabel(" History");
+        historyLabel.setFont(historyLabel.getFont().deriveFont(Font.BOLD, 11f));
+        JButton clearHistBtn = new JButton("Clear");
+        clearHistBtn.setFont(clearHistBtn.getFont().deriveFont(10f));
+        clearHistBtn.setMargin(new java.awt.Insets(1, 4, 1, 4));
+        clearHistBtn.addActionListener(e -> historyModel.clear());
+        JPanel histTop = new JPanel(new BorderLayout());
+        histTop.add(historyLabel, BorderLayout.WEST);
+        histTop.add(clearHistBtn, BorderLayout.EAST);
+        historyPanel.add(histTop, BorderLayout.NORTH);
+        historyPanel.add(new JScrollPane(historyList), BorderLayout.CENTER);
+
+        JSplitPane sidebarSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(collectionTree),
+                historyPanel);
+        sidebarSplit.setResizeWeight(0.75);
+        sidebar.add(sidebarSplit, BorderLayout.CENTER);
 
         JPanel buttons = new JPanel(new java.awt.GridLayout(5, 1, 2, 2));
         buttons.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
@@ -439,6 +546,10 @@ public class ApiClientView extends JPanel {
         sendButton = new JButton("Send");
         sendButton.addActionListener(e -> sendRequest());
 
+        JButton copyCurlBtn = new JButton("cURL");
+        copyCurlBtn.setToolTipText("Copy as cURL command");
+        copyCurlBtn.addActionListener(e -> copyAsCurl());
+
         envCombo = new JComboBox<>();
         envCombo.addItem("(no env)");
         envCombo.setPreferredSize(new Dimension(140, 28));
@@ -456,9 +567,13 @@ public class ApiClientView extends JPanel {
         envPanel.add(envCombo, BorderLayout.CENTER);
         envPanel.add(envConfigBtn, BorderLayout.EAST);
 
+        JPanel sendPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        sendPanel.add(copyCurlBtn);
+        sendPanel.add(sendButton);
+
         JPanel rightBar = new JPanel(new BorderLayout(4, 0));
         rightBar.add(envPanel, BorderLayout.CENTER);
-        rightBar.add(sendButton, BorderLayout.EAST);
+        rightBar.add(sendPanel, BorderLayout.EAST);
 
         bar.add(left, BorderLayout.CENTER);
         bar.add(rightBar, BorderLayout.EAST);
@@ -470,10 +585,10 @@ public class ApiClientView extends JPanel {
     private JTabbedPane buildRequestEditor() {
         JTabbedPane tabs = new JTabbedPane();
 
-        headersArea = new JTextArea(8, 40);
-        headersArea.setFont(monoFont());
-        headersArea.setText("User-Agent: " + gg.effront.anarcry.Version.userAgent() + "\nAccept: */*");
-        tabs.addTab("Headers", new JScrollPane(headersArea));
+        headersEditor = new KvTableEditor();
+        headersEditor.addRow("User-Agent", gg.effront.anarcry.Version.userAgent(), true);
+        headersEditor.addRow("Accept", "*/*", true);
+        tabs.addTab("Headers", headersEditor);
 
         JPanel bodyPanel = new JPanel(new BorderLayout());
         bodyTypeCombo = new JComboBox<>(new String[]{"JSON", "Text", "XML", "FormUrlEncoded", "GraphQL", "None"});
@@ -482,22 +597,47 @@ public class ApiClientView extends JPanel {
         bodyTopBar.add(new JLabel("Type:"));
         bodyTopBar.add(bodyTypeCombo);
         bodyPanel.add(bodyTopBar, BorderLayout.NORTH);
+        bodyCardLayout = new CardLayout();
+        bodyCardPanel = new JPanel(bodyCardLayout);
         bodyArea = createSyntaxArea(false);
         bodyArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JSON);
-        bodyPanel.add(new RTextScrollPane(bodyArea), BorderLayout.CENTER);
+        bodyCardPanel.add(new RTextScrollPane(bodyArea), "text");
+        formBodyEditor = new KvTableEditor();
+        bodyCardPanel.add(formBodyEditor, "form");
+        bodyPanel.add(bodyCardPanel, BorderLayout.CENTER);
         tabs.addTab("Body", bodyPanel);
 
-        paramsArea = new JTextArea(8, 40);
-        paramsArea.setFont(monoFont());
-        tabs.addTab("Params", new JScrollPane(paramsArea));
+        paramsEditor = new KvTableEditor();
+        tabs.addTab("Params", paramsEditor);
 
         JPanel authPanel = new JPanel(new BorderLayout(4, 4));
         authPanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
-        authTypeCombo = new JComboBox<>(new String[]{"none", "bearer", "basic", "apikey", "digest", "oauth2", "wsse"});
-        authFieldsArea = new JTextArea(6, 40);
-        authFieldsArea.setFont(monoFont());
+        authTypeCombo = new JComboBox<>(new String[]{"none", "inherit", "bearer", "basic", "apikey", "digest", "oauth2",
+                "wsse", "ntlm", "awsv4", "oauth1", "akamai-edgegrid"});
+        authTypeCombo.addActionListener(e -> {
+            String sel = (String) authTypeCombo.getSelectedItem();
+            if (sel != null) {
+                authCardLayout.show(authCards, sel);
+            }
+        });
+
+        authCardLayout = new CardLayout();
+        authCards = new JPanel(authCardLayout);
+        authCards.add(new JLabel("No authentication"), "none");
+        authCards.add(new JLabel("Inherits from parent folder / collection"), "inherit");
+        authCards.add(buildBearerCard(), "bearer");
+        authCards.add(buildBasicCard(), "basic");
+        authCards.add(buildApiKeyCard(), "apikey");
+        authCards.add(buildDigestCard(), "digest");
+        authCards.add(buildOAuth2Card(), "oauth2");
+        authCards.add(buildWsseCard(), "wsse");
+        authCards.add(buildNtlmCard(), "ntlm");
+        authCards.add(buildAwsV4Card(), "awsv4");
+        authCards.add(buildOAuth1Card(), "oauth1");
+        authCards.add(buildEdgeGridCard(), "akamai-edgegrid");
+
         authPanel.add(authTypeCombo, BorderLayout.NORTH);
-        authPanel.add(new JScrollPane(authFieldsArea), BorderLayout.CENTER);
+        authPanel.add(authCards, BorderLayout.CENTER);
         tabs.addTab("Auth", authPanel);
 
         JPanel varsPanel = new JPanel(new BorderLayout(0, 4));
@@ -555,6 +695,8 @@ public class ApiClientView extends JPanel {
         docsArea.setWrapStyleWord(true);
         tabs.addTab("Docs", new JScrollPane(docsArea));
 
+        tabs.addTab("Script", buildScriptPanel());
+
         JPanel settingsPanel = new JPanel(new java.awt.GridBagLayout());
         settingsPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         java.awt.GridBagConstraints gbc = new java.awt.GridBagConstraints();
@@ -574,6 +716,37 @@ public class ApiClientView extends JPanel {
         timeoutRow.add(settingsTimeout);
         settingsPanel.add(timeoutRow, gbc);
         gbc.gridy++;
+        gbc.gridx = 0;
+        gbc.weightx = 0;
+        gbc.fill = java.awt.GridBagConstraints.NONE;
+        settingsPanel.add(new JLabel("--- Proxy ---"), gbc);
+        gbc.gridy++;
+        proxyEnabled = new JCheckBox("Enable Proxy");
+        settingsPanel.add(proxyEnabled, gbc);
+        gbc.gridy++;
+        JPanel proxyRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        proxyProtocolCombo = new JComboBox<>(new String[]{"http", "https", "socks5"});
+        proxyHost = new JTextField(15);
+        proxyHost.setFont(monoFont());
+        proxyPort = new JSpinner(new SpinnerNumberModel(8080, 1, 65535, 1));
+        proxyRow.add(proxyProtocolCombo);
+        proxyRow.add(new JLabel("://"));
+        proxyRow.add(proxyHost);
+        proxyRow.add(new JLabel(":"));
+        proxyRow.add(proxyPort);
+        settingsPanel.add(proxyRow, gbc);
+        gbc.gridy++;
+        JPanel proxyAuthRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        proxyAuthRow.add(new JLabel("User:"));
+        proxyUser = new JTextField(10);
+        proxyUser.setFont(monoFont());
+        proxyAuthRow.add(proxyUser);
+        proxyAuthRow.add(new JLabel("Pass:"));
+        proxyPass = new JPasswordField(10);
+        proxyPass.setFont(monoFont());
+        proxyAuthRow.add(proxyPass);
+        settingsPanel.add(proxyAuthRow, gbc);
+        gbc.gridy++;
         gbc.weighty = 1.0;
         settingsPanel.add(new JLabel(), gbc);
         tabs.addTab("Settings", settingsPanel);
@@ -581,14 +754,39 @@ public class ApiClientView extends JPanel {
         return tabs;
     }
 
+    private JPanel buildScriptPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        JTabbedPane scriptTabs = new JTabbedPane();
+
+        preRequestScriptArea = createSyntaxArea(false);
+        preRequestScriptArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT);
+        scriptTabs.addTab("Pre-request", new RTextScrollPane(preRequestScriptArea));
+
+        postResponseScriptArea = createSyntaxArea(false);
+        postResponseScriptArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT);
+        scriptTabs.addTab("Post-response", new RTextScrollPane(postResponseScriptArea));
+
+        testsScriptArea = createSyntaxArea(false);
+        testsScriptArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT);
+        scriptTabs.addTab("Tests", new RTextScrollPane(testsScriptArea));
+
+        panel.add(scriptTabs, BorderLayout.CENTER);
+        return panel;
+    }
+
     private void updateBodySyntax() {
         String type = (String) bodyTypeCombo.getSelectedItem();
-        bodyArea.setSyntaxEditingStyle(switch (type) {
-            case "JSON" -> SyntaxConstants.SYNTAX_STYLE_JSON;
-            case "XML" -> SyntaxConstants.SYNTAX_STYLE_XML;
-            case "GraphQL" -> SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT;
-            default -> SyntaxConstants.SYNTAX_STYLE_NONE;
-        });
+        if ("FormUrlEncoded".equals(type)) {
+            bodyCardLayout.show(bodyCardPanel, "form");
+        } else {
+            bodyCardLayout.show(bodyCardPanel, "text");
+            bodyArea.setSyntaxEditingStyle(switch (type) {
+                case "JSON" -> SyntaxConstants.SYNTAX_STYLE_JSON;
+                case "XML" -> SyntaxConstants.SYNTAX_STYLE_XML;
+                case "GraphQL" -> SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT;
+                default -> SyntaxConstants.SYNTAX_STYLE_NONE;
+            });
+        }
     }
 
     // ==================== RESPONSE VIEWER ====================
@@ -611,8 +809,12 @@ public class ApiClientView extends JPanel {
         JButton prettifyBtn = new JButton("Prettify");
         prettifyBtn.setFont(prettifyBtn.getFont().deriveFont(11f));
         prettifyBtn.addActionListener(e -> prettifyResponse());
+        JButton saveRespBtn = new JButton("Save");
+        saveRespBtn.setFont(saveRespBtn.getFont().deriveFont(11f));
+        saveRespBtn.addActionListener(e -> saveResponse());
         respButtons.add(copyBtn);
         respButtons.add(prettifyBtn);
+        respButtons.add(saveRespBtn);
         statusBar.add(responseStatus, BorderLayout.CENTER);
         statusBar.add(respButtons, BorderLayout.EAST);
         panel.add(statusBar, BorderLayout.NORTH);
@@ -632,6 +834,37 @@ public class ApiClientView extends JPanel {
         assertionsResultArea.setFont(monoFont());
         responseTabPane.addTab("Assertions", new JScrollPane(assertionsResultArea));
 
+        cookiesTableModel = new DefaultTableModel(
+                new String[]{"Name", "Value", "Domain", "Path", "Expires", "HttpOnly", "Secure"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        JTable cookiesTable = new JTable(cookiesTableModel);
+        cookiesTable.setFont(monoFont());
+        responseTabPane.addTab("Cookies", new JScrollPane(cookiesTable));
+
+        variablesTableModel = new DefaultTableModel(new String[]{"Scope", "Key", "Value"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        JTable variablesTable = new JTable(variablesTableModel);
+        variablesTable.setFont(monoFont());
+        variablesTable.setRowHeight(22);
+        variablesTable.getColumnModel().getColumn(0).setPreferredWidth(80);
+        variablesTable.getColumnModel().getColumn(0).setMaxWidth(100);
+        variablesTable.getColumnModel().getColumn(1).setPreferredWidth(150);
+        variablesTable.getColumnModel().getColumn(2).setPreferredWidth(300);
+        responseTabPane.addTab("Variables", new JScrollPane(variablesTable));
+
+        scriptConsoleArea = new JTextArea(6, 40);
+        scriptConsoleArea.setEditable(false);
+        scriptConsoleArea.setFont(monoFont());
+        responseTabPane.addTab("Console", new JScrollPane(scriptConsoleArea));
+
         panel.add(responseTabPane, BorderLayout.CENTER);
         return panel;
     }
@@ -647,6 +880,31 @@ public class ApiClientView extends JPanel {
             responseBody.setCaretPosition(0);
         } catch (Exception ex) {
             // not JSON, ignore
+        }
+    }
+
+    private void saveResponse() {
+        String text = responseBody.getText();
+        if (text.isBlank()) {
+            responseStatus.setText("  No response to save");
+            return;
+        }
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Save Response");
+        String ext = responseBody.getSyntaxEditingStyle().contains("json")
+                ? ".json"
+                : responseBody.getSyntaxEditingStyle().contains("html")
+                        ? ".html"
+                        : responseBody.getSyntaxEditingStyle().contains("xml") ? ".xml" : ".txt";
+        chooser.setSelectedFile(new java.io.File("response" + ext));
+        if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            try {
+                java.nio.file.Files.writeString(chooser.getSelectedFile().toPath(), text);
+                responseStatus.setText("  Saved to " + chooser.getSelectedFile().getName());
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Save failed: " + ex.getMessage(), "Error",
+                        JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 
@@ -868,8 +1126,15 @@ public class ApiClientView extends JPanel {
             menu.add(moveDown);
         }
 
-        if (node.getUserObject() instanceof RequestItem) {
+        if (node.getUserObject() instanceof RequestItem reqItem) {
             menu.addSeparator();
+
+            JMenuItem copyCurl = new JMenuItem("Copy as cURL");
+            copyCurl.addActionListener(ev -> {
+                String curl = CurlGenerator.generate(reqItem.request());
+                copyToClipboard(curl);
+            });
+            menu.add(copyCurl);
 
             JMenuItem duplicate = new JMenuItem("Duplicate");
             duplicate.addActionListener(ev -> duplicateRequest(node));
@@ -1117,30 +1382,34 @@ public class ApiClientView extends JPanel {
         methodCombo.setSelectedItem(req.method());
         urlField.setText(req.url());
 
-        StringBuilder hdr = new StringBuilder();
+        List<KvTableEditor.Entry> headerEntries = new ArrayList<>();
         for (Header h : req.headers()) {
-            if (h.enabled()) {
-                hdr.append(h.name()).append(": ").append(h.value()).append("\n");
-            }
+            headerEntries.add(new KvTableEditor.Entry(h.name(), h.value(), h.enabled()));
         }
-        headersArea.setText(hdr.toString());
+        headersEditor.setEntries(headerEntries);
 
-        StringBuilder params = new StringBuilder();
+        List<KvTableEditor.Entry> paramEntries = new ArrayList<>();
         if (req.params() != null) {
             for (Param p : req.params().query()) {
-                if (p.enabled()) {
-                    params.append(p.name()).append("=").append(p.value()).append("\n");
-                }
+                paramEntries.add(new KvTableEditor.Entry(p.name(), p.value(), p.enabled()));
             }
             for (Param p : req.params().path()) {
-                if (p.enabled()) {
-                    params.append(":").append(p.name()).append("=").append(p.value()).append("\n");
-                }
+                paramEntries.add(new KvTableEditor.Entry(":" + p.name(), p.value(), p.enabled()));
             }
         }
-        paramsArea.setText(params.toString());
+        paramsEditor.setEntries(paramEntries);
 
-        bodyArea.setText(extractBodyText(req.body()));
+        if (req.body() instanceof BodyConfig.FormUrlEncoded f) {
+            List<KvTableEditor.Entry> formEntries = new ArrayList<>();
+            for (Param p : f.params()) {
+                formEntries.add(new KvTableEditor.Entry(p.name(), p.value(), p.enabled()));
+            }
+            formBodyEditor.setEntries(formEntries);
+            bodyArea.setText("");
+        } else {
+            formBodyEditor.clear();
+            bodyArea.setText(extractBodyText(req.body()));
+        }
         selectBodyType(req.body());
         populateAuth(req.auth());
 
@@ -1173,6 +1442,16 @@ public class ApiClientView extends JPanel {
         settingsFollowRedirects.setSelected(settings.followRedirects());
         settingsTimeout.setValue(settings.timeoutMs());
         settingsEncodeUrl.setSelected(settings.encodeUrl());
+
+        if (item.scripts() != null) {
+            preRequestScriptArea.setText(item.scripts().preRequest());
+            postResponseScriptArea.setText(item.scripts().postResponse());
+            testsScriptArea.setText(item.scripts().tests());
+        } else {
+            preRequestScriptArea.setText("");
+            postResponseScriptArea.setText("");
+            testsScriptArea.setText("");
+        }
     }
 
     private String extractBodyText(BodyConfig body) {
@@ -1197,16 +1476,524 @@ public class ApiClientView extends JPanel {
         bodyTypeCombo.setSelectedItem(type);
     }
 
+    private JPanel buildBearerCard() {
+        JPanel p = authFormPanel();
+        java.awt.GridBagConstraints g = authFormGbc();
+        p.add(new JLabel("Token:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authBearerToken = new JTextField(30);
+        authBearerToken.setFont(monoFont());
+        p.add(authBearerToken, g);
+        g.gridy++;
+        g.weighty = 1.0;
+        p.add(new JLabel(), g);
+        return p;
+    }
+
+    private JPanel buildBasicCard() {
+        JPanel p = authFormPanel();
+        java.awt.GridBagConstraints g = authFormGbc();
+        p.add(new JLabel("Username:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authBasicUser = new JTextField(30);
+        authBasicUser.setFont(monoFont());
+        p.add(authBasicUser, g);
+        g.gridx = 0;
+        g.gridy = 1;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Password:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authBasicPass = new JTextField(30);
+        authBasicPass.setFont(monoFont());
+        p.add(authBasicPass, g);
+        g.gridy++;
+        g.weighty = 1.0;
+        p.add(new JLabel(), g);
+        return p;
+    }
+
+    private JPanel buildApiKeyCard() {
+        JPanel p = authFormPanel();
+        java.awt.GridBagConstraints g = authFormGbc();
+        p.add(new JLabel("Key:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authApiKeyKey = new JTextField(30);
+        authApiKeyKey.setFont(monoFont());
+        p.add(authApiKeyKey, g);
+        g.gridx = 0;
+        g.gridy = 1;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Value:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authApiKeyValue = new JTextField(30);
+        authApiKeyValue.setFont(monoFont());
+        p.add(authApiKeyValue, g);
+        g.gridx = 0;
+        g.gridy = 2;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Add to:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authApiKeyPlacement = new JComboBox<>(new String[]{"header", "queryparams"});
+        p.add(authApiKeyPlacement, g);
+        g.gridy++;
+        g.weighty = 1.0;
+        p.add(new JLabel(), g);
+        return p;
+    }
+
+    private JPanel buildDigestCard() {
+        JPanel p = authFormPanel();
+        java.awt.GridBagConstraints g = authFormGbc();
+        p.add(new JLabel("Username:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authDigestUser = new JTextField(30);
+        authDigestUser.setFont(monoFont());
+        p.add(authDigestUser, g);
+        g.gridx = 0;
+        g.gridy = 1;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Password:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authDigestPass = new JTextField(30);
+        authDigestPass.setFont(monoFont());
+        p.add(authDigestPass, g);
+        g.gridy++;
+        g.weighty = 1.0;
+        p.add(new JLabel(), g);
+        return p;
+    }
+
+    private JPanel buildWsseCard() {
+        JPanel p = authFormPanel();
+        java.awt.GridBagConstraints g = authFormGbc();
+        p.add(new JLabel("Username:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authWsseUser = new JTextField(30);
+        authWsseUser.setFont(monoFont());
+        p.add(authWsseUser, g);
+        g.gridx = 0;
+        g.gridy = 1;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Password:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authWssePass = new JTextField(30);
+        authWssePass.setFont(monoFont());
+        p.add(authWssePass, g);
+        g.gridy++;
+        g.weighty = 1.0;
+        p.add(new JLabel(), g);
+        return p;
+    }
+
+    private JPanel buildOAuth2Card() {
+        JPanel p = authFormPanel();
+        java.awt.GridBagConstraints g = authFormGbc();
+        p.add(new JLabel("Grant Type:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authOAuth2GrantType = new JTextField("client_credentials", 30);
+        authOAuth2GrantType.setFont(monoFont());
+        p.add(authOAuth2GrantType, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Access Token URL:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authOAuth2TokenUrl = new JTextField(30);
+        authOAuth2TokenUrl.setFont(monoFont());
+        p.add(authOAuth2TokenUrl, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Client ID:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authOAuth2ClientId = new JTextField(30);
+        authOAuth2ClientId.setFont(monoFont());
+        p.add(authOAuth2ClientId, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Client Secret:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authOAuth2ClientSecret = new JTextField(30);
+        authOAuth2ClientSecret.setFont(monoFont());
+        p.add(authOAuth2ClientSecret, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Scope:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authOAuth2Scope = new JTextField(30);
+        authOAuth2Scope.setFont(monoFont());
+        p.add(authOAuth2Scope, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Authorization URL:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authOAuth2AuthUrl = new JTextField(30);
+        authOAuth2AuthUrl.setFont(monoFont());
+        p.add(authOAuth2AuthUrl, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Callback URL:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authOAuth2CallbackUrl = new JTextField(30);
+        authOAuth2CallbackUrl.setFont(monoFont());
+        p.add(authOAuth2CallbackUrl, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        authOAuth2Pkce = new JCheckBox("PKCE");
+        p.add(authOAuth2Pkce, g);
+        g.gridy++;
+        g.gridx = 1;
+        g.weighty = 1.0;
+        p.add(new JLabel(""), g);
+        return p;
+    }
+
+    private JPanel buildNtlmCard() {
+        JPanel p = authFormPanel();
+        java.awt.GridBagConstraints g = authFormGbc();
+        p.add(new JLabel("Username:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authNtlmUser = new JTextField(30);
+        authNtlmUser.setFont(monoFont());
+        p.add(authNtlmUser, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Password:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authNtlmPass = new JTextField(30);
+        authNtlmPass.setFont(monoFont());
+        p.add(authNtlmPass, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Domain:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authNtlmDomain = new JTextField(30);
+        authNtlmDomain.setFont(monoFont());
+        p.add(authNtlmDomain, g);
+        g.gridy++;
+        g.weighty = 1.0;
+        p.add(new JLabel(""), g);
+        return p;
+    }
+
+    private JPanel buildAwsV4Card() {
+        JPanel p = authFormPanel();
+        java.awt.GridBagConstraints g = authFormGbc();
+        p.add(new JLabel("Access Key ID:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authAwsAccessKey = new JTextField(30);
+        authAwsAccessKey.setFont(monoFont());
+        p.add(authAwsAccessKey, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Secret Access Key:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authAwsSecretKey = new JTextField(30);
+        authAwsSecretKey.setFont(monoFont());
+        p.add(authAwsSecretKey, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Session Token:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authAwsSession = new JTextField(30);
+        authAwsSession.setFont(monoFont());
+        p.add(authAwsSession, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Service:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authAwsService = new JTextField(30);
+        authAwsService.setFont(monoFont());
+        p.add(authAwsService, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Region:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authAwsRegion = new JTextField(30);
+        authAwsRegion.setFont(monoFont());
+        p.add(authAwsRegion, g);
+        g.gridy++;
+        g.weighty = 1.0;
+        p.add(new JLabel(""), g);
+        return p;
+    }
+
+    private JPanel buildOAuth1Card() {
+        JPanel p = authFormPanel();
+        java.awt.GridBagConstraints g = authFormGbc();
+        p.add(new JLabel("Consumer Key:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authOAuth1ConsumerKey = new JTextField(30);
+        authOAuth1ConsumerKey.setFont(monoFont());
+        p.add(authOAuth1ConsumerKey, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Consumer Secret:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authOAuth1ConsumerSecret = new JTextField(30);
+        authOAuth1ConsumerSecret.setFont(monoFont());
+        p.add(authOAuth1ConsumerSecret, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Access Token:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authOAuth1AccessToken = new JTextField(30);
+        authOAuth1AccessToken.setFont(monoFont());
+        p.add(authOAuth1AccessToken, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Token Secret:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authOAuth1TokenSecret = new JTextField(30);
+        authOAuth1TokenSecret.setFont(monoFont());
+        p.add(authOAuth1TokenSecret, g);
+        g.gridy++;
+        g.weighty = 1.0;
+        p.add(new JLabel(""), g);
+        return p;
+    }
+
+    private JPanel buildEdgeGridCard() {
+        JPanel p = authFormPanel();
+        java.awt.GridBagConstraints g = authFormGbc();
+        p.add(new JLabel("Access Token:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authEdgeAccessToken = new JTextField(30);
+        authEdgeAccessToken.setFont(monoFont());
+        p.add(authEdgeAccessToken, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Client Token:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authEdgeClientToken = new JTextField(30);
+        authEdgeClientToken.setFont(monoFont());
+        p.add(authEdgeClientToken, g);
+        g.gridx = 0;
+        g.gridy++;
+        g.fill = java.awt.GridBagConstraints.NONE;
+        g.weightx = 0;
+        p.add(new JLabel("Client Secret:"), g);
+        g.gridx = 1;
+        g.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        g.weightx = 1.0;
+        authEdgeClientSecret = new JTextField(30);
+        authEdgeClientSecret.setFont(monoFont());
+        p.add(authEdgeClientSecret, g);
+        g.gridy++;
+        g.weighty = 1.0;
+        p.add(new JLabel(""), g);
+        return p;
+    }
+
+    private static JPanel authFormPanel() {
+        JPanel p = new JPanel(new java.awt.GridBagLayout());
+        p.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
+        return p;
+    }
+
+    private static java.awt.GridBagConstraints authFormGbc() {
+        java.awt.GridBagConstraints g = new java.awt.GridBagConstraints();
+        g.insets = new java.awt.Insets(2, 4, 2, 4);
+        g.anchor = java.awt.GridBagConstraints.WEST;
+        g.gridx = 0;
+        g.gridy = 0;
+        return g;
+    }
+
     private void populateAuth(AuthConfig auth) {
         authTypeCombo.setSelectedItem(auth.mode());
-        String fields = switch (auth) {
-            case AuthConfig.Bearer b -> "token=" + b.token();
-            case AuthConfig.Basic b -> "username=" + b.username() + "\npassword=" + b.password();
-            case AuthConfig.ApiKey a -> "key=" + a.key() + "\nvalue=" + a.value() + "\nplacement=" + a.placement();
-            case AuthConfig.Digest d -> "username=" + d.username() + "\npassword=" + d.password();
-            default -> "";
-        };
-        authFieldsArea.setText(fields);
+        clearAuthCards();
+        switch (auth) {
+            case AuthConfig.Bearer b -> authBearerToken.setText(b.token());
+            case AuthConfig.Basic b -> {
+                authBasicUser.setText(b.username());
+                authBasicPass.setText(b.password());
+            }
+            case AuthConfig.ApiKey a -> {
+                authApiKeyKey.setText(a.key());
+                authApiKeyValue.setText(a.value());
+                authApiKeyPlacement.setSelectedItem(a.placement());
+            }
+            case AuthConfig.Digest d -> {
+                authDigestUser.setText(d.username());
+                authDigestPass.setText(d.password());
+            }
+            case AuthConfig.Wsse w -> {
+                authWsseUser.setText(w.username());
+                authWssePass.setText(w.password());
+            }
+            case AuthConfig.OAuth2 o -> {
+                authOAuth2GrantType.setText(o.grantType());
+                authOAuth2TokenUrl.setText(o.accessTokenUrl());
+                authOAuth2ClientId.setText(o.clientId());
+                authOAuth2ClientSecret.setText(o.clientSecret());
+                authOAuth2Scope.setText(o.scope());
+                authOAuth2AuthUrl.setText(o.authorizationUrl() != null ? o.authorizationUrl() : "");
+                authOAuth2CallbackUrl.setText(o.callbackUrl() != null ? o.callbackUrl() : "");
+                authOAuth2Pkce.setSelected(o.pkce());
+            }
+            case AuthConfig.Ntlm n -> {
+                authNtlmUser.setText(n.username());
+                authNtlmPass.setText(n.password());
+                authNtlmDomain.setText(n.domain());
+            }
+            case AuthConfig.AwsV4 a -> {
+                authAwsAccessKey.setText(a.accessKeyId());
+                authAwsSecretKey.setText(a.secretAccessKey());
+                authAwsSession.setText(a.sessionToken() != null ? a.sessionToken() : "");
+                authAwsService.setText(a.service());
+                authAwsRegion.setText(a.region());
+            }
+            case AuthConfig.OAuth1 o -> {
+                authOAuth1ConsumerKey.setText(o.consumerKey());
+                authOAuth1ConsumerSecret.setText(o.consumerSecret());
+                authOAuth1AccessToken.setText(o.accessToken());
+                authOAuth1TokenSecret.setText(o.tokenSecret());
+            }
+            case AuthConfig.EdgeGrid eg -> {
+                authEdgeAccessToken.setText(eg.accessToken());
+                authEdgeClientToken.setText(eg.clientToken());
+                authEdgeClientSecret.setText(eg.clientSecret());
+            }
+            default -> {
+            }
+        }
+        authCardLayout.show(authCards, auth.mode());
+    }
+
+    private void clearAuthCards() {
+        authBearerToken.setText("");
+        authBasicUser.setText("");
+        authBasicPass.setText("");
+        authApiKeyKey.setText("");
+        authApiKeyValue.setText("");
+        authApiKeyPlacement.setSelectedIndex(0);
+        authDigestUser.setText("");
+        authDigestPass.setText("");
+        authWsseUser.setText("");
+        authWssePass.setText("");
+        authOAuth2GrantType.setText("client_credentials");
+        authOAuth2TokenUrl.setText("");
+        authOAuth2ClientId.setText("");
+        authOAuth2ClientSecret.setText("");
+        authOAuth2Scope.setText("");
+        authOAuth2AuthUrl.setText("");
+        authOAuth2CallbackUrl.setText("");
+        authOAuth2Pkce.setSelected(false);
+        authNtlmUser.setText("");
+        authNtlmPass.setText("");
+        authNtlmDomain.setText("");
+        authAwsAccessKey.setText("");
+        authAwsSecretKey.setText("");
+        authAwsSession.setText("");
+        authAwsService.setText("");
+        authAwsRegion.setText("");
+        authOAuth1ConsumerKey.setText("");
+        authOAuth1ConsumerSecret.setText("");
+        authOAuth1AccessToken.setText("");
+        authOAuth1TokenSecret.setText("");
+        authEdgeAccessToken.setText("");
+        authEdgeClientToken.setText("");
+        authEdgeClientSecret.setText("");
     }
 
     // ==================== ENV EDITOR ====================
@@ -1280,6 +2067,18 @@ public class ApiClientView extends JPanel {
 
     // ==================== SEND / RUN ====================
 
+    private void copyAsCurl() {
+        RequestItem item = buildCurrentRequestItem();
+        String curl = CurlGenerator.generate(item.request());
+        copyToClipboard(curl);
+        responseStatus.setText("  cURL copied to clipboard");
+    }
+
+    private void copyToClipboard(String text) {
+        java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                .setContents(new java.awt.datatransfer.StringSelection(text), null);
+    }
+
     private void sendRequest() {
         String method = (String) methodCombo.getSelectedItem();
         String url = urlField.getText().trim();
@@ -1311,7 +2110,10 @@ public class ApiClientView extends JPanel {
 
                 autoExtractToken(result);
 
-                SwingUtilities.invokeLater(() -> displayResult(result));
+                SwingUtilities.invokeLater(() -> {
+                    displayResult(result);
+                    addToHistory(result);
+                });
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> responseStatus.setText("  Error: " + ex.getMessage()));
             } finally {
@@ -1325,25 +2127,17 @@ public class ApiClientView extends JPanel {
         String url = urlField.getText().trim();
 
         List<Header> headers = new ArrayList<>();
-        for (String line : headersArea.getText().split("\n")) {
-            int sep = line.indexOf(':');
-            if (sep > 0) {
-                headers.add(Header.of(line.substring(0, sep).trim(), line.substring(sep + 1).trim()));
-            }
+        for (KvTableEditor.Entry e : headersEditor.getEntries()) {
+            headers.add(new Header(e.key(), e.value(), e.enabled()));
         }
 
         List<Param> queryParams = new ArrayList<>();
         List<Param> pathParams = new ArrayList<>();
-        for (String line : paramsArea.getText().split("\n")) {
-            int sep = line.indexOf('=');
-            if (sep > 0) {
-                String key = line.substring(0, sep).trim();
-                String val = line.substring(sep + 1).trim();
-                if (key.startsWith(":")) {
-                    pathParams.add(new Param(key.substring(1), val, Param.ParamType.PATH, true));
-                } else {
-                    queryParams.add(new Param(key, val, Param.ParamType.QUERY, true));
-                }
+        for (KvTableEditor.Entry e : paramsEditor.getEntries()) {
+            if (e.key().startsWith(":")) {
+                pathParams.add(new Param(e.key().substring(1), e.value(), Param.ParamType.PATH, e.enabled()));
+            } else {
+                queryParams.add(new Param(e.key(), e.value(), Param.ParamType.QUERY, e.enabled()));
             }
         }
         ParamsDef params = new ParamsDef(queryParams, pathParams);
@@ -1383,50 +2177,57 @@ public class ApiClientView extends JPanel {
         String name = activeRequest != null ? activeRequest.name() : "Manual Request";
         int seq = activeRequest != null && activeRequest.meta() != null ? activeRequest.meta().seq() : 0;
         RequestMeta meta = RequestMeta.http(name, seq);
-        return new RequestItem(null, name, meta, req, vars, assertions, null);
+        ScriptDef scripts = new ScriptDef(preRequestScriptArea.getText(), postResponseScriptArea.getText(),
+                testsScriptArea.getText());
+        return new RequestItem(null, name, meta, req, vars, assertions, null, scripts);
     }
 
     private BodyConfig buildBody() {
-        String text = bodyArea.getText();
         String type = (String) bodyTypeCombo.getSelectedItem();
-        if (text.isBlank() || "None".equals(type)) {
+        if ("None".equals(type)) {
+            return new BodyConfig.None();
+        }
+        if ("FormUrlEncoded".equals(type)) {
+            List<Param> formParams = new ArrayList<>();
+            for (KvTableEditor.Entry e : formBodyEditor.getEntries()) {
+                formParams.add(new Param(e.key(), e.value(), Param.ParamType.QUERY, e.enabled()));
+            }
+            return new BodyConfig.FormUrlEncoded(formParams);
+        }
+        String text = bodyArea.getText();
+        if (text.isBlank()) {
             return new BodyConfig.None();
         }
         return switch (type) {
             case "XML" -> new BodyConfig.Xml(text);
             case "Text" -> new BodyConfig.Text(text);
             case "GraphQL" -> new BodyConfig.GraphQL(text, null);
-            case "FormUrlEncoded" -> {
-                List<Param> formParams = new ArrayList<>();
-                for (String line : text.split("\n")) {
-                    int sep = line.indexOf('=');
-                    if (sep > 0) {
-                        formParams.add(new Param(line.substring(0, sep).trim(), line.substring(sep + 1).trim(),
-                                Param.ParamType.QUERY, true));
-                    }
-                }
-                yield new BodyConfig.FormUrlEncoded(formParams);
-            }
             default -> new BodyConfig.Json(text);
         };
     }
 
     private AuthConfig buildAuth() {
         String mode = (String) authTypeCombo.getSelectedItem();
-        String fields = authFieldsArea.getText();
-        java.util.Map<String, String> map = new java.util.LinkedHashMap<>();
-        for (String line : fields.split("\n")) {
-            int sep = line.indexOf('=');
-            if (sep > 0) {
-                map.put(line.substring(0, sep).trim(), line.substring(sep + 1).trim());
-            }
-        }
         return switch (mode) {
-            case "bearer" -> new AuthConfig.Bearer(map.getOrDefault("token", ""));
-            case "basic" -> new AuthConfig.Basic(map.getOrDefault("username", ""), map.getOrDefault("password", ""));
-            case "apikey" -> new AuthConfig.ApiKey(map.getOrDefault("key", ""), map.getOrDefault("value", ""),
-                    map.getOrDefault("placement", "header"));
-            case "digest" -> new AuthConfig.Digest(map.getOrDefault("username", ""), map.getOrDefault("password", ""));
+            case "inherit" -> new AuthConfig.Inherit();
+            case "bearer" -> new AuthConfig.Bearer(authBearerToken.getText());
+            case "basic" -> new AuthConfig.Basic(authBasicUser.getText(), authBasicPass.getText());
+            case "apikey" -> new AuthConfig.ApiKey(authApiKeyKey.getText(), authApiKeyValue.getText(),
+                    (String) authApiKeyPlacement.getSelectedItem());
+            case "digest" -> new AuthConfig.Digest(authDigestUser.getText(), authDigestPass.getText());
+            case "wsse" -> new AuthConfig.Wsse(authWsseUser.getText(), authWssePass.getText());
+            case "oauth2" -> new AuthConfig.OAuth2(authOAuth2GrantType.getText(), authOAuth2TokenUrl.getText(), "",
+                    authOAuth2ClientId.getText(), authOAuth2ClientSecret.getText(), authOAuth2Scope.getText(),
+                    authOAuth2CallbackUrl.getText(), authOAuth2AuthUrl.getText(), authOAuth2Pkce.isSelected(), "body",
+                    "header", false, false, java.util.Map.of());
+            case "ntlm" ->
+                new AuthConfig.Ntlm(authNtlmUser.getText(), authNtlmPass.getText(), authNtlmDomain.getText());
+            case "awsv4" -> new AuthConfig.AwsV4(authAwsAccessKey.getText(), authAwsSecretKey.getText(),
+                    authAwsSession.getText(), authAwsService.getText(), authAwsRegion.getText());
+            case "oauth1" -> new AuthConfig.OAuth1(authOAuth1ConsumerKey.getText(), authOAuth1ConsumerSecret.getText(),
+                    authOAuth1AccessToken.getText(), authOAuth1TokenSecret.getText(), "HMAC-SHA1", "header");
+            case "akamai-edgegrid" -> new AuthConfig.EdgeGrid(authEdgeAccessToken.getText(),
+                    authEdgeClientToken.getText(), authEdgeClientSecret.getText());
             default -> new AuthConfig.None();
         };
     }
@@ -1446,6 +2247,15 @@ public class ApiClientView extends JPanel {
 
     private void resetSessionContext() {
         sessionContext = null;
+    }
+
+    private static final int MAX_HISTORY = 50;
+
+    private void addToHistory(RequestResult result) {
+        historyModel.add(0, result);
+        if (historyModel.size() > MAX_HISTORY) {
+            historyModel.remove(historyModel.size() - 1);
+        }
     }
 
     private static final String[] TOKEN_FIELDS = {"token", "accessToken", "access_token", "jwt"};
@@ -1474,6 +2284,7 @@ public class ApiClientView extends JPanel {
     }
 
     private void displayResult(RequestResult result) {
+        cookiesTableModel.setRowCount(0);
         if (result.response() != null) {
             var resp = result.response();
             String statusText = resp.statusText() != null && !resp.statusText().isEmpty()
@@ -1481,6 +2292,7 @@ public class ApiClientView extends JPanel {
                     : String.valueOf(resp.status());
             responseStatus.setText(String.format("  %d %s  %dms  %s", resp.status(), statusText, resp.responseTimeMs(),
                     formatBytes(resp.body().length())));
+            responseStatus.setForeground(statusColor(resp.status()));
 
             responseBody.setText(resp.body());
             responseBody.setCaretPosition(0);
@@ -1498,8 +2310,13 @@ public class ApiClientView extends JPanel {
             }
             responseHeaders.setText(hdr.toString());
             responseTabPane.setTitleAt(1, "Headers " + headerCount);
+
+            parseCookies(resp.headers());
+            int cookieCount = cookiesTableModel.getRowCount();
+            responseTabPane.setTitleAt(3, cookieCount > 0 ? "Cookies " + cookieCount : "Cookies");
         } else {
             responseStatus.setText("  No response");
+            responseStatus.setForeground(Color.GRAY);
         }
 
         if (result.assertions() != null && !result.assertions().isEmpty()) {
@@ -1515,6 +2332,70 @@ public class ApiClientView extends JPanel {
             }
             assertionsResultArea.setText(sb.toString());
         }
+
+        populateVariablesTab();
+        populateScriptConsole();
+    }
+
+    private void populateScriptConsole() {
+        scriptConsoleArea.setText("");
+        if (sessionContext == null) {
+            return;
+        }
+        ScriptResult sr = sessionContext.lastScriptResult();
+        if (sr == null) {
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String line : sr.consoleLog()) {
+            sb.append(line).append("\n");
+        }
+        if (sr.hasError()) {
+            sb.append("[ERROR] ").append(sr.error()).append("\n");
+        }
+        if (!sr.testResults().isEmpty()) {
+            sb.append("\n--- Test Results ---\n");
+            int passed = 0;
+            int failed = 0;
+            for (ScriptResult.TestResult t : sr.testResults()) {
+                String status = t.passed() ? "PASS" : "FAIL";
+                sb.append("[").append(status).append("] ").append(t.name());
+                if (!t.message().isEmpty()) {
+                    sb.append(" -- ").append(t.message());
+                }
+                sb.append("\n");
+                if (t.passed()) {
+                    passed++;
+                } else {
+                    failed++;
+                }
+            }
+            sb.append("\n").append(passed).append(" passed, ").append(failed).append(" failed\n");
+        }
+        scriptConsoleArea.setText(sb.toString());
+        int consoleIdx = responseTabPane.indexOfTab("Console");
+        if (consoleIdx >= 0 && !sr.testResults().isEmpty()) {
+            int total = sr.testResults().size();
+            int failCount = sr.testsFailed();
+            String label = failCount > 0 ? "Console (" + failCount + " FAIL)" : "Console (" + total + " PASS)";
+            responseTabPane.setTitleAt(consoleIdx, label);
+        } else if (consoleIdx >= 0) {
+            responseTabPane.setTitleAt(consoleIdx, "Console");
+        }
+    }
+
+    private void populateVariablesTab() {
+        variablesTableModel.setRowCount(0);
+        if (sessionContext == null) {
+            return;
+        }
+        VariableStore vars = sessionContext.vars();
+        vars.envVars().forEach(
+                (k, v) -> variablesTableModel.addRow(new Object[]{"env", k, vars.isSecret(k) ? "********" : v}));
+        vars.collectionVars().forEach((k, v) -> variablesTableModel.addRow(new Object[]{"collection", k, v}));
+        vars.folderVars().forEach((k, v) -> variablesTableModel.addRow(new Object[]{"folder", k, v}));
+        vars.runtimeVars().forEach((k, v) -> variablesTableModel.addRow(new Object[]{"runtime", k, v}));
+        vars.requestVars().forEach((k, v) -> variablesTableModel.addRow(new Object[]{"request", k, v}));
     }
 
     private static String formatBytes(int bytes) {
@@ -1522,6 +2403,67 @@ public class ApiClientView extends JPanel {
             return bytes + "B";
         }
         return String.format("%.1fKB", bytes / 1024.0);
+    }
+
+    private static Color statusColor(int code) {
+        if (code >= 200 && code < 300) {
+            return METHOD_GET;
+        }
+        if (code >= 300 && code < 400) {
+            return METHOD_PUT;
+        }
+        if (code >= 400 && code < 500) {
+            return METHOD_POST;
+        }
+        if (code >= 500) {
+            return METHOD_DELETE;
+        }
+        return Color.GRAY;
+    }
+
+    private void parseCookies(java.util.Map<String, java.util.List<String>> headers) {
+        for (var entry : headers.entrySet()) {
+            if (!"set-cookie".equalsIgnoreCase(entry.getKey())) {
+                continue;
+            }
+            for (String raw : entry.getValue()) {
+                String name = "";
+                String value = "";
+                String domain = "";
+                String path = "";
+                String expires = "";
+                String httpOnly = "";
+                String secure = "";
+
+                String[] parts = raw.split(";");
+                for (int i = 0; i < parts.length; i++) {
+                    String part = parts[i].trim();
+                    if (i == 0) {
+                        int eq = part.indexOf('=');
+                        if (eq > 0) {
+                            name = part.substring(0, eq).trim();
+                            value = part.substring(eq + 1).trim();
+                        }
+                    } else {
+                        String lower = part.toLowerCase(java.util.Locale.ROOT);
+                        if (lower.startsWith("domain=")) {
+                            domain = part.substring(7).trim();
+                        } else if (lower.startsWith("path=")) {
+                            path = part.substring(5).trim();
+                        } else if (lower.startsWith("expires=")) {
+                            expires = part.substring(8).trim();
+                        } else if (lower.startsWith("max-age=")) {
+                            expires = "max-age=" + part.substring(8).trim();
+                        } else if ("httponly".equals(lower)) {
+                            httpOnly = "Yes";
+                        } else if ("secure".equals(lower)) {
+                            secure = "Yes";
+                        }
+                    }
+                }
+                cookiesTableModel.addRow(new Object[]{name, value, domain, path, expires, httpOnly, secure});
+            }
+        }
     }
 
     // ==================== LOAD / IMPORT ====================
@@ -1553,12 +2495,46 @@ public class ApiClientView extends JPanel {
             openRequests.clear();
             activeRequest = null;
             resetSessionContext();
+            loadDotEnv(dir);
             populateTree();
             populateEnvCombo();
             refreshRequestTabs();
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Failed to load collection: " + ex.getMessage(), "Error",
                     JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void loadDotEnv(Path dir) {
+        Path dotEnv = dir.resolve(".env");
+        if (!java.nio.file.Files.isRegularFile(dotEnv)) {
+            return;
+        }
+        try {
+            List<EnvVariable> vars = new ArrayList<>();
+            for (String line : java.nio.file.Files.readAllLines(dotEnv)) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    continue;
+                }
+                int eq = trimmed.indexOf('=');
+                if (eq > 0) {
+                    String key = trimmed.substring(0, eq).trim();
+                    String value = trimmed.substring(eq + 1).trim();
+                    if (value.startsWith("\"") && value.endsWith("\"") && value.length() >= 2) {
+                        value = value.substring(1, value.length() - 1);
+                    }
+                    vars.add(EnvVariable.of(key, value));
+                }
+            }
+            if (!vars.isEmpty()) {
+                List<Environment> envs = new ArrayList<>(currentCollection.environments());
+                envs.add(0, new Environment(null, ".env", null, vars, null));
+                currentCollection = new Collection(currentCollection.uid(), currentCollection.name(),
+                        currentCollection.version(), envs, currentCollection.items(), currentCollection.root(),
+                        currentCollection.settings());
+            }
+        } catch (Exception ignored) {
         }
     }
 
@@ -1628,6 +2604,10 @@ public class ApiClientView extends JPanel {
         bruno.addActionListener(e -> importBruno());
         menu.add(bruno);
 
+        JMenuItem insomnia = new JMenuItem("Insomnia Export...");
+        insomnia.addActionListener(e -> importInsomnia());
+        menu.add(insomnia);
+
         JMenuItem curl = new JMenuItem("cURL Command...");
         curl.addActionListener(e -> importCurl());
         menu.add(curl);
@@ -1687,6 +2667,23 @@ public class ApiClientView extends JPanel {
         }
     }
 
+    private void importInsomnia() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Select Insomnia Export JSON");
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            try {
+                currentCollection = new InsomniaImporter().importFile(chooser.getSelectedFile().toPath());
+                collectionPath = null;
+                resetSessionContext();
+                populateTree();
+                populateEnvCombo();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Import failed: " + ex.getMessage(), "Error",
+                        JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
     private void importCurl() {
         String cmd = JOptionPane.showInputDialog(this, "Paste cURL command:", "Import cURL", JOptionPane.PLAIN_MESSAGE);
         if (cmd != null && !cmd.isBlank()) {
@@ -1733,19 +2730,107 @@ public class ApiClientView extends JPanel {
     }
 
     private void showRunResult(RunResult result) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Collection: ").append(currentCollection.name()).append("\n");
-        sb.append("Total: ").append(result.summary().total()).append(" | Passed: ").append(result.summary().passed())
-                .append(" | Failed: ").append(result.summary().failed()).append("\n");
-        sb.append("Duration: ").append(result.durationMs()).append("ms\n\n");
-        runLog.forEach(l -> sb.append(l).append("\n"));
+        removeRunResultsTab();
 
-        JTextArea logArea = new JTextArea(sb.toString());
-        logArea.setEditable(false);
-        logArea.setFont(monoFont());
-        JScrollPane scroll = new JScrollPane(logArea);
-        scroll.setPreferredSize(new Dimension(600, 400));
-        JOptionPane.showMessageDialog(this, scroll, "Collection Run Result", JOptionPane.INFORMATION_MESSAGE);
+        JPanel panel = new JPanel(new BorderLayout(0, 4));
+
+        RunSummary summary = result.summary();
+        JPanel summaryBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 4));
+        summaryBar.add(summaryLabel("Total: " + summary.total(), Color.GRAY));
+        summaryBar.add(summaryLabel("Passed: " + summary.passed(), METHOD_GET));
+        summaryBar.add(summaryLabel("Failed: " + summary.failed(), METHOD_DELETE));
+        if (summary.skipped() > 0) {
+            summaryBar.add(summaryLabel("Skipped: " + summary.skipped(), METHOD_PUT));
+        }
+        summaryBar.add(summaryLabel(result.durationMs() + "ms", Color.GRAY));
+        JButton closeBtn = new JButton("X");
+        closeBtn.setFont(closeBtn.getFont().deriveFont(Font.BOLD, 10f));
+        closeBtn.setMargin(new java.awt.Insets(0, 4, 0, 4));
+        closeBtn.addActionListener(e -> removeRunResultsTab());
+        summaryBar.add(closeBtn);
+        panel.add(summaryBar, BorderLayout.NORTH);
+
+        String[] columns = {"#", "Name", "Method", "URL", "Status", "Time", "Asserts", "Result"};
+        DefaultTableModel model = new DefaultTableModel(columns, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+
+        List<RequestResult> results = result.results();
+        for (int i = 0; i < results.size(); i++) {
+            RequestResult rr = results.get(i);
+            String name = rr.item() != null ? rr.item().name() : "?";
+            String method = rr.interpolatedRequest() != null ? rr.interpolatedRequest().method() : "?";
+            String url = rr.interpolatedRequest() != null ? rr.interpolatedRequest().url() : "";
+            int status = rr.response() != null ? rr.response().status() : 0;
+            long time = rr.durationMs();
+            int assertCount = rr.assertions() != null ? rr.assertions().size() : 0;
+            long assertPassed = rr.assertions() != null
+                    ? rr.assertions().stream().filter(AssertionResult::passed).count()
+                    : 0;
+            String assertText = assertCount > 0 ? assertPassed + "/" + assertCount : "-";
+            String passText = rr.passed() ? "PASS" : "FAIL";
+
+            model.addRow(new Object[]{i + 1, name, method, url, status, time + "ms", assertText, passText});
+        }
+
+        JTable table = new JTable(model);
+        table.setFont(monoFont());
+        table.setRowHeight(22);
+        table.getColumnModel().getColumn(0).setMaxWidth(35);
+        table.getColumnModel().getColumn(2).setMaxWidth(70);
+        table.getColumnModel().getColumn(4).setMaxWidth(60);
+        table.getColumnModel().getColumn(5).setMaxWidth(70);
+        table.getColumnModel().getColumn(6).setMaxWidth(60);
+        table.getColumnModel().getColumn(7).setMaxWidth(50);
+        table.setDefaultRenderer(Object.class, new javax.swing.table.DefaultTableCellRenderer() {
+            @Override
+            public java.awt.Component getTableCellRendererComponent(JTable t, Object value, boolean isSelected,
+                    boolean hasFocus, int row, int column) {
+                super.getTableCellRendererComponent(t, value, isSelected, hasFocus, row, column);
+                if (!isSelected) {
+                    if (column == 4 && value instanceof Integer code) {
+                        setForeground(statusColor(code));
+                    } else if (column == 7) {
+                        setForeground("PASS".equals(value) ? METHOD_GET : METHOD_DELETE);
+                    } else {
+                        setForeground(t.getForeground());
+                    }
+                }
+                return this;
+            }
+        });
+
+        table.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                int row = table.getSelectedRow();
+                if (row >= 0 && row < results.size()) {
+                    displayResult(results.get(row));
+                }
+            }
+        });
+
+        panel.add(new JScrollPane(table), BorderLayout.CENTER);
+
+        responseTabPane.addTab("Run Results", panel);
+        responseTabPane.setSelectedComponent(panel);
+    }
+
+    private void removeRunResultsTab() {
+        for (int i = responseTabPane.getTabCount() - 1; i >= 0; i--) {
+            if ("Run Results".equals(responseTabPane.getTitleAt(i))) {
+                responseTabPane.removeTabAt(i);
+            }
+        }
+    }
+
+    private static JLabel summaryLabel(String text, Color color) {
+        JLabel label = new JLabel(text);
+        label.setForeground(color);
+        label.setFont(label.getFont().deriveFont(Font.BOLD, 12f));
+        return label;
     }
 
     // ==================== UTIL ====================
