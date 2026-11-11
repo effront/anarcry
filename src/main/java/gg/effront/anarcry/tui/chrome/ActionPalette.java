@@ -21,7 +21,7 @@ public class ActionPalette {
             new String[]{"F3", "DASHBOARD mode -- session summary"},
             new String[]{"F4", "REPEATER mode -- request/response"}, new String[]{"F5", "NOTES mode -- scratchpad"},
             new String[]{"F6", "REPORT mode -- export panel"},
-            new String[]{"E", "Export menu (AnarCry / H1 / Bugcrowd / JSON / SARIF)"},
+            new String[]{"E", "Export menu (AnarCry / H1 / Bugcrowd / JSON / SARIF / Log)"},
             new String[]{"?", "Open this action palette"}, new String[]{"q", "Quit application"});
 
     public static void show(WindowBasedTextGUI gui) {

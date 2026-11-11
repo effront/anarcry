@@ -8,7 +8,7 @@ import java.util.Set;
 
 public record ScanConfig(int delayMs, String sessionCookie, String sessionCookie2, Set<String> inScopeHosts,
         List<Suppression> suppressions, String redirectRelayUrl, int probeConcurrency, boolean exploitationEnabled,
-        OastConfig oastConfig) {
+        OastConfig oastConfig, boolean debugMode) {
 
     public static final int DEFAULT_PROBE_CONCURRENCY = 12;
 
@@ -40,27 +40,34 @@ public record ScanConfig(int delayMs, String sessionCookie, String sessionCookie
     }
 
     public ScanConfig(int delayMs, String sessionCookie, String sessionCookie2, Set<String> inScopeHosts,
+            List<Suppression> suppressions, String redirectRelayUrl, int probeConcurrency, boolean exploitationEnabled,
+            OastConfig oastConfig) {
+        this(delayMs, sessionCookie, sessionCookie2, inScopeHosts, suppressions, redirectRelayUrl, probeConcurrency,
+                exploitationEnabled, oastConfig, false);
+    }
+
+    public ScanConfig(int delayMs, String sessionCookie, String sessionCookie2, Set<String> inScopeHosts,
             List<Suppression> suppressions, String redirectRelayUrl, int probeConcurrency,
             boolean exploitationEnabled) {
         this(delayMs, sessionCookie, sessionCookie2, inScopeHosts, suppressions, redirectRelayUrl, probeConcurrency,
-                exploitationEnabled, OastConfig.disabled());
+                exploitationEnabled, OastConfig.disabled(), false);
     }
 
     public ScanConfig(int delayMs, String sessionCookie, String sessionCookie2, Set<String> inScopeHosts,
             List<Suppression> suppressions, String redirectRelayUrl, int probeConcurrency) {
         this(delayMs, sessionCookie, sessionCookie2, inScopeHosts, suppressions, redirectRelayUrl, probeConcurrency,
-                false, OastConfig.disabled());
+                false, OastConfig.disabled(), false);
     }
 
     public ScanConfig(int delayMs, String sessionCookie, Set<String> inScopeHosts, List<Suppression> suppressions,
             String redirectRelayUrl) {
         this(delayMs, sessionCookie, "", inScopeHosts, suppressions, redirectRelayUrl, DEFAULT_PROBE_CONCURRENCY, false,
-                OastConfig.disabled());
+                OastConfig.disabled(), false);
     }
 
     public static ScanConfig defaults() {
         return new ScanConfig(0, "", "", Set.of(), List.of(), "", DEFAULT_PROBE_CONCURRENCY, false,
-                OastConfig.disabled());
+                OastConfig.disabled(), false);
     }
 
     public boolean oastEnabled() {

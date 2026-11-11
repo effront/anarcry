@@ -32,6 +32,11 @@ public class FindingsPanel extends Panel {
         addComponent(hintLabel);
     }
 
+    public void clear() {
+        sortedFindings.clear();
+        list.clearItems();
+    }
+
     public void addFinding(Finding finding) {
         sortedFindings.add(finding);
         // CRITICAL first (ordinal 0) → INFO last (ordinal 4)

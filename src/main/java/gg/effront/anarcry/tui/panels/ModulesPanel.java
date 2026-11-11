@@ -117,7 +117,7 @@ public class ModulesPanel extends Panel {
         xxeCheck.setChecked(true);
         sstiCheck = new CheckBox("SSTI");
         sstiCheck.setChecked(true);
-        idorCheck = new CheckBox("IDOR");
+        idorCheck = new CheckBox("IDOR (needs 2 tokens)");
         idorCheck.setChecked(false);
         hostHeaderCheck = new CheckBox("HostHeader");
         hostHeaderCheck.setChecked(true);
@@ -147,13 +147,13 @@ public class ModulesPanel extends Panel {
         csrfCheck.setChecked(true);
         secretsCheck = new CheckBox("Secrets");
         secretsCheck.setChecked(true);
-        raceConditionCheck = new CheckBox("RaceCondition");
+        raceConditionCheck = new CheckBox("RaceCondition (destructive)");
         raceConditionCheck.setChecked(false);
         nosqliCheck = new CheckBox("NoSQLi");
         nosqliCheck.setChecked(true);
         deserializationCheck = new CheckBox("Deserialization");
         deserializationCheck.setChecked(true);
-        fileUploadCheck = new CheckBox("FileUpload");
+        fileUploadCheck = new CheckBox("FileUpload (destructive)");
         fileUploadCheck.setChecked(false);
         subTakeoverCheck = new CheckBox("SubTakeover");
         subTakeoverCheck.setChecked(true);
@@ -344,9 +344,9 @@ public class ModulesPanel extends Panel {
 
     private static String infraLabel() {
         if (!nmapOnPath()) {
-            return "Infra";
+            return "Infra (port scan)";
         }
-        return rootProcess() ? "Infra [nmap+SYN]" : "Infra [nmap]";
+        return rootProcess() ? "Infra (port scan) [nmap+SYN]" : "Infra (port scan) [nmap]";
     }
 
     private static boolean nmapOnPath() {
@@ -504,8 +504,9 @@ public class ModulesPanel extends Panel {
             // keep default
         }
         boolean exploit = exploitationCheck.isChecked();
+        boolean debug = logPanel.isDebugEnabled();
         logPanel.log("[*] Iniciando scan em " + target + " (auth=" + selectedAuthType + ", concurrency=" + concurrency
-                + ", exploit=" + exploit + ") ...");
+                + ", exploit=" + exploit + (debug ? ", debug=true" : "") + ") ...");
 
         CredentialStore credStore = null;
         String jwt = "";
@@ -549,7 +550,7 @@ public class ModulesPanel extends Panel {
         }
 
         ScanConfig cfg = new ScanConfig(0, cookie, cookie2, Set.of(), SuppressionLoader.loadFromCwd(), "", concurrency,
-                exploit);
+                exploit, null, debug);
         ScanContext ctx = new ScanContext(target, jwt, jwt2, modules, cfg, requestLogCb, new DiscoveredPaths(),
                 new WafState(), credStore);
         scanRunner.run(ctx);

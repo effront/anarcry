@@ -40,6 +40,22 @@ public final class WafState {
     private volatile BrowserTransport browserTransport;
     private final ConcurrentHashMap<String, CircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
     private volatile Consumer<String> runtimeLog;
+    private volatile boolean debugMode;
+    private volatile int wafDelayMs;
+
+    public void setDebugMode(boolean enabled) {
+        this.debugMode = enabled;
+    }
+
+    public boolean isDebugMode() {
+        return debugMode;
+    }
+
+    public void debugLog(String msg) {
+        if (debugMode && runtimeLog != null) {
+            runtimeLog.accept("[DBG] " + msg);
+        }
+    }
 
     public void markWafDetected(String product) {
         wafDetected.set(true);
@@ -183,5 +199,13 @@ public final class WafState {
     public boolean isCircuitOpen(String moduleId) {
         CircuitBreaker cb = circuitBreakers.get(moduleId);
         return cb != null && cb.isTripped();
+    }
+
+    public void setWafDelay(int ms) {
+        this.wafDelayMs = Math.max(0, ms);
+    }
+
+    public int wafDelayMs() {
+        return wafDelayMs;
     }
 }

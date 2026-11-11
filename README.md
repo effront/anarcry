@@ -29,9 +29,10 @@
 +===========================================================================+
 |  ANARCRY -- Java 27 Security Scanner                                      |
 +===========================================================================+
-|  Security scanner for bug bounty. 25 attack modules, parallel execution,  |
-|  CVSS v3.1 auto-scoring, knowledge base with 26 entries, WAF detection    |
-|  (15 providers) + circuit breaker. TUI + Swing GUI + AI Assistant.        |
+|  Security scanner for bug bounty. 38 attack modules, parallel execution,  |
+|  CVSS v3.1 auto-scoring, knowledge base with 34 entries, WAF detection    |
+|  (15 providers) + circuit breaker. OAST blind detection infra.            |
+|  TUI + Swing GUI + AI Assistant.                                          |
 |  Built-in API Client (Bruno-inspired) with collections, environments,     |
 |  auth injectors, variable interpolation, runner + assertions.             |
 +===========================================================================+
@@ -75,7 +76,21 @@
 |  [x] MassAssign      -- JSON mass assignment on REST endpoints            |
 |  [x] CachePoisoning  -- unkeyed headers reflected and cached              |
 |  [x] ReqSmuggling    -- CL.TE, TE.CL, TE.TE, Duplicate CL, CL.0,          |
-|                         Hop-by-hop TE stripping                           |
+|                         Hop-by-hop TE, H2.CL, H2.TE, HPACK manipulation   |
+|  [x] CSRF           -- token validation, SameSite, referer/origin bypass  |
+|  [x] Secrets        -- 17 patterns (AWS, GCP, GitHub, Slack, JWTs, etc.)  |
+|  [x] NoSQLi        -- MongoDB operator injection, auth bypass             |
+|  [x] Deserialization-- Java/PHP/Python/.NET gadget detection              |
+|  [x] SubTakeover   -- dangling CNAME, service fingerprinting              |
+|  [x] WebSocket     -- origin validation, unauth endpoint detection        |
+|  [x] ProtoPollution-- __proto__, constructor.prototype injection          |
+|  [x] CloudMisconfig-- S3/Azure/GCS public access, metadata endpoint       |
+|  [ ] RaceCondition  -- concurrent request state inconsistency (opt-in)    |
+|  [ ] FileUpload    -- extension/content-type/magic byte bypass (opt-in)   |
+|                                                                           |
+|  OAST (Out-of-Band Application Security Testing)                          |
+|  [x] OastServer     -- HTTP/DNS callback server for blind detection       |
+|  [x] OastCorrelator -- payload-to-callback correlation engine             |
 +---------------------------------------------------------------------------+
 ```
 
@@ -108,7 +123,7 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-1.9.5.jar
+java -jar build/libs/anarcry-2.2.0.jar
 ```
 
 Or use the launcher (auto-builds if source changed):
@@ -126,7 +141,7 @@ With `.env.local` for pre-configured targets:
 Launch in GUI mode (Swing + FlatLaf):
 
 ```bash
-java -jar build/libs/anarcry-1.9.5.jar --gui
+java -jar build/libs/anarcry-2.2.0.jar --gui
 ```
 
 ---
@@ -145,8 +160,8 @@ java -jar build/libs/anarcry-1.9.5.jar --gui
 |  HTTP Client         |  java.net.http.HttpClient (HTTP/2 default)         |
 |  JSON                |  Gson 2.11.0                                       |
 |  CVSS                |  CvssCalculator.java (FIRST formula, zero deps)    |
-|  Knowledge Base      |  knowledge_base.json (25 entries, CWE+CVSS+VRT)    |
-|                      |  knowledge-base/*.md (26 enriched entries)         |
+|  Knowledge Base      |  knowledge_base.json (34 entries, CWE+CVSS+VRT)    |
+|                      |  knowledge-base/*.md (27 enriched entries)         |
 |  AI Assistant        |  Multi-provider (Claude, OpenAI, Gemini, Ollama)   |
 |  GUI                 |  Swing + FlatLaf + RSyntaxTextArea + JFreeChart    |
 |  Test                |  JUnit 5.11.3                                      |
@@ -163,6 +178,7 @@ java -jar build/libs/anarcry-1.9.5.jar --gui
 | HackerOne | `[E]` in TUI -> option 2 | `~/.anarcry/reports/h1-report-*.md` (KB-enriched) |
 | Bugcrowd | `[E]` in TUI -> option 3 | `~/.anarcry/reports/bugcrowd-report-*.md` (VRT mapped) |
 | JSON only | `[E]` in TUI -> option 4 | `~/.anarcry/reports/anarcry-findings-*.json` |
+| SARIF v2.1.0 | `[E]` in TUI -> option 5 | `~/.anarcry/reports/sarif-report-*.sarif.json` |
 
 HackerOne and Bugcrowd exports are enriched from the Knowledge Base with detailed descriptions, impact statements, remediation guidance, and VRT classification.
 
@@ -210,10 +226,10 @@ Two interfaces: **TUI** (Lanterna, terminal-native) and **GUI** (Swing + FlatLaf
 
 ### TUI
 
-Two operational modes: **Target** (main scan interface) and **Repeater** (HTTP request replay). Tab bar at the top, status bar at the bottom with severity counters and progress.
+Nine modes: Dashboard, Scan, Target, Findings, Repeater, Report, SiteMap, API Client, Assistant. Tab bar at the top, status bar at the bottom with severity counters and progress.
 
 ```
- [Target] [Repeater]                                                 [Ctrl+P]
+ [Dash] [Scan] [Target] [Findings] [Repeater] [Report] [SiteMap] [API] [Asst] [Ctrl+P]
 +---------------+-------------------------------------------------------+
 | MODULES       | LOG                                     scroll: Up/Dn |
 |               |                                                       |
@@ -266,23 +282,23 @@ Two operational modes: **Target** (main scan interface) and **Repeater** (HTTP r
 
 ### GUI
 
-Launch with `--gui` flag. Tabs: Dashboard, Target, Findings, Repeater, SiteMap, Report, Assistant.
+Launch with `--gui` flag. Tabs: Dashboard, Scan, Target, Findings, Repeater, Report, SiteMap, API Client, Assistant.
 
 ```
-+-----------------------------------------------------------------------+
-| AnarCry                                    [Privacy] [Preferences]    |
-+-----------------------------------------------------------------------+
-| Dashboard | Target | Findings | Repeater | SiteMap | Report | AI Asst |
-+-----------------------------------------------------------------------+
-|                                                                       |
-|  Severity Distribution (pie)   |   Recent Findings                    |
-|  [CRIT: 3] [HIGH: 5]           |   - JWT alg:none (CRITICAL)          |
-|  [MED: 8]  [LOW: 2]            |   - CORS origin reflect (CRITICAL)   |
-|                                |   - XSS reflected (HIGH)             |
-|                                                                       |
-+-----------------------------------------------------------------------+
-|  Status: Scanning... | 8/25 modules | C:3 H:5 M:8 L:2 I:0             |
-+-----------------------------------------------------------------------+
++-----------------------------------------------------------------------------------+
+| AnarCry                                            [Privacy] [Preferences]        |
++-----------------------------------------------------------------------------------+
+| Dashboard | Scan | Target | Findings | Repeater | Report | SiteMap | API | Asst   |
++-----------------------------------------------------------------------------------+
+|                                                                                   |
+|  Severity Distribution (pie)               |   Recent Findings                    |
+|  [CRIT: 3] [HIGH: 5]                       |   - JWT alg:none (CRITICAL)          |
+|  [MED: 8]  [LOW: 2]                        |   - CORS origin reflect (CRITICAL)   |
+|                                            |   - XSS reflected (HIGH)             |
+|                                            |                                      |
++-----------------------------------------------------------------------------------+
+|  Status: Scanning...                       | 8/25 modules | C:3 H:5 M:8 L:2 I:0   |
++-----------------------------------------------------------------------------------+
 ```
 
 **AI Assistant tab:** chat interface with SSE streaming, tool-use indicators, and token usage display. Supports Claude, OpenAI, Gemini, and Ollama. Configure provider and API key in Preferences.
@@ -296,7 +312,7 @@ Launch with `--gui` flag. Tabs: Dashboard, Target, Findings, Repeater, SiteMap, 
 ./gradlew integrationTest   # tests with external hosts (badssl.com, etc.)
 ```
 
-Test suite covers: JWT probes (alg:none, weak secret, RS256->HS256, JKU, null signature, signature disclosure), CORS (origin reflection, wildcard, null origin), OAuth (well-known discovery, redirect_uri bypass), CRLF (path + header injection), SSRF, GraphQL introspection, Open Redirect, Cache Poisoning, Request Smuggling (CL.TE, TE.CL, Duplicate CL, CL.0, Hop-by-hop TE), SQLi (error-based + time-based), PQC, Headers, HSTS, IDOR (COOKIE auth, cross-user), ScanRunner orchestration (callbacks, module isolation, dedup, omnibus E2E), ReportEngine (MD+JSON export, JSON serialization), KnowledgeBase (loading, lookups, CweRegistry delegation), CvssCalculator, and a false-positive regression suite on a clean server.
+Test suite covers: JWT probes (alg:none, weak secret, RS256->HS256, JKU, null signature, signature disclosure, x5c, x5u, key confusion), CORS (origin reflection, wildcard, null origin), OAuth (well-known discovery, redirect_uri bypass), CRLF (path + header injection), SSRF, GraphQL (introspection, mutation, nested DoS, batching), Open Redirect, Cache Poisoning, Request Smuggling (CL.TE, TE.CL, Duplicate CL, CL.0, Hop-by-hop TE, H2.CL, H2.TE), SQLi (error-based + time-based), PQC, Headers, HSTS, IDOR (COOKIE auth, cross-user), OAST (server lifecycle, correlator matching, config validation), ScanRunner orchestration (callbacks, module isolation, dedup, omnibus E2E), ReportEngine (MD+JSON+SARIF export, JSON serialization), KnowledgeBase (34 entries, lookups, CweRegistry delegation), CvssCalculator, API Client (collections, importers, runner, assertions), and a false-positive regression suite on a clean server.
 
 ---
 
@@ -312,7 +328,7 @@ src/main/java/gg/effront/anarcry/
 |   |                                recommendation, cweId, cweTitle, cvssVector,
 |   |                                cvssScore)
 |   +-- Severity.java                CRITICAL / HIGH / MEDIUM / LOW / INFO
-|   +-- CweRegistry.java            Delegates to KnowledgeBase (25 entries + fallback)
+|   +-- CweRegistry.java            Delegates to KnowledgeBase (34 entries + fallback)
 |   +-- CvssCalculator.java         CVSS v3.1 Base Score (FIRST formula)
 |   +-- KnowledgeBase.java          Singleton: loads knowledge_base.json, lookup by
 |   |                                module or ID
@@ -339,11 +355,15 @@ src/main/java/gg/effront/anarcry/
 |   |   +-- WafEvasion.java        5 bypass strategies + 15-vendor signature detection
 |   |   +-- CircuitBreaker.java    Per-module WAF block counter with dynamic threshold
 |   +-- crypto/                    5 modules: TLS (+ RawTlsProbe), Headers, HSTS,
-|   |                               JWT (5 probes), PQC
-|   +-- web/                       20 modules: SQLi, XSS, LFI, CmdInject, CORS, OAuth,
-|                                   OpenRedirect, SSRF, GraphQL, CRLF, XXE, SSTI, IDOR,
-|                                   HostHeader, Actuator, MassAssign, CachePoisoning,
-|                                   ReqSmuggling, Crawler, Infra
+|   |                               JWT (8 probes incl. x5c, x5u, key confusion), PQC
+|   +-- web/                       30 modules: SQLi, XSS, LFI, CmdInject, CORS, OAuth,
+|   |                               OpenRedirect, SSRF, GraphQL, CRLF, XXE, SSTI, IDOR,
+|   |                               HostHeader, Actuator, MassAssign, CachePoisoning,
+|   |                               ReqSmuggling, Crawler, Infra, CSRF, Secrets,
+|   |                               RaceCondition, NoSQLi, Deserialization, FileUpload,
+|   |                               SubTakeover, WebSocket, ProtoPollution, CloudMisconfig
+|   +-- oast/                      OAST infrastructure: OastServer, OastCorrelator,
+|                                   OastPayload, OastCallback, OastConfig
 +-- report/
 |   +-- ReportEngine.java          MD+JSON / HackerOne / Bugcrowd (KB-enriched)
 |                                   All reports saved to ~/.anarcry/reports/
@@ -377,7 +397,11 @@ src/main/java/gg/effront/anarcry/
 |   |   +-- RepeaterView           HTTP request replay
 |   |   +-- SiteMapView            Crawled sitemap tree
 |   |   +-- ReportView             Report generation and export
+|   |   +-- ApiClientView          API Client with collection tree + request tabs
 |   |   +-- AssistantView          AI Assistant chat with streaming + tools
+|   |   +-- EnvironmentEditorDialog  API Client environment variable editor
+|   |   +-- GlobalSearchDialog     Cross-tab search (Ctrl+F)
+|   |   +-- ExportDialog           Multi-format export (MD, JSON, SARIF, H1, BC)
 |   +-- components/                Reusable GUI components
 |   +-- theme/                     FlatLaf theme customization
 +-- tui/
@@ -386,7 +410,7 @@ src/main/java/gg/effront/anarcry/
     +-- chrome/                    ModeBar, StatusBar, ActionPalette, EventLogDrawer
     +-- modes/                     Target mode, Repeater mode
     +-- panels/                    FindingsPanel, LogPanel, ModulesPanel, SiteMapPanel,
-                                    AssistantPanel
+                                    ApiClientPanel, AssistantPanel
 ```
 
 **Scan execution flow:**
@@ -416,9 +440,9 @@ ScanRunner.run(ScanContext)
 
 Two layers:
 
-**Structured data** -- `src/main/resources/knowledge_base.json` contains 25 entries (one per vulnerability class). Each entry provides CWE ID, CVSS v3.1 vector, VRT ID, summary, payloads, crawler hints, and remediation. `CweRegistry` delegates to `KnowledgeBase` at runtime -- findings auto-resolve CWE and CVSS from the KB when created via `Finding.of()`.
+**Structured data** -- `src/main/resources/knowledge_base.json` contains 34 entries (one per vulnerability class). Each entry provides CWE ID, CVSS v3.1 vector, VRT ID, summary, payloads, crawler hints, and remediation. `CweRegistry` delegates to `KnowledgeBase` at runtime -- findings auto-resolve CWE and CVSS from the KB when created via `Finding.of()`.
 
-**Enriched markdown** -- `knowledge-base/*.md` contains 26 entries with extended sections:
+**Enriched markdown** -- `knowledge-base/*.md` contains 27 entries with extended sections:
 
 - Description, impact, payloads and bypasses
 - Escalation Techniques (account takeover, data exfiltration, lateral movement)
@@ -492,6 +516,47 @@ Built-in API client inspired by [Bruno](https://www.usebruno.com/) for manual AP
 
 ## 11 - Changelog
 
+### v2.2.0
+
+**Scanner Expansion -- 13 new modules, OAST, SARIF, FP reduction**
+
+New scanner modules:
+- **CSRF**: 6-phase detection (token presence, validation tests, SameSite cookie, referer/origin bypass, PoC generation)
+- **Secrets**: 17 regex patterns (AWS AKIA, GCP, GitHub ghp_/gho_/ghs_, Slack xoxb/xoxp, JWTs, private keys, generic API keys) with JS bundle and source map scanning
+- **Race Condition** (opt-in): concurrent request dispatch, state inconsistency detection for payment/coupon/vote endpoints
+- **NoSQL Injection**: MongoDB operator injection ($gt, $ne, $regex, $where, $exists), JSON body injection, auth bypass
+- **Insecure Deserialization**: Java/PHP/Python/.NET gadget detection, content-type analysis, error-based fingerprinting
+- **File Upload Bypass** (opt-in): double extension, null byte, unicode, content-type spoofing, magic byte manipulation
+- **Subdomain Takeover**: CNAME resolution, dangling record detection, service fingerprinting (GitHub Pages, Heroku, S3, Azure, Shopify)
+- **WebSocket Security**: origin validation bypass, unauthenticated endpoint detection, protocol downgrade (ws:// vs wss://)
+- **Prototype Pollution**: `__proto__` and `constructor.prototype` injection in JSON bodies and query params
+- **Cloud Misconfiguration**: S3/Azure Blob/GCS public access checks, cloud metadata endpoint exposure
+
+JWT++ probes:
+- **x5c chain**: self-signed certificate chain injection
+- **x5u cert**: attacker-controlled certificate URL (OAST-enabled)
+- **Key confusion**: RSA public key as HMAC secret (RS256 -> HS256 variant)
+
+OAST infrastructure (`scanner/oast/`):
+- **OastServer**: lightweight HTTP/DNS callback server for blind vulnerability detection
+- **OastCorrelator**: matches incoming callbacks to pending payloads with timestamp correlation
+- Integrated into SSRF, XXE, SQLi, CmdInjection modules (conditional on `oastEnabled`)
+
+Module enhancements:
+- **GraphQL++**: mutation testing, nested query DoS (depth bombing), batching bypass, field suggestion leak
+- **XXE++**: SVG upload XXE, SAML XXE, XInclude, content-type switching
+- **HTTP/2 Smuggling**: H2.CL, H2.TE, HPACK header manipulation, CRLF injection
+
+Other:
+- **SARIF v2.1.0 export**: full CWE/CVSS mapping, available in TUI ([E] -> 5), GUI (Export dialog), CLI (--format sarif)
+- **FP reduction**: echo detection in FindingValidator, module-specific validation hooks (SQLi/XSS/SSRF), structural HTML comparison in BaselineDiffer, statistical timing analysis in TimingAnalyzer
+- **Knowledge base**: expanded from 25 to 34 entries with new module coverage
+- Version bump to 2.2.0
+
+
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
+
 ### v2.1.0
 
 **API Client Module - Bruno-inspired collections, environments, runner**
@@ -511,9 +576,6 @@ Built-in API client inspired by [Bruno](https://www.usebruno.com/) for manual AP
 - **PreferencesDialog**: Bruno-style categorized settings (General, Display, Proxy, Certificates, Keybindings, About) - SSL/TLS toggle, proxy config for Burp/ZAP, client certificates table
 - **StatusBar shortcuts**: Search (jumps to Findings search), Cookies count, Proxy status, Privacy toggle, version display
 - **F-key shift**: API Client on F8, Assistant moved to F9
-
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v2.0.1
 

@@ -12,6 +12,7 @@ import gg.effront.anarcry.scanner.oast.OastServer;
 import gg.effront.anarcry.scanner.util.BrowserTransport;
 import gg.effront.anarcry.scanner.util.ChallengeSolver;
 import gg.effront.anarcry.scanner.util.CircuitBreakerException;
+import gg.effront.anarcry.scanner.util.CookieCache;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.StealthHttpClient;
 import gg.effront.anarcry.scanner.util.WafEvasion;
@@ -79,16 +80,8 @@ public class ScanRunner {
     private final List<Finding> accumulatedFindings = Collections.synchronizedList(new ArrayList<>());
     private volatile List<ValidatedFinding> lastValidatedFindings = List.of();
     private final List<Scanner> customModules = new ArrayList<>();
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "anarcry-scan");
-        t.setDaemon(true);
-        return t;
-    });
-    private final ExecutorService modulePool = Executors.newFixedThreadPool(DEFAULT_PARALLELISM, r -> {
-        Thread t = new Thread(r, "anarcry-module");
-        t.setDaemon(true);
-        return t;
-    });
+    private volatile ExecutorService executor = newScanExecutor();
+    private volatile ExecutorService modulePool = newModulePool();
 
     private volatile ScanContext lastScanContext;
 
@@ -140,20 +133,34 @@ public class ScanRunner {
 
     public void run(ScanContext ctx) {
         lastScanContext = ctx;
+        seenFindings.clear();
+        testedClean.clear();
+        testedModules.clear();
+        accumulatedFindings.clear();
+        lastValidatedFindings = List.of();
         executor.submit(() -> {
             try {
-                testedClean.clear();
-                testedModules.clear();
-                accumulatedFindings.clear();
-                lastValidatedFindings = List.of();
                 runScan(ctx);
             } catch (Exception e) {
-                logCb.accept("[!] Scan falhou: " + e.getMessage());
+                if (!isCancellation(e)) {
+                    logCb.accept("[!] Scan falhou: " + e.getMessage());
+                }
             } finally {
                 ctx.wafState().closeBrowserTransport();
                 onScanFinish.run();
             }
         });
+    }
+
+    private static boolean isCancellation(Throwable t) {
+        while (t != null) {
+            if (t instanceof InterruptedException || t instanceof java.util.concurrent.RejectedExecutionException
+                    || t instanceof java.util.concurrent.CancellationException) {
+                return true;
+            }
+            t = t.getCause();
+        }
+        return false;
     }
 
     private void runScan(ScanContext origCtx) {
@@ -178,6 +185,14 @@ public class ScanRunner {
                 origCtx.enabledModules(), origCtx.config(), safeReqLog, origCtx.discoveredPaths(), origCtx.wafState(),
                 origCtx.credentialStore());
         ctx.wafState().setRuntimeLog(safeLog);
+        ctx.wafState().setDebugMode(ctx.config().debugMode());
+        if (ctx.config().debugMode()) {
+            safeLog.accept("[DBG] Debug mode enabled -- verbose logging active");
+            safeLog.accept("[DBG] Target: " + ctx.targetUrl() + " | Auth: "
+                    + (ctx.jwtToken().isBlank() ? "none/cookie" : "bearer") + " | Modules: "
+                    + ctx.enabledModules().size() + " | Concurrency: " + ctx.config().probeConcurrency()
+                    + " | Exploitation: " + ctx.config().exploitationEnabled());
+        }
         List<Scanner> modules = new ArrayList<>();
         if (ctx.has("TLS")) {
             modules.add(new TlsModule());
@@ -347,6 +362,20 @@ public class ScanRunner {
                         java.net.http.HttpResponse.BodyHandlers.ofString());
                 String cleanBody = cleanResp.body() != null ? cleanResp.body() : "";
 
+                if (ctx.config().debugMode()) {
+                    String srvHdr = cleanResp.headers().firstValue("Server").orElse("-");
+                    String cfRay = cleanResp.headers().firstValue("cf-ray").orElse("-");
+                    String xVercel = cleanResp.headers().firstValue("x-vercel-mitigated").orElse("-");
+                    safeLog.accept("[DBG] Phase 1.5 baseline: HTTP " + cleanResp.statusCode() + " Server=" + srvHdr
+                            + " CF-Ray=" + cfRay + " X-Vercel-Mitigated=" + xVercel + " body=" + cleanBody.length()
+                            + "B");
+                    if (cleanResp.statusCode() == 403 || cleanResp.statusCode() == 503) {
+                        String snippet = cleanBody.length() > 300 ? cleanBody.substring(0, 300) + "..." : cleanBody;
+                        snippet = snippet.replace("\n", " ").replace("\r", "");
+                        safeLog.accept("[DBG] Phase 1.5 baseline body: " + snippet);
+                    }
+                }
+
                 // Multi-vendor signature detection on baseline (CDN presence only -- not WAF
                 // enforcement)
                 var providers = WafEvasion.detectProviders(cleanResp.statusCode(), cleanResp.headers().map(), cleanBody,
@@ -370,8 +399,21 @@ public class ScanRunner {
                 String serverHdr = probeResp.headers().firstValue("Server").orElse("");
                 String probeBody = probeResp.body() != null ? probeResp.body() : "";
 
+                if (ctx.config().debugMode()) {
+                    String cfRayP = probeResp.headers().firstValue("cf-ray").orElse("-");
+                    String xvmP = probeResp.headers().firstValue("x-vercel-mitigated").orElse("-");
+                    safeLog.accept("[DBG] Phase 1.5 XSS probe: HTTP " + probeResp.statusCode() + " Server=" + serverHdr
+                            + " CF-Ray=" + cfRayP + " X-Vercel-Mitigated=" + xvmP + " body=" + probeBody.length()
+                            + "B");
+                }
+
                 // Classify challenge type (CF-specific: managed/jsd/interactive/turnstile)
                 String cfType = WafEvasion.parseCfChallengeType(probeBody, probeResp.headers().map(), probeUrl);
+
+                if (ctx.config().debugMode()) {
+                    safeLog.accept("[DBG] Phase 1.5 classification: cfType=\"" + cfType + "\" vercel-body="
+                            + probeBody.contains("Vercel Security Checkpoint"));
+                }
 
                 // Vercel Security Checkpoint -- must be checked BEFORE CF branch
                 String vercelMitigated = probeResp.headers().firstValue("x-vercel-mitigated").orElse("");
@@ -386,29 +428,41 @@ public class ScanRunner {
                     safeLog.accept("[!] Phase 1.5: Vercel Security Checkpoint detectado (HTTP " + probeResp.statusCode()
                             + ")");
 
-                    safeLog.accept("[*] Phase 1.5: tentando ChallengeSolver (headless Chromium + WASM)...");
-                    ChallengeSolver.Result csResult = ChallengeSolver.solve(ctx.targetUrl(), safeLog);
+                    boolean dbg = ctx.config().debugMode();
+                    String targetHost = java.net.URI.create(ctx.targetUrl()).getHost();
+                    String cached = CookieCache.load(targetHost);
+                    if (cached != null) {
+                        safeLog.accept("[+] Phase 1.5: cookies de clearance encontrados no cache para " + targetHost);
+                        ctx.wafState().setChallengeCookies(cached);
+                    } else {
+                        safeLog.accept("[*] Phase 1.5: tentando ChallengeSolver (headless Chromium + stealth)...");
+                        ChallengeSolver.Result csResult = ChallengeSolver.solve(ctx.targetUrl(), safeLog, dbg);
 
-                    if (csResult != null && csResult.cookies() != null && !csResult.cookies().isBlank()) {
-                        ctx.wafState().setChallengeCookies(csResult.cookies());
-                        safeLog.accept("[+] Phase 1.5: Vercel challenge resolvido -- cookies de clearance extraidos");
-                        safeLog.accept("[+] Phase 1.5: cookies serao injetados em todos os requests via Http.send()");
+                        if (csResult != null && csResult.cookies() != null && !csResult.cookies().isBlank()) {
+                            ctx.wafState().setChallengeCookies(csResult.cookies());
+                            CookieCache.save(targetHost, csResult.cookies());
+                            safeLog.accept(
+                                    "[+] Phase 1.5: Vercel challenge resolvido -- cookies extraidos e salvos no cache");
+                        } else {
+                            safeLog.accept("[-] Phase 1.5: ChallengeSolver falhou ou Playwright indisponivel");
+                            safeLog.accept(
+                                    "[*] Fallback: abra o alvo no browser, resolva o challenge, e extraia cookies:");
+                            safeLog.accept("[*]   1. No console do browser: document.cookie");
+                            safeLog.accept("[*]   2. Cole o valor no campo 'Session Cookie' do AnarCry");
+                            safeLog.accept("[*]   3. Mude Auth Type para Cookie e reinicie o scan");
 
-                        BrowserTransport browserTx = BrowserTransport.create(ctx.targetUrl(), safeLog);
+                            if (!ctx.config().sessionCookie().isBlank()) {
+                                safeLog.accept("[+] Session Cookie detectado -- tentando usar como clearance");
+                                ctx.wafState().setChallengeCookies(ctx.config().sessionCookie());
+                            }
+                        }
+                    }
+
+                    if (ctx.wafState().hasChallengeCookies()) {
+                        BrowserTransport browserTx = BrowserTransport.create(ctx.targetUrl(), safeLog, dbg);
                         if (browserTx != null) {
                             ctx.wafState().setBrowserTransport(browserTx);
                             safeLog.accept("[+] Phase 1.5: BrowserTransport ativado como transport complementar");
-                        }
-                    } else {
-                        safeLog.accept("[-] Phase 1.5: ChallengeSolver falhou ou Playwright indisponivel");
-                        safeLog.accept("[*] Fallback: abra o alvo no browser, resolva o challenge, e extraia cookies:");
-                        safeLog.accept("[*]   1. No console do browser: document.cookie");
-                        safeLog.accept("[*]   2. Cole o valor no campo 'Session Cookie' do AnarCry");
-                        safeLog.accept("[*]   3. Mude Auth Type para Cookie e reinicie o scan");
-
-                        if (!ctx.config().sessionCookie().isBlank()) {
-                            safeLog.accept("[+] Session Cookie detectado -- tentando usar como clearance");
-                            ctx.wafState().setChallengeCookies(ctx.config().sessionCookie());
                         }
                     }
                 } else if (!cfType.isEmpty()) {
@@ -464,6 +518,13 @@ public class ScanRunner {
 
         if (ctx.wafState().isWafDetected()) {
             WafState.WafBlockType bt = ctx.wafState().blockType();
+            if (ctx.config().debugMode()) {
+                safeLog.accept("[DBG] Phase 1.5 WAF state: product=" + ctx.wafState().wafProduct() + " blockType=" + bt
+                        + " jsChallenge=" + ctx.wafState().isJsChallenge() + " challengeType="
+                        + ctx.wafState().challengeType() + " stealth=" + ctx.wafState().isStealthActive()
+                        + " hasCookies=" + ctx.wafState().hasChallengeCookies() + " threshold="
+                        + ctx.wafState().effectiveThreshold());
+            }
             if (ctx.wafState().isVercelChallenge()) {
                 // Vercel challenge was already handled in the detection block above
                 if (ctx.wafState().hasChallengeCookies()) {
@@ -478,15 +539,54 @@ public class ScanRunner {
                 safeLog.accept("[*] Phase 1.5: " + bt + " detectado -- pulando evasion strategy probing");
                 safeLog.accept("[*] Alternativa: abra o alvo no Chrome, copie os cookies e cole em Session Cookie");
             } else if (bt == WafState.WafBlockType.JS_CHALLENGE || ctx.wafState().isJsChallenge()) {
-                // JS challenge -- use headless Chromium as request transport
+                // JS challenge -- try cached cookies first, then ChallengeSolver
+                boolean dbg2 = ctx.config().debugMode();
+                String jsHost2 = java.net.URI.create(ctx.targetUrl()).getHost();
+                String cached2 = CookieCache.load(jsHost2);
+                ChallengeSolver.Result csResult = null;
+                if (cached2 != null) {
+                    safeLog.accept("[+] Phase 1.5: cookies de clearance encontrados no cache para " + jsHost2);
+                    ctx.wafState().setChallengeCookies(cached2);
+                } else {
+                    safeLog.accept("[*] Phase 1.5: tentando ChallengeSolver (headless Chromium + stealth)...");
+                    csResult = ChallengeSolver.solve(ctx.targetUrl(), safeLog, dbg2);
+                }
+
+                boolean challengeSolved = cached2 != null
+                        || (csResult != null && csResult.cookies() != null && !csResult.cookies().isBlank());
+                if (cached2 == null && challengeSolved) {
+                    ctx.wafState().setChallengeCookies(csResult.cookies());
+                    CookieCache.save(jsHost2, csResult.cookies());
+                    safeLog.accept("[+] Phase 1.5: challenge resolvido -- cookies extraidos e salvos no cache");
+                } else if (!challengeSolved && csResult != null && csResult.challengeType() != null
+                        && csResult.challengeType().contains("Vercel")) {
+                    // ChallengeSolver identified Vercel checkpoint -- reclassify
+                    ctx.wafState().markWafDetected("Vercel");
+                    ctx.wafState().markBlockType(WafState.WafBlockType.VERCEL_CHALLENGE);
+                    ctx.wafState().markJsChallenge("Vercel Security Checkpoint");
+                    safeLog.accept("[!] Phase 1.5: reclassificado para Vercel Security Checkpoint");
+                    safeLog.accept("[*] Fallback: abra o alvo no browser, resolva o challenge, e extraia cookies:");
+                    safeLog.accept("[*]   1. No console do browser: document.cookie");
+                    safeLog.accept("[*]   2. Cole o valor no campo 'Session Cookie' do AnarCry");
+                    safeLog.accept("[*]   3. Mude Auth Type para Cookie e reinicie o scan");
+                    if (!ctx.config().sessionCookie().isBlank()) {
+                        safeLog.accept("[+] Session Cookie detectado -- tentando usar como clearance");
+                        ctx.wafState().setChallengeCookies(ctx.config().sessionCookie());
+                    }
+                }
+
+                // BrowserTransport as complementary transport (with cookies already in context)
                 safeLog.accept("[*] Phase 1.5: ativando BrowserTransport (headless Chromium)...");
-                BrowserTransport browserTx = BrowserTransport.create(ctx.targetUrl(), safeLog);
+                BrowserTransport browserTx = BrowserTransport.create(ctx.targetUrl(), safeLog, dbg2);
                 if (browserTx != null) {
                     ctx.wafState().setBrowserTransport(browserTx);
-                    safeLog.accept("[+] Phase 1.5: JS challenge bypassado -- requests via Chromium headless");
-                    // BT solves JS challenges; any subsequent block is payload-level
+                    if (ctx.wafState().hasChallengeCookies()) {
+                        safeLog.accept("[+] Phase 1.5: JS challenge bypassado -- clearance cookies ativos");
+                    } else {
+                        safeLog.accept("[~] Phase 1.5: BrowserTransport ativo mas sem clearance -- scan pode ter FPs");
+                    }
                     ctx.wafState().markBlockType(WafState.WafBlockType.RULE_BLOCK);
-                    // Probe payload bypass strategies through BT
+                    // Probe payload bypass strategies
                     safeLog.accept(
                             "[*] Phase 1.5: probing payload bypass strategies para " + ctx.wafState().wafProduct());
                     try {
@@ -502,8 +602,8 @@ public class ScanRunner {
                     } catch (Exception e) {
                         safeLog.accept("[!] WAF probe falhou: " + e.getMessage());
                     }
-                } else {
-                    safeLog.accept("[-] Phase 1.5: BrowserTransport indisponivel");
+                } else if (!ctx.wafState().hasChallengeCookies()) {
+                    safeLog.accept("[-] Phase 1.5: BrowserTransport indisponivel e sem clearance cookies");
                     safeLog.accept("[*] Alternativa: abra o alvo no Chrome, copie os cookies e cole em Session Cookie");
                 }
             } else {
@@ -548,6 +648,12 @@ public class ScanRunner {
                     safeLog.accept("[!] WAF probe falhou: " + e.getMessage());
                 }
             }
+        }
+
+        if (ctx.wafState().isWafDetected() && !ctx.wafState().hasChallengeCookies()) {
+            int wafDelay = 300;
+            ctx.wafState().setWafDelay(wafDelay);
+            safeLog.accept("[*] WAF sem clearance -- throttle global +" + wafDelay + "ms por request");
         }
 
         // Phase 2: Scanner modules (parallel)
@@ -603,7 +709,9 @@ public class ScanRunner {
                     futures.add(future.handle((findings, ex) -> {
                         if (ex != null) {
                             Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                            if (cause instanceof TimeoutException) {
+                            if (isCancellation(cause)) {
+                                // scan was stopped by user -- ignore silently
+                            } else if (cause instanceof TimeoutException) {
                                 safeLog.accept("[!] " + module.id() + " timeout apos " + MODULE_TIMEOUT_SECONDS
                                         + "s -- abortando modulo");
                                 Thread t = moduleThreads.remove(module.id());
@@ -776,5 +884,23 @@ public class ScanRunner {
     public void shutdown() {
         executor.shutdownNow();
         modulePool.shutdownNow();
+        executor = newScanExecutor();
+        modulePool = newModulePool();
+    }
+
+    private static ExecutorService newScanExecutor() {
+        return Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "anarcry-scan");
+            t.setDaemon(true);
+            return t;
+        });
+    }
+
+    private static ExecutorService newModulePool() {
+        return Executors.newFixedThreadPool(DEFAULT_PARALLELISM, r -> {
+            Thread t = new Thread(r, "anarcry-module");
+            t.setDaemon(true);
+            return t;
+        });
     }
 }

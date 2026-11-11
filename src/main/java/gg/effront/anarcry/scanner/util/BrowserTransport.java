@@ -46,19 +46,25 @@ public final class BrowserTransport implements AutoCloseable {
     private final Browser browser;
     private final Page page;
     private final String targetHost;
+    private final boolean challengeResolved;
 
     public static BrowserTransport stub(String targetHost) {
-        return new BrowserTransport(null, null, null, targetHost);
+        return new BrowserTransport(null, null, null, targetHost, false);
     }
 
-    private BrowserTransport(Playwright pw, Browser browser, Page page, String targetHost) {
+    private BrowserTransport(Playwright pw, Browser browser, Page page, String targetHost, boolean challengeResolved) {
         this.pw = pw;
         this.browser = browser;
         this.page = page;
         this.targetHost = targetHost;
+        this.challengeResolved = challengeResolved;
     }
 
-    public static BrowserTransport create(String targetUrl, Consumer<String> log) {
+    public boolean isChallengeResolved() {
+        return challengeResolved;
+    }
+
+    public static BrowserTransport create(String targetUrl, Consumer<String> log, boolean debug) {
         try {
             Class.forName("com.microsoft.playwright.Playwright");
         } catch (ClassNotFoundException e) {
@@ -69,10 +75,15 @@ public final class BrowserTransport implements AutoCloseable {
         Browser browser = null;
         try {
             pw = Playwright.create();
-            browser = pw.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true).setArgs(List.of(
-                    "--disable-blink-features=AutomationControlled", "--no-first-run", "--no-default-browser-check")));
-            BrowserContext ctx = browser
-                    .newContext(new Browser.NewContextOptions().setUserAgent(StealthHttpClient.CHROME_UA));
+            browser = pw.chromium()
+                    .launch(new BrowserType.LaunchOptions().setHeadless(true)
+                            .setArgs(List.of("--disable-blink-features=AutomationControlled", "--no-first-run",
+                                    "--no-default-browser-check", "--disable-dev-shm-usage",
+                                    "--disable-features=IsolateOrigins,site-per-process")));
+            BrowserContext ctx = browser.newContext(new Browser.NewContextOptions()
+                    .setUserAgent(StealthHttpClient.CHROME_UA).setViewportSize(1920, 1080).setScreenSize(1920, 1080)
+                    .setLocale("en-US").setTimezoneId("America/New_York"));
+            PlaywrightStealth.apply(ctx);
             Page page = ctx.newPage();
             page.setDefaultTimeout(PAGE_DEFAULT_TIMEOUT_MS);
 
@@ -80,9 +91,45 @@ public final class BrowserTransport implements AutoCloseable {
             log.accept("[*] BrowserTransport: navegando para " + targetUrl);
             Response resp = page.navigate(targetUrl, new Page.NavigateOptions().setTimeout(NAVIGATE_TIMEOUT_MS));
             int status = resp != null ? resp.status() : -1;
-            log.accept("[+] BrowserTransport: Chromium ready (HTTP " + status + ")");
 
-            return new BrowserTransport(pw, browser, page, host);
+            if (status == 403 || status == 503) {
+                String title = page.title();
+                if (debug) {
+                    String pageUrl = page.url();
+                    log.accept("[DBG] BrowserTransport: initial HTTP " + status + " title=\"" + title + "\" url="
+                            + pageUrl);
+                    var cookies = ctx.cookies();
+                    if (!cookies.isEmpty()) {
+                        String cookieNames = cookies.stream().map(c -> c.name)
+                                .collect(java.util.stream.Collectors.joining(", "));
+                        log.accept("[DBG] BrowserTransport: cookies present: " + cookieNames);
+                    }
+                }
+                if (title.contains("Just a moment") || title.contains("Checking")
+                        || title.contains("Security Checkpoint") || title.contains("Attention Required")) {
+                    log.accept("[~] BrowserTransport: challenge page detectada (" + title + "), aguardando...");
+                    try {
+                        page.waitForURL(u -> true, new Page.WaitForURLOptions().setTimeout(NAVIGATE_TIMEOUT_MS));
+                        page.waitForLoadState(com.microsoft.playwright.options.LoadState.NETWORKIDLE,
+                                new Page.WaitForLoadStateOptions().setTimeout(NAVIGATE_TIMEOUT_MS));
+                        String finalTitle = page.title();
+                        if (!finalTitle.contains("Just a moment") && !finalTitle.contains("Checking")
+                                && !finalTitle.contains("Security Checkpoint")
+                                && !finalTitle.contains("Attention Required")) {
+                            log.accept("[+] BrowserTransport: challenge resolvido (" + finalTitle + ")");
+                            status = 200;
+                        } else {
+                            log.accept("[-] BrowserTransport: challenge nao resolveu (timeout)");
+                        }
+                    } catch (com.microsoft.playwright.TimeoutError e) {
+                        log.accept("[-] BrowserTransport: challenge timeout -- continuando degradado");
+                    }
+                }
+            }
+
+            boolean resolved = status == 200 || (status != 403 && status != 503);
+            log.accept("[+] BrowserTransport: Chromium ready (HTTP " + status + ", resolved=" + resolved + ")");
+            return new BrowserTransport(pw, browser, page, host, resolved);
         } catch (Exception e) {
             if (browser != null) {
                 try {
