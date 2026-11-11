@@ -23,6 +23,7 @@ public class GuiStatusBar extends JPanel {
     private static final Color COLOR_HIGH = new Color(0xD2, 0x99, 0x22);
     private static final Color COLOR_MEDIUM = new Color(0xE3, 0xB3, 0x41);
     private static final Color COLOR_LOW = new Color(0x58, 0xA6, 0xFF);
+    private static final Color COLOR_INFO = new Color(0x8B, 0x94, 0x9E);
     private static final Color COLOR_SEPARATOR = new Color(0x8B, 0x94, 0x9E);
     private static final Color COLOR_PRIVACY_ON = new Color(0x3F, 0xB9, 0x50);
     private static final Color COLOR_PROXY_ON = new Color(0x3F, 0xB9, 0x50);
@@ -32,6 +33,7 @@ public class GuiStatusBar extends JPanel {
     private final JLabel highLabel;
     private final JLabel mediumLabel;
     private final JLabel lowLabel;
+    private final JLabel infoLabel;
     private final JLabel modulesLabel;
     private final JLabel targetLabel;
     private final JProgressBar progressBar;
@@ -61,6 +63,7 @@ public class GuiStatusBar extends JPanel {
         highLabel = coloredLabel("H:0", COLOR_HIGH);
         mediumLabel = coloredLabel("M:0", COLOR_MEDIUM);
         lowLabel = coloredLabel("L:0", COLOR_LOW);
+        infoLabel = coloredLabel("I:0", COLOR_INFO);
 
         modulesLabel = new JLabel("Modules: 0/0");
         targetLabel = new JLabel("");
@@ -88,6 +91,7 @@ public class GuiStatusBar extends JPanel {
         left.add(highLabel);
         left.add(mediumLabel);
         left.add(lowLabel);
+        left.add(infoLabel);
         left.add(separator());
         left.add(modulesLabel);
         left.add(separator());
@@ -170,12 +174,13 @@ public class GuiStatusBar extends JPanel {
         SwingUtilities.invokeLater(() -> cookiesLabel.setText("Cookies(" + count + ")"));
     }
 
-    public void setSeverityCounts(int c, int h, int m, int l) {
+    public void setSeverityCounts(int c, int h, int m, int l, int i) {
         SwingUtilities.invokeLater(() -> {
             criticalLabel.setText("C:" + c);
             highLabel.setText("H:" + h);
             mediumLabel.setText("M:" + m);
             lowLabel.setText("L:" + l);
+            infoLabel.setText("I:" + i);
         });
     }
 

@@ -26,7 +26,9 @@ import gg.effront.anarcry.apiclient.model.VarsDef;
 import gg.effront.anarcry.apiclient.runner.AssertionEngine;
 import gg.effront.anarcry.apiclient.runner.CollectionRunner;
 import gg.effront.anarcry.apiclient.runner.RequestExecutor;
+import gg.effront.anarcry.apiclient.runner.RunContext;
 import gg.effront.anarcry.apiclient.vars.Interpolator;
+import gg.effront.anarcry.apiclient.vars.VariableStore;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -127,6 +129,7 @@ public class ApiClientView extends JPanel {
     private JTextArea responseHeaders;
     private JTextArea assertionsResultArea;
     private JPanel requestTabsPanel;
+    private JButton overflowButton;
 
     private Collection currentCollection;
     private Path collectionPath;
@@ -134,6 +137,7 @@ public class ApiClientView extends JPanel {
     private final List<RequestItem> openRequests = new ArrayList<>();
     private final HttpClient httpClient;
     private final List<String> runLog = new ArrayList<>();
+    private RunContext sessionContext;
 
     public ApiClientView() {
         super(new BorderLayout());
@@ -221,25 +225,43 @@ public class ApiClientView extends JPanel {
         collectionTree.setDropMode(DropMode.ON_OR_INSERT);
         collectionTree.setTransferHandler(new TreeDragHandler());
         installTreeContextMenu();
+        javax.swing.ToolTipManager.sharedInstance().registerComponent(collectionTree);
 
-        collectionTree.setCellRenderer(new DefaultTreeCellRenderer() {
+        collectionTree.setCellRenderer(new javax.swing.tree.TreeCellRenderer() {
+
+            private final JPanel panel = new JPanel(new BorderLayout(4, 0));
+            private final JLabel methodLabel = new JLabel();
+            private final JLabel nameLabel = new JLabel();
+            private final DefaultTreeCellRenderer fallback = new DefaultTreeCellRenderer();
+
+            {
+                methodLabel.setFont(new Font(Font.MONOSPACED, Font.BOLD, 12));
+                nameLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+                panel.setOpaque(true);
+                panel.add(methodLabel, BorderLayout.WEST);
+                panel.add(nameLabel, BorderLayout.CENTER);
+            }
 
             @Override
             public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean expanded,
                     boolean leaf, int row, boolean hasFocus) {
-                super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
                 if (value instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof RequestItem ri) {
-                    setIcon(null);
                     String method = ri.request().method();
-                    String hex = String.format("%06x", methodColor(method).getRGB() & 0xFFFFFF);
-                    setText("<html><b><font color='#" + hex + "'>" + method + "</font></b> " + escapeHtml(ri.name())
-                            + "</html>");
-                } else if (value instanceof DefaultMutableTreeNode node
-                        && !(node.getUserObject() instanceof RequestItem)) {
-                    setIcon(expanded ? getOpenIcon() : getClosedIcon());
-                    setText(String.valueOf(node.getUserObject()));
+                    methodLabel.setText(method);
+                    methodLabel.setForeground(methodColor(method));
+                    nameLabel.setText(ri.name());
+                    Color bg = sel ? new Color(0x3A, 0x3A, 0x4E) : tree.getBackground();
+                    Color fg = sel ? Color.WHITE : tree.getForeground();
+                    panel.setBackground(bg);
+                    nameLabel.setForeground(fg);
+                    panel.setToolTipText(method + " " + ri.name() + " - " + ri.request().url());
+                    return panel;
                 }
-                return this;
+                Component c = fallback.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
+                if (value instanceof DefaultMutableTreeNode node) {
+                    fallback.setToolTipText(node.getUserObject().toString());
+                }
+                return c;
             }
         });
 
@@ -377,11 +399,19 @@ public class ApiClientView extends JPanel {
 
         requestTabsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 2));
         requestTabsPanel.setBorder(BorderFactory.createEmptyBorder(0, 4, 2, 4));
-        JScrollPane tabsScroll = new JScrollPane(requestTabsPanel, JScrollPane.VERTICAL_SCROLLBAR_NEVER,
-                JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        tabsScroll.setPreferredSize(new Dimension(0, 30));
-        tabsScroll.setBorder(null);
-        topSection.add(tabsScroll, BorderLayout.SOUTH);
+
+        overflowButton = new JButton(">>");
+        overflowButton.setFont(overflowButton.getFont().deriveFont(11f));
+        overflowButton.setMargin(new java.awt.Insets(2, 6, 2, 6));
+        overflowButton.setFocusPainted(false);
+        overflowButton.setVisible(false);
+        overflowButton.setToolTipText("More tabs");
+
+        JPanel tabsRow = new JPanel(new BorderLayout());
+        tabsRow.add(requestTabsPanel, BorderLayout.CENTER);
+        tabsRow.add(overflowButton, BorderLayout.EAST);
+        tabsRow.setPreferredSize(new Dimension(0, 30));
+        topSection.add(tabsRow, BorderLayout.SOUTH);
 
         right.add(topSection, BorderLayout.NORTH);
 
@@ -641,9 +671,66 @@ public class ApiClientView extends JPanel {
 
     private void refreshRequestTabs() {
         requestTabsPanel.removeAll();
+
+        List<JPanel> allTabs = new ArrayList<>();
         for (RequestItem req : openRequests) {
-            requestTabsPanel.add(createRequestTabButton(req));
+            allTabs.add(createRequestTabButton(req));
         }
+
+        // Measure available width and decide which tabs fit.
+        // Active tab is always visible -- if it would overflow, swap with the last
+        // visible tab.
+        int availableWidth = requestTabsPanel.getParent() != null
+                ? requestTabsPanel.getParent().getWidth() - 50
+                : Integer.MAX_VALUE;
+        int usedWidth = 8;
+        List<Integer> visibleIndices = new ArrayList<>();
+        List<RequestItem> overflowItems = new ArrayList<>();
+        for (int i = 0; i < allTabs.size(); i++) {
+            int tabWidth = allTabs.get(i).getPreferredSize().width + 4;
+            if (usedWidth + tabWidth <= availableWidth || visibleIndices.isEmpty()) {
+                visibleIndices.add(i);
+                usedWidth += tabWidth;
+            } else {
+                overflowItems.add(openRequests.get(i));
+            }
+        }
+        // Ensure active tab is visible
+        int activeIdx = openRequests.indexOf(activeRequest);
+        if (activeIdx >= 0 && !visibleIndices.contains(activeIdx) && !visibleIndices.isEmpty()) {
+            int lastVisible = visibleIndices.getLast();
+            overflowItems.remove(openRequests.get(activeIdx));
+            overflowItems.add(openRequests.get(lastVisible));
+            visibleIndices.set(visibleIndices.size() - 1, activeIdx);
+        }
+        for (int idx : visibleIndices) {
+            requestTabsPanel.add(allTabs.get(idx));
+        }
+
+        if (!overflowItems.isEmpty()) {
+            overflowButton.setVisible(true);
+            for (var al : overflowButton.getActionListeners()) {
+                overflowButton.removeActionListener(al);
+            }
+            overflowButton.addActionListener(e -> {
+                JPopupMenu popup = new JPopupMenu();
+                for (RequestItem oi : overflowItems) {
+                    String method = oi.request().method();
+                    JMenuItem mi = new JMenuItem(method + " " + oi.name());
+                    mi.setForeground(methodColor(method));
+                    mi.addActionListener(ev -> {
+                        activeRequest = oi;
+                        loadRequestIntoEditor(oi);
+                        refreshRequestTabs();
+                    });
+                    popup.add(mi);
+                }
+                popup.show(overflowButton, 0, overflowButton.getHeight());
+            });
+        } else {
+            overflowButton.setVisible(false);
+        }
+
         requestTabsPanel.revalidate();
         requestTabsPanel.repaint();
     }
@@ -719,10 +806,6 @@ public class ApiClientView extends JPanel {
             case "PATCH" -> METHOD_PATCH;
             default -> Color.LIGHT_GRAY;
         };
-    }
-
-    private static String escapeHtml(String s) {
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     // ==================== TREE CONTEXT MENU ====================
@@ -1214,12 +1297,14 @@ public class ApiClientView extends JPanel {
                         : new Collection(null, "adhoc", null, null, List.of(item), null, null);
                 Environment env = getSelectedEnvironment();
 
+                ensureSessionContext(coll, env);
                 Interpolator interpolator = new Interpolator();
                 RequestExecutor executor = new RequestExecutor(httpClient, interpolator, new AuthInjectorRegistry(),
                         new AssertionEngine(interpolator));
-                CollectionRunner runner = new CollectionRunner(executor);
-                RequestResult result = runner.runSingle(item, coll, env, msg -> {
+                RequestResult result = executor.execute(item, sessionContext, coll, msg -> {
                 });
+
+                autoExtractToken(result);
 
                 SwingUtilities.invokeLater(() -> displayResult(result));
             } catch (Exception ex) {
@@ -1282,6 +1367,48 @@ public class ApiClientView extends JPanel {
             case "digest" -> new AuthConfig.Digest(map.getOrDefault("username", ""), map.getOrDefault("password", ""));
             default -> new AuthConfig.None();
         };
+    }
+
+    private void ensureSessionContext(Collection coll, Environment env) {
+        if (sessionContext == null) {
+            VariableStore vars = new VariableStore();
+            vars.loadCollection(coll.root());
+            if (env != null) {
+                vars.loadEnv(env);
+            }
+            sessionContext = new RunContext(vars);
+        } else if (env != null) {
+            sessionContext.vars().loadEnv(env);
+        }
+    }
+
+    private void resetSessionContext() {
+        sessionContext = null;
+    }
+
+    private static final String[] TOKEN_FIELDS = {"token", "accessToken", "access_token", "jwt"};
+
+    private void autoExtractToken(RequestResult result) {
+        if (result.response() == null || result.response().status() >= 300) {
+            return;
+        }
+        String body = result.response().body();
+        if (body == null || body.isBlank() || !body.trim().startsWith("{")) {
+            return;
+        }
+        try {
+            com.google.gson.JsonObject obj = com.google.gson.JsonParser.parseString(body).getAsJsonObject();
+            for (String field : TOKEN_FIELDS) {
+                if (obj.has(field) && obj.get(field).isJsonPrimitive()) {
+                    String value = obj.get(field).getAsString();
+                    if (value != null && !value.isBlank()) {
+                        sessionContext.vars().setRuntime("token", value);
+                        return;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     private void displayResult(RequestResult result) {
@@ -1363,6 +1490,7 @@ public class ApiClientView extends JPanel {
             collectionPath = dir;
             openRequests.clear();
             activeRequest = null;
+            resetSessionContext();
             populateTree();
             populateEnvCombo();
             refreshRequestTabs();
@@ -1452,6 +1580,7 @@ public class ApiClientView extends JPanel {
             try {
                 currentCollection = new PostmanImporter().importFile(chooser.getSelectedFile().toPath());
                 collectionPath = null;
+                resetSessionContext();
                 populateTree();
                 populateEnvCombo();
             } catch (Exception ex) {
@@ -1468,6 +1597,7 @@ public class ApiClientView extends JPanel {
             try {
                 currentCollection = new OpenApiImporter().importFile(chooser.getSelectedFile().toPath());
                 collectionPath = null;
+                resetSessionContext();
                 populateTree();
                 populateEnvCombo();
             } catch (Exception ex) {
@@ -1485,6 +1615,7 @@ public class ApiClientView extends JPanel {
             try {
                 currentCollection = new BruImporter().importDirectory(chooser.getSelectedFile().toPath());
                 collectionPath = null;
+                resetSessionContext();
                 populateTree();
                 populateEnvCombo();
             } catch (Exception ex) {
@@ -1501,6 +1632,7 @@ public class ApiClientView extends JPanel {
                 RequestItem item = new CurlImporter().importCurl(cmd);
                 currentCollection = new Collection(null, "cURL Import", null, null, List.of(item), null, null);
                 collectionPath = null;
+                resetSessionContext();
                 populateTree();
                 populateEnvCombo();
                 onTreeSelection();

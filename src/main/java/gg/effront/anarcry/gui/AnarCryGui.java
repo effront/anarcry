@@ -161,7 +161,7 @@ public class AnarCryGui {
             reportView.clear();
             logPane.clear();
             resetSeverityCounts();
-            statusBar.setSeverityCounts(0, 0, 0, 0);
+            statusBar.setSeverityCounts(0, 0, 0, 0, 0);
             statusBar.resetProgress();
             String target = modulesPanel.getTarget();
             siteMapView.setRootUrl(target);
@@ -472,7 +472,7 @@ public class AnarCryGui {
             severityCounts.merge(severity, 1, Integer::sum);
             statusBar.setSeverityCounts(severityCounts.getOrDefault(Severity.CRITICAL, 0),
                     severityCounts.getOrDefault(Severity.HIGH, 0), severityCounts.getOrDefault(Severity.MEDIUM, 0),
-                    severityCounts.getOrDefault(Severity.LOW, 0));
+                    severityCounts.getOrDefault(Severity.LOW, 0), severityCounts.getOrDefault(Severity.INFO, 0));
         });
     }
 

@@ -124,7 +124,7 @@ public class RequestExecutor {
         for (CollectionItem ci : items) {
             if (ci instanceof Folder folder) {
                 for (CollectionItem child : folder.items()) {
-                    if (child instanceof RequestItem ri && ri.uid().equals(item.uid())) {
+                    if (child instanceof RequestItem ri && java.util.Objects.equals(ri.uid(), item.uid())) {
                         return folder;
                     }
                     if (child instanceof Folder sub) {
@@ -141,7 +141,7 @@ public class RequestExecutor {
 
     private boolean containsRequest(Folder folder, RequestItem target) {
         for (CollectionItem ci : folder.items()) {
-            if (ci instanceof RequestItem ri && ri.uid().equals(target.uid())) {
+            if (ci instanceof RequestItem ri && java.util.Objects.equals(ri.uid(), target.uid())) {
                 return true;
             }
             if (ci instanceof Folder sub && containsRequest(sub, target)) {

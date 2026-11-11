@@ -167,10 +167,17 @@ public final class AiAssistant {
             }
             conversationHistory.add(ChatMessage.assistantToolCall(GSON.toJson(toolCallPayload)));
 
+            tokenCallback.accept("\n[Consultando " + toolCallName + "...]\n");
+
             String toolResult = dispatchToolCall(GSON.toJson(toolCallPayload));
             if (toolResult != null) {
                 conversationHistory.add(ChatMessage.toolResult(toolResult, toolCallPayload.get("id").getAsString()));
-                streamInternal(systemPrompt, toolsJson, tokenCallback);
+                try {
+                    streamInternal(systemPrompt, toolsJson, tokenCallback);
+                } catch (Exception e) {
+                    tokenCallback.accept("\n[Erro na consulta: " + e.getMessage() + "]\n");
+                    conversationHistory.add(ChatMessage.assistant("[Erro: " + e.getMessage() + "]"));
+                }
                 return;
             }
         }

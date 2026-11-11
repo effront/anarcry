@@ -53,6 +53,8 @@ public class DashboardView extends JPanel {
     private final JLabel highCount;
     private final JLabel mediumCount;
     private final JLabel lowCount;
+    private final JLabel infoCount;
+    private final JLabel summaryLabel;
 
     @SuppressWarnings("rawtypes")
     private final DefaultPieDataset pieDataset;
@@ -71,13 +73,15 @@ public class DashboardView extends JPanel {
         highCount = statValue("0");
         mediumCount = statValue("0");
         lowCount = statValue("0");
+        infoCount = statValue("0");
 
-        JPanel cards = new JPanel(new GridLayout(1, 4, 12, 0));
+        JPanel cards = new JPanel(new GridLayout(1, 5, 12, 0));
         cards.setOpaque(false);
         cards.add(statCard("CRITICAL", criticalCount, COLOR_CRITICAL));
         cards.add(statCard("HIGH", highCount, COLOR_HIGH));
         cards.add(statCard("MEDIUM", mediumCount, COLOR_MEDIUM));
         cards.add(statCard("LOW", lowCount, COLOR_LOW));
+        cards.add(statCard("INFO", infoCount, COLOR_INFO));
         cards.setMaximumSize(new Dimension(Integer.MAX_VALUE, 90));
 
         // -- Pie chart --
@@ -100,8 +104,19 @@ public class DashboardView extends JPanel {
         chartSplit.setDividerLocation(0.5);
         chartSplit.setOpaque(false);
 
+        summaryLabel = new JLabel("No findings yet.");
+        summaryLabel.setForeground(COLOR_INFO);
+        summaryLabel.setFont(summaryLabel.getFont().deriveFont(Font.PLAIN, 13f));
+        JPanel summaryPanel = new JPanel(new BorderLayout());
+        summaryPanel.setBackground(BG_DARK);
+        summaryPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(0x44, 0x44, 0x55)),
+                BorderFactory.createEmptyBorder(8, 4, 4, 4)));
+        summaryPanel.add(summaryLabel, BorderLayout.CENTER);
+
         add(cards, BorderLayout.NORTH);
         add(chartSplit, BorderLayout.CENTER);
+        add(summaryPanel, BorderLayout.SOUTH);
     }
 
     /**
@@ -128,10 +143,32 @@ public class DashboardView extends JPanel {
             moduleCounts.merge(f.module(), 1, Integer::sum);
         }
 
-        criticalCount.setText(String.valueOf(sevCounts.get(Severity.CRITICAL)));
-        highCount.setText(String.valueOf(sevCounts.get(Severity.HIGH)));
-        mediumCount.setText(String.valueOf(sevCounts.get(Severity.MEDIUM)));
-        lowCount.setText(String.valueOf(sevCounts.get(Severity.LOW)));
+        int crit = sevCounts.get(Severity.CRITICAL);
+        int high = sevCounts.get(Severity.HIGH);
+        int med = sevCounts.get(Severity.MEDIUM);
+        int low = sevCounts.get(Severity.LOW);
+        int info = sevCounts.get(Severity.INFO);
+        int total = findings.size();
+
+        criticalCount.setText(String.valueOf(crit));
+        highCount.setText(String.valueOf(high));
+        mediumCount.setText(String.valueOf(med));
+        lowCount.setText(String.valueOf(low));
+        infoCount.setText(String.valueOf(info));
+
+        if (total == 0) {
+            summaryLabel.setText("No findings yet.");
+        } else {
+            StringBuilder topModules = new StringBuilder();
+            moduleCounts.entrySet().stream().sorted(Map.Entry.comparingByValue(Comparator.reverseOrder())).limit(5)
+                    .forEach(e -> {
+                        if (!topModules.isEmpty()) {
+                            topModules.append(", ");
+                        }
+                        topModules.append(e.getKey()).append(" (").append(e.getValue()).append(")");
+                    });
+            summaryLabel.setText("Total: " + total + " findings -- Top modules: " + topModules);
+        }
 
         pieDataset.clear();
         for (Severity s : Severity.values()) {
