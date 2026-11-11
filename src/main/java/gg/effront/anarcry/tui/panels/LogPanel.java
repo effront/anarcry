@@ -1,6 +1,7 @@
 package gg.effront.anarcry.tui.panels;
 
 import com.googlecode.lanterna.TextColor;
+import com.googlecode.lanterna.gui2.CheckBox;
 import com.googlecode.lanterna.gui2.Direction;
 import com.googlecode.lanterna.gui2.Label;
 import com.googlecode.lanterna.gui2.LinearLayout;
@@ -15,6 +16,7 @@ public class LogPanel extends Panel {
 
     private final int height;
     private final Panel linesPanel;
+    private final CheckBox debugCheck;
     private final List<ColoredLine> lines = new ArrayList<>();
     private int viewStart = 0;
 
@@ -23,9 +25,16 @@ public class LogPanel extends Panel {
 
     public LogPanel(int height) {
         super(new LinearLayout(Direction.VERTICAL));
-        this.height = height;
+        this.height = height - 1;
+        debugCheck = new CheckBox("[BUG] Debug");
+        debugCheck.setChecked(false);
+        addComponent(debugCheck, LinearLayout.createLayoutData(LinearLayout.Alignment.End));
         this.linesPanel = new Panel(new LinearLayout(Direction.VERTICAL));
         addComponent(linesPanel, LinearLayout.createLayoutData(LinearLayout.Alignment.Fill));
+    }
+
+    public boolean isDebugEnabled() {
+        return debugCheck.isChecked();
     }
 
     public synchronized void log(String message) {
@@ -49,6 +58,20 @@ public class LogPanel extends Panel {
     public synchronized void scrollDown(int n) {
         viewStart = Math.min(Math.max(0, lines.size() - height), viewStart + n);
         repaint();
+    }
+
+    public synchronized void clear() {
+        lines.clear();
+        viewStart = 0;
+        repaint();
+    }
+
+    public synchronized List<String> getRawLines() {
+        List<String> result = new ArrayList<>(lines.size());
+        for (ColoredLine cl : lines) {
+            result.add(cl.text());
+        }
+        return result;
     }
 
     private boolean isAtBottom() {

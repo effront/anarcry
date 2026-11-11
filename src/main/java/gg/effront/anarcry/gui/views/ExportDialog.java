@@ -22,7 +22,7 @@ import javax.swing.JRadioButton;
 import javax.swing.JTextField;
 
 /**
- * Modal export dialog supporting Markdown+JSON, HackerOne, and Bugcrowd
+ * Modal export dialog supporting Markdown+JSON, HackerOne, Bugcrowd, and SARIF
  * formats. Delegates to {@link ReportEngine} for file generation.
  */
 public class ExportDialog extends JDialog {
@@ -33,6 +33,7 @@ public class ExportDialog extends JDialog {
     private final JRadioButton mdRadio;
     private final JRadioButton h1Radio;
     private final JRadioButton bugcrowdRadio;
+    private final JRadioButton sarifRadio;
     private final JTextField programField;
     private final JLabel programLabel;
 
@@ -41,7 +42,7 @@ public class ExportDialog extends JDialog {
         this.findings = findings;
         this.targetUrl = targetUrl;
 
-        setSize(500, 320);
+        setSize(500, 350);
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout(8, 8));
 
@@ -67,10 +68,15 @@ public class ExportDialog extends JDialog {
         bugcrowdRadio = new JRadioButton("Bugcrowd");
         formPanel.add(bugcrowdRadio, gbc);
 
+        gbc.gridy++;
+        sarifRadio = new JRadioButton("SARIF (CI/CD)");
+        formPanel.add(sarifRadio, gbc);
+
         ButtonGroup group = new ButtonGroup();
         group.add(mdRadio);
         group.add(h1Radio);
         group.add(bugcrowdRadio);
+        group.add(sarifRadio);
 
         gbc.gridy++;
         gbc.insets = new Insets(12, 4, 4, 4);
@@ -89,6 +95,7 @@ public class ExportDialog extends JDialog {
         h1Radio.addActionListener(e -> toggleProgramField());
         mdRadio.addActionListener(e -> toggleProgramField());
         bugcrowdRadio.addActionListener(e -> toggleProgramField());
+        sarifRadio.addActionListener(e -> toggleProgramField());
 
         add(formPanel, BorderLayout.CENTER);
 
@@ -128,6 +135,8 @@ public class ExportDialog extends JDialog {
                 path = engine.exportH1(findings, targetUrl, program);
             } else if (bugcrowdRadio.isSelected()) {
                 path = engine.exportBugcrowd(findings, targetUrl);
+            } else if (sarifRadio.isSelected()) {
+                path = engine.exportSarif(findings, targetUrl);
             } else {
                 path = engine.export(findings, targetUrl);
             }

@@ -91,11 +91,16 @@ public class GuiController {
      */
     public void startScan(String target, AuthType authType, String cred1, String cred2, Set<String> modules,
             Consumer<RequestRecord> requestLogCb) {
-        startScan(target, authType, cred1, cred2, modules, requestLogCb, false);
+        startScan(target, authType, cred1, cred2, modules, requestLogCb, false, false);
     }
 
     public void startScan(String target, AuthType authType, String cred1, String cred2, Set<String> modules,
             Consumer<RequestRecord> requestLogCb, boolean exploitationEnabled) {
+        startScan(target, authType, cred1, cred2, modules, requestLogCb, exploitationEnabled, false);
+    }
+
+    public void startScan(String target, AuthType authType, String cred1, String cred2, Set<String> modules,
+            Consumer<RequestRecord> requestLogCb, boolean exploitationEnabled, boolean debugMode) {
 
         if (target == null || target.isBlank() || "https://".equals(target)) {
             logCb.accept("[!] Target nao informado");
@@ -152,7 +157,7 @@ public class GuiController {
             cookie = sessionCookie;
         }
         ScanConfig cfg = new ScanConfig(0, cookie, cookie2, scopeHosts, SuppressionLoader.loadFromCwd(), "",
-                ScanConfig.DEFAULT_PROBE_CONCURRENCY, exploitationEnabled);
+                ScanConfig.DEFAULT_PROBE_CONCURRENCY, exploitationEnabled, null, debugMode);
         ScanContext ctx = new ScanContext(target, jwt, jwt2, modules, cfg, requestLogCb, new DiscoveredPaths(),
                 new WafState(), credStore);
         lastScanContext = ctx;

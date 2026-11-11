@@ -62,6 +62,10 @@ import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.scanner.DiscoveredPaths;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -163,6 +167,21 @@ public class AnarCryTui {
             scanning = true;
             modeBar.setScanning(true);
             statusBar.setTarget(modulesPanel.getTarget());
+            synchronized (logHistory) {
+                logHistory.clear();
+            }
+            LogPanel lp = currentLog.get();
+            if (lp != null) {
+                lp.clear();
+            }
+            synchronized (findingHistory) {
+                findingHistory.clear();
+            }
+            FindingsPanel fp = currentFindings.get();
+            if (fp != null) {
+                fp.clear();
+            }
+            modeBar.setFindingsCount(0);
         }));
         scanRunner.setOnScanFinish(() -> gui.getGUIThread().invokeLater(() -> {
             scanning = false;
@@ -755,10 +774,6 @@ public class AnarCryTui {
         synchronized (findingHistory) {
             snapshot = new ArrayList<>(findingHistory);
         }
-        if (snapshot.isEmpty()) {
-            addToLog("[!] No findings to export");
-            return;
-        }
 
         var dialog = new BasicWindow("Export Report");
         dialog.setHints(Set.of(Window.Hint.CENTERED));
@@ -767,22 +782,50 @@ public class AnarCryTui {
         panel.addComponent(new Label(" Select export format:"));
         panel.addComponent(new EmptySpace(new TerminalSize(1, 1)));
 
-        var actions = new com.googlecode.lanterna.gui2.ActionListBox(new TerminalSize(36, 4));
+        var actions = new com.googlecode.lanterna.gui2.ActionListBox(new TerminalSize(36, 5));
         actions.addItem("[1] AnarCry MD + JSON", () -> {
             dialog.close();
+            if (snapshot.isEmpty()) {
+                addToLog("[!] No findings to export");
+                return;
+            }
             exportAnarCry(snapshot);
         });
         actions.addItem("[2] HackerOne", () -> {
             dialog.close();
+            if (snapshot.isEmpty()) {
+                addToLog("[!] No findings to export");
+                return;
+            }
             promptProgramName(snapshot, "h1");
         });
         actions.addItem("[3] Bugcrowd", () -> {
             dialog.close();
+            if (snapshot.isEmpty()) {
+                addToLog("[!] No findings to export");
+                return;
+            }
             exportBugcrowd(snapshot);
         });
         actions.addItem("[4] JSON only", () -> {
             dialog.close();
+            if (snapshot.isEmpty()) {
+                addToLog("[!] No findings to export");
+                return;
+            }
             exportJson(snapshot);
+        });
+        actions.addItem("[5] SARIF (CI/CD)", () -> {
+            dialog.close();
+            if (snapshot.isEmpty()) {
+                addToLog("[!] No findings to export");
+                return;
+            }
+            exportSarif(snapshot);
+        });
+        actions.addItem("[6] Scan Log", () -> {
+            dialog.close();
+            exportScanLog();
         });
         panel.addComponent(actions);
 
@@ -800,19 +843,47 @@ public class AnarCryTui {
                     char c = ks.getCharacter();
                     if (c == '1') {
                         dialog.close();
-                        exportAnarCry(snapshot);
+                        if (snapshot.isEmpty()) {
+                            addToLog("[!] No findings to export");
+                        } else {
+                            exportAnarCry(snapshot);
+                        }
                         deliver.set(false);
                     } else if (c == '2') {
                         dialog.close();
-                        promptProgramName(snapshot, "h1");
+                        if (snapshot.isEmpty()) {
+                            addToLog("[!] No findings to export");
+                        } else {
+                            promptProgramName(snapshot, "h1");
+                        }
                         deliver.set(false);
                     } else if (c == '3') {
                         dialog.close();
-                        exportBugcrowd(snapshot);
+                        if (snapshot.isEmpty()) {
+                            addToLog("[!] No findings to export");
+                        } else {
+                            exportBugcrowd(snapshot);
+                        }
                         deliver.set(false);
                     } else if (c == '4') {
                         dialog.close();
-                        exportJson(snapshot);
+                        if (snapshot.isEmpty()) {
+                            addToLog("[!] No findings to export");
+                        } else {
+                            exportJson(snapshot);
+                        }
+                        deliver.set(false);
+                    } else if (c == '5') {
+                        dialog.close();
+                        if (snapshot.isEmpty()) {
+                            addToLog("[!] No findings to export");
+                        } else {
+                            exportSarif(snapshot);
+                        }
+                        deliver.set(false);
+                    } else if (c == '6') {
+                        dialog.close();
+                        exportScanLog();
                         deliver.set(false);
                     }
                 }
@@ -905,6 +976,38 @@ public class AnarCryTui {
             addToLog("[+] JSON export: " + path);
         } catch (Throwable t) {
             addToLog("[!] JSON export error: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
+    }
+
+    private void exportSarif(List<Finding> snapshot) {
+        String target = modulesPanel.getTarget();
+        try {
+            String file = new ReportEngine().exportSarif(snapshot, target.isBlank() ? "unknown" : target,
+                    scanRunner.testedModules(), scanRunner.testedClean());
+            addToLog("[+] SARIF report: " + file);
+        } catch (Throwable t) {
+            addToLog("[!] SARIF export error: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
+    }
+
+    private void exportScanLog() {
+        List<String> lines;
+        synchronized (logHistory) {
+            lines = new ArrayList<>(logHistory);
+        }
+        if (lines.isEmpty()) {
+            addToLog("[!] No log lines to export");
+            return;
+        }
+        try {
+            Path reportsDir = Path.of(System.getProperty("user.home"), ".anarcry", "reports");
+            Files.createDirectories(reportsDir);
+            String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+            Path outFile = reportsDir.resolve("scan-log-" + ts + ".txt");
+            Files.write(outFile, lines);
+            addToLog("[+] Scan log exported: " + outFile);
+        } catch (IOException e) {
+            addToLog("[!] Log export error: " + e.getMessage());
         }
     }
 

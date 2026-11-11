@@ -63,15 +63,18 @@ public class Http {
         CircuitBreaker cb = ctx.wafState().circuitBreaker(moduleId);
         cb.checkAndThrow();
 
+        long t0 = System.currentTimeMillis();
         HttpResponse<T> resp = dispatch(ctx, hc, req, handler);
+        long elapsed = System.currentTimeMillis() - t0;
 
         if (creds != null && creds.isCookieBased() && creds.sessionCookieName() != null) {
             rotateCookie(resp, creds);
         }
 
-        if (ctx.config().delayMs() > 0) {
+        int totalDelay = ctx.config().delayMs() + ctx.wafState().wafDelayMs();
+        if (totalDelay > 0) {
             try {
-                Thread.sleep(ctx.config().delayMs());
+                Thread.sleep(totalDelay);
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
             }
@@ -85,6 +88,22 @@ public class Http {
             bodyStr = s;
         }
 
+        if (ctx.wafState().isDebugMode()) {
+            String cfRay = resp.headers().firstValue("cf-ray").orElse("-");
+            String cfCache = resp.headers().firstValue("cf-cache-status").orElse("-");
+            String contentType = resp.headers().firstValue("content-type").orElse("-");
+            int bodyLen = bodyStr.length();
+            ctx.wafState()
+                    .debugLog(moduleId + " " + req.method() + " " + req.uri() + " -> HTTP " + status + " (" + elapsed
+                            + "ms) Server=" + serverHdr + " CF-Ray=" + cfRay + " CF-Cache=" + cfCache + " CT="
+                            + contentType + " body=" + bodyLen + "B");
+            if (status == 403 || status == 503) {
+                String bodySnippet = bodyStr.length() > 200 ? bodyStr.substring(0, 200) + "..." : bodyStr;
+                bodySnippet = bodySnippet.replace("\n", " ").replace("\r", "");
+                ctx.wafState().debugLog(moduleId + " response body: " + bodySnippet);
+            }
+        }
+
         boolean wafBlock = WafEvasion.isWafBlocked(status, serverHdr, bodyStr);
         boolean challenge = WafEvasion.isJsChallenge(status, resp.headers().map(), bodyStr);
 
@@ -93,11 +112,18 @@ public class Http {
         // 2. POST JSON body (CF inspects JSON bodies with weaker rules)
         if (wafBlock && "GET".equals(req.method()) && ctx.wafState().isWafDetected()
                 && req.uri().getRawQuery() != null) {
+            if (ctx.wafState().isDebugMode()) {
+                ctx.wafState().debugLog(moduleId + " WAF block detected, trying auto-retry chain");
+            }
             // Retry 1: X-Original-URL / X-Rewrite-URL header bypass
             HttpRequest rewriteRetry = buildRewriteRequest(req);
             if (rewriteRetry != null) {
                 HttpResponse<T> rResp = dispatch(ctx, hc, rewriteRetry, handler);
                 if (isSuccessfulRetry(rResp)) {
+                    if (ctx.wafState().isDebugMode()) {
+                        ctx.wafState().debugLog(
+                                moduleId + " X-Original-URL retry succeeded (HTTP " + rResp.statusCode() + ")");
+                    }
                     return recordAndReturn(ctx, cb, rResp, rewriteRetry, moduleId);
                 }
             }
@@ -106,12 +132,23 @@ public class Http {
             if (jsonRetry != null) {
                 HttpResponse<T> jResp = dispatch(ctx, hc, jsonRetry, handler);
                 if (isSuccessfulRetry(jResp)) {
+                    if (ctx.wafState().isDebugMode()) {
+                        ctx.wafState()
+                                .debugLog(moduleId + " POST JSON retry succeeded (HTTP " + jResp.statusCode() + ")");
+                    }
                     return recordAndReturn(ctx, cb, jResp, jsonRetry, moduleId);
                 }
+            }
+            if (ctx.wafState().isDebugMode()) {
+                ctx.wafState().debugLog(moduleId + " all retry strategies failed");
             }
         }
 
         if (wafBlock || challenge) {
+            if (ctx.wafState().isDebugMode()) {
+                ctx.wafState().debugLog(moduleId + " wafBlock=" + wafBlock + " challenge=" + challenge + " blockType="
+                        + ctx.wafState().blockType() + " cb.blocks=" + cb.consecutiveBlocks());
+            }
             Consumer<String> log = ctx.wafState().runtimeLog();
             if (!ctx.wafState().isWafDetected()) {
                 var providers = WafEvasion.detectProviders(status, resp.headers().map(), bodyStr, req.uri().toString());
@@ -175,7 +212,7 @@ public class Http {
     private static <T> HttpResponse<T> dispatch(ScanContext ctx, HttpClient hc, HttpRequest req,
             HttpResponse.BodyHandler<T> handler) throws Exception {
         BrowserTransport bt = ctx.wafState().browserTransport();
-        if (bt != null && bt.isTargetHost(req.uri().toString())) {
+        if (bt != null && bt.isChallengeResolved() && bt.isTargetHost(req.uri().toString())) {
             return (HttpResponse<T>) bt.fetch(req);
         } else if (ctx.wafState().isStealthActive()) {
             return (HttpResponse<T>) StealthHttpClient.send(req);

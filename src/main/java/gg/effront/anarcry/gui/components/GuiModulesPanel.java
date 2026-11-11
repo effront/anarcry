@@ -19,6 +19,7 @@ import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComponent;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -78,7 +79,7 @@ public class GuiModulesPanel extends JPanel {
 
         addSection(checksPanel, "RECON", COLOR_RECON);
         checksPanel.add(moduleCheck("Crawler", true));
-        checksPanel.add(moduleCheck("Infra", false));
+        checksPanel.add(moduleCheck("Infra", false, "Port scan -- slow and noisy, enable manually"));
 
         checksPanel.add(Box.createVerticalStrut(12));
 
@@ -109,12 +110,25 @@ public class GuiModulesPanel extends JPanel {
         checksPanel.add(moduleCheck("XSS", true));
         checksPanel.add(moduleCheck("LFI", true));
         checksPanel.add(moduleCheck("CmdInjection", true));
-        checksPanel.add(moduleCheck("IDOR", false));
+        checksPanel.add(moduleCheck("CSRF", true));
+        checksPanel.add(moduleCheck("Secrets", true));
+        checksPanel.add(moduleCheck("RaceCondition", false,
+                "Sends concurrent requests that may alter target state (payments, coupons)"));
+        checksPanel.add(moduleCheck("NoSQLi", true));
+        checksPanel.add(moduleCheck("Deserialization", true));
+        checksPanel
+                .add(moduleCheck("FileUpload", false, "Uploads test files to the target -- potentially destructive"));
+        checksPanel.add(moduleCheck("SubTakeover", true));
+        checksPanel.add(moduleCheck("WebSocket", true));
+        checksPanel.add(moduleCheck("ProtoPollution", true));
+        checksPanel.add(moduleCheck("CloudMisconfig", true));
+        checksPanel.add(moduleCheck("IDOR", false, "Requires two auth tokens (JWT Token 2) for cross-user testing"));
+        moduleChecks.get("IDOR").addActionListener(e -> updateCredentialFields());
 
         checksPanel.add(Box.createVerticalStrut(12));
 
         addSection(checksPanel, "POST-SCAN", new Color(0xBB, 0x6B, 0xD9));
-        exploitationCheck = new JCheckBox("Exploitation (validate findings)", false);
+        exploitationCheck = new JCheckBox("<html>Exploitation<br>(validate findings)</html>", false);
         exploitationCheck.setAlignmentX(Component.LEFT_ALIGNMENT);
         exploitationCheck.setBorder(BorderFactory.createEmptyBorder(1, 12, 1, 0));
         checksPanel.add(exploitationCheck);
@@ -286,7 +300,18 @@ public class GuiModulesPanel extends JPanel {
     private void updateCredentialFields() {
         AuthType selected = getAuthType();
         boolean showCred1 = selected.hasAuth();
-        boolean showCred2 = selected == AuthType.JWT || selected == AuthType.AUTO;
+
+        boolean idorAllowed = selected == AuthType.JWT || selected == AuthType.AUTO;
+        JCheckBox idorCb = moduleChecks.get("IDOR");
+        if (idorCb != null) {
+            idorCb.setEnabled(idorAllowed);
+            if (!idorAllowed && idorCb.isSelected()) {
+                idorCb.setSelected(false);
+            }
+        }
+
+        boolean idorEnabled = idorCb != null && idorCb.isSelected();
+        boolean showCred2 = (selected == AuthType.JWT && idorEnabled) || selected == AuthType.AUTO;
 
         cred1Label.setVisible(showCred1);
         cred1Scroll.setVisible(showCred1);
@@ -364,12 +389,34 @@ public class GuiModulesPanel extends JPanel {
         parent.add(Box.createVerticalStrut(4));
     }
 
-    private JCheckBox moduleCheck(String moduleId, boolean checked) {
+    private JComponent moduleCheck(String moduleId, boolean checked) {
+        return moduleCheck(moduleId, checked, null);
+    }
+
+    private JComponent moduleCheck(String moduleId, boolean checked, String tooltip) {
         JCheckBox cb = new JCheckBox(moduleId, checked);
-        cb.setAlignmentX(Component.LEFT_ALIGNMENT);
         cb.setBorder(BorderFactory.createEmptyBorder(1, 12, 1, 0));
         moduleChecks.put(moduleId, cb);
-        return cb;
+        if (tooltip == null) {
+            cb.setAlignmentX(Component.LEFT_ALIGNMENT);
+            return cb;
+        }
+        JPanel row = new JPanel();
+        row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row.setOpaque(false);
+        row.add(cb);
+        row.add(Box.createHorizontalStrut(2));
+        JLabel info = new JLabel("i");
+        info.setFont(info.getFont().deriveFont(Font.BOLD | Font.ITALIC, 9f));
+        info.setForeground(new Color(0x77, 0x99, 0xBB));
+        info.setBorder(
+                BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(0x77, 0x99, 0xBB), 1),
+                        BorderFactory.createEmptyBorder(0, 3, 0, 3)));
+        info.setToolTipText(tooltip);
+        info.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        row.add(info);
+        return row;
     }
 
     private static JLabel fieldLabel(String text) {

@@ -12,7 +12,9 @@ public final class ScanOrchestrator {
 
     public static final Set<String> ALL_MODULES = Set.of("TLS", "Headers", "HSTS", "JWT", "PQC", "CORS", "OAuth",
             "OpenRedirect", "SSRF", "GraphQL", "CRLF", "XXE", "SSTI", "IDOR", "HostHeader", "Actuator", "MassAssign",
-            "CachePoisoning", "ReqSmuggling", "Crawler", "Infra");
+            "CachePoisoning", "ReqSmuggling", "Crawler", "Infra", "SQLi", "XSS", "LFI", "CmdInjection", "CSRF",
+            "Secrets", "RaceCondition", "Deserialization", "FileUpload", "NoSQLi", "SubTakeover", "WebSocket",
+            "ProtoPollution", "CloudMisconfig");
 
     private ScanOrchestrator() {
     }
@@ -43,6 +45,8 @@ public final class ScanOrchestrator {
         Set<String> modules = new LinkedHashSet<>(ALL_MODULES);
         modules.remove("IDOR");
         modules.remove("Infra");
+        modules.remove("RaceCondition");
+        modules.remove("FileUpload");
         return modules;
     }
 }

@@ -13,7 +13,7 @@ class KnowledgeBaseTest {
 
     @Test
     void loadsAll25Entries() {
-        assertEquals(25, kb.size());
+        assertEquals(34, kb.size());
     }
 
     @Test
@@ -23,7 +23,9 @@ class KnowledgeBaseTest {
                 "jwt_signature_bypass", "oauth_misconfiguration", "mass_assignment", "graphql_misconfiguration",
                 "request_smuggling", "cache_poisoning", "security_headers_missing", "hsts_missing",
                 "infrastructure_exposure", "spring_actuator_exposure", "tls_weak_configuration", "open_redirect",
-                "post_quantum_readiness");
+                "post_quantum_readiness", "secrets_exposure", "race_condition", "insecure_deserialization",
+                "file_upload_bypass", "nosql_injection", "subdomain_takeover", "websocket_security",
+                "prototype_pollution", "cloud_misconfiguration");
 
         for (String id : expectedIds) {
             assertTrue(kb.byId(id).isPresent(), "Missing entry for id: " + id);
@@ -124,7 +126,9 @@ class KnowledgeBaseTest {
     void allModulesMatchCweRegistryKeys() {
         List<String> scannerKeys = List.of("TLS", "Headers", "JWT", "PQC", "CORS", "OAuth", "OpenRedirect", "SSRF",
                 "GraphQL", "CRLF", "XXE", "SSTI", "IDOR", "HostHeader", "Actuator", "MassAssign", "CachePoisoning",
-                "ReqSmuggling", "XSS", "SQLi", "LFI", "CmdInjection", "HSTS", "CSRF", "Infra");
+                "ReqSmuggling", "XSS", "SQLi", "LFI", "CmdInjection", "HSTS", "CSRF", "Infra", "Secrets",
+                "RaceCondition", "Deserialization", "FileUpload", "NoSQLi", "SubTakeover", "WebSocket",
+                "ProtoPollution", "CloudMisconfig");
 
         for (String key : scannerKeys) {
             Optional<KnowledgeEntry> entry = kb.byModule(key);
