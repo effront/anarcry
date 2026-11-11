@@ -56,7 +56,7 @@ public class RequestExecutor {
 
         try {
             // Phase 1: MERGE - cascade folder/collection headers, auth, vars
-            HttpRequestDef merged = mergeInherited(item, collection);
+            HttpRequestDef merged = mergeInherited(item, collection, ctx.vars());
 
             // Phase 2: PRE-VARS - resolve pre-request variables
             resolvePreVars(item.vars().pre(), ctx.vars());
@@ -89,7 +89,7 @@ public class RequestExecutor {
         }
     }
 
-    HttpRequestDef mergeInherited(RequestItem item, Collection collection) {
+    HttpRequestDef mergeInherited(RequestItem item, Collection collection, VariableStore vars) {
         HttpRequestDef req = item.request();
 
         List<Header> mergedHeaders = new ArrayList<>(collection.root().headers());
@@ -112,8 +112,7 @@ public class RequestExecutor {
         }
 
         if (parentFolder != null) {
-            VariableStore dummyStore = new VariableStore();
-            dummyStore.loadFolder(parentFolder.root());
+            vars.loadFolder(parentFolder.root());
         }
 
         return new HttpRequestDef(req.method(), req.url(), req.params(), mergedHeaders, auth, req.body(),

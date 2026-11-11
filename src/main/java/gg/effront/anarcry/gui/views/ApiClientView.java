@@ -7,6 +7,7 @@ import gg.effront.anarcry.apiclient.io.CollectionWriter;
 import gg.effront.anarcry.apiclient.io.CurlImporter;
 import gg.effront.anarcry.apiclient.io.OpenApiImporter;
 import gg.effront.anarcry.apiclient.io.PostmanImporter;
+import gg.effront.anarcry.apiclient.model.AssertOp;
 import gg.effront.anarcry.apiclient.model.Assertion;
 import gg.effront.anarcry.apiclient.model.AssertionResult;
 import gg.effront.anarcry.apiclient.model.AuthConfig;
@@ -18,7 +19,9 @@ import gg.effront.anarcry.apiclient.model.Folder;
 import gg.effront.anarcry.apiclient.model.Header;
 import gg.effront.anarcry.apiclient.model.HttpRequestDef;
 import gg.effront.anarcry.apiclient.model.Param;
+import gg.effront.anarcry.apiclient.model.ParamsDef;
 import gg.effront.anarcry.apiclient.model.RequestItem;
+import gg.effront.anarcry.apiclient.model.RequestMeta;
 import gg.effront.anarcry.apiclient.model.RequestResult;
 import gg.effront.anarcry.apiclient.model.RequestSettings;
 import gg.effront.anarcry.apiclient.model.RunResult;
@@ -135,13 +138,15 @@ public class ApiClientView extends JPanel {
     private Path collectionPath;
     private RequestItem activeRequest;
     private final List<RequestItem> openRequests = new ArrayList<>();
+    private final java.net.CookieManager cookieManager;
     private final HttpClient httpClient;
     private final List<String> runLog = new ArrayList<>();
     private RunContext sessionContext;
 
     public ApiClientView() {
         super(new BorderLayout());
-        httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL)
+        cookieManager = new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL);
+        httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).cookieHandler(cookieManager)
                 .connectTimeout(Duration.ofSeconds(REQUEST_TIMEOUT_SECONDS)).build();
 
         JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildSidebar(), buildRightPanel());
@@ -1327,12 +1332,58 @@ public class ApiClientView extends JPanel {
             }
         }
 
+        List<Param> queryParams = new ArrayList<>();
+        List<Param> pathParams = new ArrayList<>();
+        for (String line : paramsArea.getText().split("\n")) {
+            int sep = line.indexOf('=');
+            if (sep > 0) {
+                String key = line.substring(0, sep).trim();
+                String val = line.substring(sep + 1).trim();
+                if (key.startsWith(":")) {
+                    pathParams.add(new Param(key.substring(1), val, Param.ParamType.PATH, true));
+                } else {
+                    queryParams.add(new Param(key, val, Param.ParamType.QUERY, true));
+                }
+            }
+        }
+        ParamsDef params = new ParamsDef(queryParams, pathParams);
+
+        List<VarsDef.VarEntry> preVars = new ArrayList<>();
+        for (String line : varsPreArea.getText().split("\n")) {
+            int sep = line.indexOf('=');
+            if (sep > 0) {
+                preVars.add(new VarsDef.VarEntry(line.substring(0, sep).trim(), line.substring(sep + 1).trim()));
+            }
+        }
+        List<VarsDef.VarEntry> postVars = new ArrayList<>();
+        for (String line : varsPostArea.getText().split("\n")) {
+            int sep = line.indexOf('=');
+            if (sep > 0) {
+                postVars.add(new VarsDef.VarEntry(line.substring(0, sep).trim(), line.substring(sep + 1).trim()));
+            }
+        }
+        VarsDef vars = new VarsDef(preVars, postVars);
+
+        List<Assertion> assertions = new ArrayList<>();
+        for (int i = 0; i < assertTableModel.getRowCount(); i++) {
+            String expr = String.valueOf(assertTableModel.getValueAt(i, 0));
+            String op = String.valueOf(assertTableModel.getValueAt(i, 1));
+            String expected = String.valueOf(assertTableModel.getValueAt(i, 2));
+            boolean enabled = Boolean.TRUE.equals(assertTableModel.getValueAt(i, 3));
+            try {
+                assertions.add(new Assertion(expr, AssertOp.fromSymbol(op), expected, enabled));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+
         BodyConfig body = buildBody();
         AuthConfig auth = buildAuth();
 
-        HttpRequestDef req = new HttpRequestDef(method, url, null, headers, auth, body, null);
+        HttpRequestDef req = new HttpRequestDef(method, url, params, headers, auth, body, null);
         String name = activeRequest != null ? activeRequest.name() : "Manual Request";
-        return new RequestItem(null, name, null, req, null, List.of(), null);
+        int seq = activeRequest != null && activeRequest.meta() != null ? activeRequest.meta().seq() : 0;
+        RequestMeta meta = RequestMeta.http(name, seq);
+        return new RequestItem(null, name, meta, req, vars, assertions, null);
     }
 
     private BodyConfig buildBody() {
@@ -1345,6 +1396,17 @@ public class ApiClientView extends JPanel {
             case "XML" -> new BodyConfig.Xml(text);
             case "Text" -> new BodyConfig.Text(text);
             case "GraphQL" -> new BodyConfig.GraphQL(text, null);
+            case "FormUrlEncoded" -> {
+                List<Param> formParams = new ArrayList<>();
+                for (String line : text.split("\n")) {
+                    int sep = line.indexOf('=');
+                    if (sep > 0) {
+                        formParams.add(new Param(line.substring(0, sep).trim(), line.substring(sep + 1).trim(),
+                                Param.ParamType.QUERY, true));
+                    }
+                }
+                yield new BodyConfig.FormUrlEncoded(formParams);
+            }
             default -> new BodyConfig.Json(text);
         };
     }
