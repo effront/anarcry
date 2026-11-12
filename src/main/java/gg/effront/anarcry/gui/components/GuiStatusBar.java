@@ -45,8 +45,13 @@ public class GuiStatusBar extends JPanel {
     private final JLabel versionLabel;
 
     private Runnable onSearchClick;
+    private Runnable onCookiesClick;
     private Runnable onProxyClick;
     private Runnable onSettingsClick;
+    private Runnable onThemeClick;
+    private Runnable onGithubClick;
+    private Runnable onLicenseClick;
+    private Runnable onKeybindingsClick;
 
     private String rawTarget = "";
     private int modulesCompleted = 0;
@@ -72,9 +77,8 @@ public class GuiStatusBar extends JPanel {
         progressBar.setStringPainted(true);
         progressBar.setVisible(false);
 
-        JLabel settingsGear = clickableLabel("⚙");
-        settingsGear.setFont(settingsGear.getFont().deriveFont(16f));
-        settingsGear.setToolTipText("Preferences");
+        JLabel settingsGear = iconButton(StatusBarIcons.settings());
+        settingsGear.setToolTipText("Preferences (Ctrl+,)");
         settingsGear.addMouseListener(new MouseAdapter() {
 
             @Override
@@ -85,7 +89,46 @@ public class GuiStatusBar extends JPanel {
             }
         });
 
+        JLabel themeLabel = iconButton(StatusBarIcons.palette());
+        themeLabel.setToolTipText("Toggle Theme (Ctrl+Shift+T)");
+        themeLabel.addMouseListener(new MouseAdapter() {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (onThemeClick != null) {
+                    onThemeClick.run();
+                }
+            }
+        });
+
+        JLabel githubLabel = iconButton(StatusBarIcons.github());
+        githubLabel.setToolTipText("Open GitHub Repository");
+        githubLabel.addMouseListener(new MouseAdapter() {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (onGithubClick != null) {
+                    onGithubClick.run();
+                }
+            }
+        });
+
+        JLabel licenseLabel = iconButton(StatusBarIcons.license());
+        licenseLabel.setToolTipText("License Info");
+        licenseLabel.addMouseListener(new MouseAdapter() {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (onLicenseClick != null) {
+                    onLicenseClick.run();
+                }
+            }
+        });
+
         left.add(settingsGear);
+        left.add(themeLabel);
+        left.add(githubLabel);
+        left.add(licenseLabel);
         left.add(separator());
         left.add(criticalLabel);
         left.add(highLabel);
@@ -101,7 +144,8 @@ public class GuiStatusBar extends JPanel {
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
         right.setOpaque(false);
 
-        searchLabel = clickableLabel("Search");
+        searchLabel = iconButton(StatusBarIcons.search());
+        searchLabel.setToolTipText("Global Search (Ctrl+K)");
         searchLabel.addMouseListener(new MouseAdapter() {
 
             @Override
@@ -112,8 +156,23 @@ public class GuiStatusBar extends JPanel {
             }
         });
 
-        cookiesLabel = clickableLabel("Cookies(0)");
-        proxyLabel = clickableLabel("Proxy: OFF");
+        cookiesLabel = new JLabel("Cookies(0)", StatusBarIcons.cookie(), JLabel.LEFT);
+        cookiesLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        cookiesLabel.setIconTextGap(4);
+        cookiesLabel.setToolTipText("Cookie Jar");
+        cookiesLabel.addMouseListener(new MouseAdapter() {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (onCookiesClick != null) {
+                    onCookiesClick.run();
+                }
+            }
+        });
+        proxyLabel = new JLabel("Proxy: OFF", StatusBarIcons.proxy(), JLabel.LEFT);
+        proxyLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        proxyLabel.setIconTextGap(4);
+        proxyLabel.setToolTipText("Proxy Settings");
         proxyLabel.addMouseListener(new MouseAdapter() {
 
             @Override
@@ -155,12 +214,32 @@ public class GuiStatusBar extends JPanel {
         this.onSearchClick = action;
     }
 
+    public void setOnCookiesClick(Runnable action) {
+        this.onCookiesClick = action;
+    }
+
     public void setOnProxyClick(Runnable action) {
         this.onProxyClick = action;
     }
 
     public void setOnSettingsClick(Runnable action) {
         this.onSettingsClick = action;
+    }
+
+    public void setOnThemeClick(Runnable action) {
+        this.onThemeClick = action;
+    }
+
+    public void setOnGithubClick(Runnable action) {
+        this.onGithubClick = action;
+    }
+
+    public void setOnLicenseClick(Runnable action) {
+        this.onLicenseClick = action;
+    }
+
+    public void setOnKeybindingsClick(Runnable action) {
+        this.onKeybindingsClick = action;
     }
 
     public void setProxyEnabled(boolean on) {
@@ -261,6 +340,12 @@ public class GuiStatusBar extends JPanel {
 
     private static JLabel clickableLabel(String text) {
         JLabel label = new JLabel(text);
+        label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return label;
+    }
+
+    private static JLabel iconButton(javax.swing.Icon icon) {
+        JLabel label = new JLabel(icon);
         label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         return label;
     }
