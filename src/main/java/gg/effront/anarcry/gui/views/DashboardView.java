@@ -39,8 +39,27 @@ import org.jfree.data.general.DefaultPieDataset;
  */
 public class DashboardView extends JPanel {
 
-    private static final Color BG_DARK = new Color(0x1E, 0x1E, 0x2E);
-    private static final Color FG_WHITE = Color.WHITE;
+    private static Color dashBg() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.isDark()
+                ? new Color(0x1E, 0x1E, 0x2E)
+                : new Color(0xF0, 0xF0, 0xF0);
+    }
+
+    private static Color dashFg() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.fg();
+    }
+
+    private static Color dashGrid() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.isDark()
+                ? new Color(0x44, 0x44, 0x55)
+                : new Color(0xC8, 0xC8, 0xC8);
+    }
+
+    private static Color dashBorder() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.isDark()
+                ? new Color(0x44, 0x44, 0x55)
+                : new Color(0xC0, 0xC0, 0xC0);
+    }
 
     private static final Color COLOR_CRITICAL = new Color(0xF8, 0x51, 0x49);
     private static final Color COLOR_HIGH = new Color(0xD2, 0x99, 0x22);
@@ -65,7 +84,7 @@ public class DashboardView extends JPanel {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public DashboardView() {
         super(new BorderLayout(0, 8));
-        setBackground(BG_DARK);
+        setBackground(dashBg());
         setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
 
         // -- Stat cards --
@@ -108,10 +127,10 @@ public class DashboardView extends JPanel {
         summaryLabel.setForeground(COLOR_INFO);
         summaryLabel.setFont(summaryLabel.getFont().deriveFont(Font.PLAIN, 13f));
         JPanel summaryPanel = new JPanel(new BorderLayout());
-        summaryPanel.setBackground(BG_DARK);
-        summaryPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(0x44, 0x44, 0x55)),
-                BorderFactory.createEmptyBorder(8, 4, 4, 4)));
+        summaryPanel.setBackground(dashBg());
+        summaryPanel
+                .setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, dashBorder()),
+                        BorderFactory.createEmptyBorder(8, 4, 4, 4)));
         summaryPanel.add(summaryLabel, BorderLayout.CENTER);
 
         add(cards, BorderLayout.NORTH);
@@ -189,16 +208,16 @@ public class DashboardView extends JPanel {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void stylePieChart(JFreeChart chart) {
-        chart.setBackgroundPaint(BG_DARK);
-        chart.getTitle().setPaint(FG_WHITE);
+        chart.setBackgroundPaint(dashBg());
+        chart.getTitle().setPaint(dashFg());
         if (chart.getLegend() != null) {
-            chart.getLegend().setBackgroundPaint(BG_DARK);
-            chart.getLegend().setItemPaint(FG_WHITE);
+            chart.getLegend().setBackgroundPaint(dashBg());
+            chart.getLegend().setItemPaint(dashFg());
         }
         PiePlot plot = (PiePlot) chart.getPlot();
-        plot.setBackgroundPaint(BG_DARK);
+        plot.setBackgroundPaint(dashBg());
         plot.setOutlineVisible(false);
-        plot.setLabelPaint(FG_WHITE);
+        plot.setLabelPaint(dashFg());
         plot.setLabelBackgroundPaint(null);
         plot.setLabelOutlinePaint(null);
         plot.setLabelShadowPaint(null);
@@ -210,16 +229,16 @@ public class DashboardView extends JPanel {
     }
 
     private static void styleBarChart(JFreeChart chart) {
-        chart.setBackgroundPaint(BG_DARK);
-        chart.getTitle().setPaint(FG_WHITE);
+        chart.setBackgroundPaint(dashBg());
+        chart.getTitle().setPaint(dashFg());
         CategoryPlot plot = chart.getCategoryPlot();
-        plot.setBackgroundPaint(BG_DARK);
+        plot.setBackgroundPaint(dashBg());
         plot.setOutlineVisible(false);
-        plot.setRangeGridlinePaint(new Color(0x44, 0x44, 0x55));
-        plot.getDomainAxis().setTickLabelPaint(FG_WHITE);
-        plot.getDomainAxis().setLabelPaint(FG_WHITE);
-        plot.getRangeAxis().setTickLabelPaint(FG_WHITE);
-        plot.getRangeAxis().setLabelPaint(FG_WHITE);
+        plot.setRangeGridlinePaint(dashGrid());
+        plot.getDomainAxis().setTickLabelPaint(dashFg());
+        plot.getDomainAxis().setLabelPaint(dashFg());
+        plot.getRangeAxis().setTickLabelPaint(dashFg());
+        plot.getRangeAxis().setLabelPaint(dashFg());
         BarRenderer renderer = (BarRenderer) plot.getRenderer();
         renderer.setSeriesPaint(0, COLOR_BAR);
         renderer.setBarPainter(new StandardBarPainter());
@@ -229,7 +248,7 @@ public class DashboardView extends JPanel {
     private static JPanel statCard(String title, JLabel valueLabel, Color accentColor) {
         JPanel card = new JPanel();
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBackground(BG_DARK);
+        card.setBackground(dashBg());
         card.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(accentColor, 2),
                 BorderFactory.createEmptyBorder(8, 12, 8, 12)));
 
@@ -239,7 +258,7 @@ public class DashboardView extends JPanel {
         titleLabel.setAlignmentX(CENTER_ALIGNMENT);
 
         valueLabel.setAlignmentX(CENTER_ALIGNMENT);
-        valueLabel.setForeground(FG_WHITE);
+        valueLabel.setForeground(dashFg());
 
         card.add(titleLabel);
         card.add(Box.createVerticalStrut(4));
@@ -250,7 +269,7 @@ public class DashboardView extends JPanel {
     private static JLabel statValue(String text) {
         JLabel label = new JLabel(text, SwingConstants.CENTER);
         label.setFont(label.getFont().deriveFont(Font.BOLD, 28f));
-        label.setForeground(FG_WHITE);
+        label.setForeground(dashFg());
         return label;
     }
 }

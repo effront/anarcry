@@ -30,6 +30,34 @@ public final class AnarCryLaf {
     private AnarCryLaf() {
     }
 
+    public static Color bg() {
+        return isDark() ? BG : new Color(0xF5, 0xF5, 0xF5);
+    }
+
+    public static Color bgDark() {
+        return isDark() ? BG_DARK : Color.WHITE;
+    }
+
+    public static Color fg() {
+        return isDark() ? new Color(0xCE, 0xCE, 0xCE) : new Color(0x1A, 0x1A, 0x1A);
+    }
+
+    public static Color border() {
+        return isDark() ? BORDER : new Color(0xC0, 0xC0, 0xC0);
+    }
+
+    public static Color buttonBg() {
+        return isDark() ? new Color(0x4C, 0x50, 0x52) : new Color(0xE0, 0xE0, 0xE0);
+    }
+
+    public static Color buttonBgOn() {
+        return isDark() ? new Color(0x2A, 0x4A, 0x2A) : new Color(0xC8, 0xE6, 0xC8);
+    }
+
+    public static Color sectionLine() {
+        return isDark() ? new Color(0x49, 0x49, 0x49) : new Color(0xC0, 0xC0, 0xC0);
+    }
+
     /** Installs the dark theme (FlatDarkLaf) with AnarCry UI customizations. */
     public static void install() {
         FlatDarkLaf.setup();
@@ -41,7 +69,7 @@ public final class AnarCryLaf {
      */
     public static void installLight() {
         FlatIntelliJLaf.setup();
-        applySharedCustomizations();
+        applyLightCustomizations();
     }
 
     /** Returns {@code true} if the current Look and Feel is a dark theme. */
@@ -117,6 +145,85 @@ public final class AnarCryLaf {
 
         // SplitPane
         UIManager.put("SplitPaneDivider.draggingColor", new Color(0x64, 0x64, 0x64));
+    }
+
+    private static void applyLightCustomizations() {
+        applySharedCustomizations();
+
+        Color lightBg = new Color(0xF5, 0xF5, 0xF5);
+        Color lightBgAlt = new Color(0xEB, 0xEB, 0xEB);
+        Color lightFg = new Color(0x1A, 0x1A, 0x1A);
+        Color lightBorder = new Color(0xC0, 0xC0, 0xC0);
+        Color lightSelection = new Color(0xCC, 0xDE, 0xF5);
+        Color lightGrid = new Color(0xD8, 0xD8, 0xD8);
+        Color lightHeader = new Color(0xE8, 0xE8, 0xE8);
+        Color lightAccent = new Color(0xC0, 0x50, 0x20);
+
+        UIManager.put("TabbedPane.underlineColor", lightAccent);
+        UIManager.put("TabbedPane.selectedBackground", Color.WHITE);
+        UIManager.put("TabbedPane.hoverColor", lightBgAlt);
+        UIManager.put("TabbedPane.focusColor", Color.WHITE);
+        UIManager.put("TabbedPane.tabHeight", 28);
+        UIManager.put("TabbedPane.tabInsets", new Insets(2, 12, 4, 12));
+        UIManager.put("TabbedPane.tabSelectionHeight", 2);
+        UIManager.put("TabbedPane.showTabSeparators", false);
+        UIManager.put("TabbedPane.contentSeparatorHeight", 1);
+
+        UIManager.put("Table.background", Color.WHITE);
+        UIManager.put("Table.alternateRowColor", lightBg);
+        UIManager.put("Table.selectionBackground", lightSelection);
+        UIManager.put("Table.selectionForeground", lightFg);
+        UIManager.put("Table.foreground", lightFg);
+        UIManager.put("Table.gridColor", lightGrid);
+
+        UIManager.put("TableHeader.background", lightHeader);
+        UIManager.put("TableHeader.foreground", lightFg);
+        UIManager.put("TableHeader.separatorColor", lightBorder);
+        UIManager.put("TableHeader.bottomSeparatorColor", lightBorder);
+
+        UIManager.put("Tree.hash", lightBorder);
+        UIManager.put("Tree.selectionBackground", lightSelection);
+        UIManager.put("Tree.selectionForeground", lightFg);
+        UIManager.put("Tree.foreground", lightFg);
+
+        UIManager.put("List.foreground", lightFg);
+        UIManager.put("List.selectionBackground", lightSelection);
+        UIManager.put("List.selectionForeground", lightFg);
+
+        UIManager.put("TextArea.background", Color.WHITE);
+        UIManager.put("TextArea.foreground", lightFg);
+        UIManager.put("TextField.background", Color.WHITE);
+        UIManager.put("TextField.foreground", lightFg);
+        UIManager.put("TextPane.background", Color.WHITE);
+        UIManager.put("TextPane.foreground", lightFg);
+
+        UIManager.put("Panel.background", lightBg);
+        UIManager.put("Panel.foreground", lightFg);
+        UIManager.put("Label.foreground", lightFg);
+
+        UIManager.put("Component.borderColor", lightBorder);
+        UIManager.put("Component.focusedBorderColor", new Color(0x00, 0x66, 0xCC));
+
+        UIManager.put("CheckBox.foreground", lightFg);
+        UIManager.put("CheckBox.icon.selectedBorderColor", new Color(0x26, 0x64, 0x9D));
+        UIManager.put("CheckBox.icon.selectedBackground", new Color(0x26, 0x64, 0x9D));
+
+        UIManager.put("Button.background", new Color(0xE0, 0xE0, 0xE0));
+        UIManager.put("Button.foreground", lightFg);
+
+        UIManager.put("Separator.foreground", lightBorder);
+        UIManager.put("MenuBar.borderColor", lightBorder);
+        UIManager.put("PopupMenu.borderColor", lightBorder);
+
+        UIManager.put("ProgressBar.foreground", lightAccent);
+        UIManager.put("ProgressBar.arc", 999);
+
+        UIManager.put("ToolTip.background", new Color(0xF0, 0xF0, 0xF0));
+        UIManager.put("ToolTip.foreground", lightFg);
+
+        UIManager.put("SplitPaneDivider.draggingColor", lightBorder);
+
+        UIManager.put("ScrollPane.background", lightBg);
     }
 
     private static void applySharedCustomizations() {
