@@ -90,6 +90,9 @@ public class AnarCryGui {
             AnarCryLaf.install();
         }
 
+        SplashScreen splash = new SplashScreen();
+        splash.show();
+
         logPane = new LogPane();
         statusBar = new GuiStatusBar();
         modulesPanel = new GuiModulesPanel();
@@ -133,7 +136,10 @@ public class AnarCryGui {
         }
         assistantView.configure(env != null ? env.asMap() : java.util.Map.of());
 
-        SwingUtilities.invokeLater(this::buildAndShowFrame);
+        SwingUtilities.invokeLater(() -> {
+            buildAndShowFrame();
+            splash.dismiss();
+        });
     }
 
     private void onFinding(Finding f) {
@@ -221,6 +227,7 @@ public class AnarCryGui {
     private void buildAndShowFrame() {
         frame = new JFrame(FRAME_TITLE);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setIconImages(loadAppIcons());
         frame.setJMenuBar(buildMenuBar());
 
         installFindingDetailHandler(scanFindingsTable);
@@ -307,6 +314,18 @@ public class AnarCryGui {
         }
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
+    }
+
+    private static java.util.List<java.awt.Image> loadAppIcons() {
+        java.util.List<java.awt.Image> icons = new ArrayList<>();
+        for (String name : new String[]{"/icons/app-icon-64.png", "/icons/app-icon-128.png",
+                "/icons/app-icon-256.png"}) {
+            java.net.URL url = AnarCryGui.class.getResource(name);
+            if (url != null) {
+                icons.add(new javax.swing.ImageIcon(url).getImage());
+            }
+        }
+        return icons;
     }
 
     private void wireSelectionDetail(FindingsTable table, FindingDetailPanel detail) {
