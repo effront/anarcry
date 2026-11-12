@@ -5,13 +5,21 @@ import com.formdev.flatlaf.FlatIntelliJLaf;
 import com.formdev.flatlaf.FlatLaf;
 
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Insets;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
+import javax.swing.JComponent;
 import javax.swing.UIManager;
+import javax.swing.plaf.ColorUIResource;
 
 /** FlatLaf theme setup utility for the AnarCry GUI. */
 public final class AnarCryLaf {
+
+    private static final List<Runnable> THEME_LISTENERS = new CopyOnWriteArrayList<>();
 
     // Burp-inspired palette
     static final Color BG = new Color(0x32, 0x33, 0x34);
@@ -30,6 +38,34 @@ public final class AnarCryLaf {
     private AnarCryLaf() {
     }
 
+    public static Color bg() {
+        return isDark() ? BG : new Color(0xF5, 0xF5, 0xF5);
+    }
+
+    public static Color bgDark() {
+        return isDark() ? BG_DARK : Color.WHITE;
+    }
+
+    public static Color fg() {
+        return isDark() ? new Color(0xCE, 0xCE, 0xCE) : new Color(0x1A, 0x1A, 0x1A);
+    }
+
+    public static Color border() {
+        return isDark() ? BORDER : new Color(0xC0, 0xC0, 0xC0);
+    }
+
+    public static Color buttonBg() {
+        return isDark() ? new Color(0x4C, 0x50, 0x52) : new Color(0xE0, 0xE0, 0xE0);
+    }
+
+    public static Color buttonBgOn() {
+        return isDark() ? new Color(0x2A, 0x4A, 0x2A) : new Color(0xC8, 0xE6, 0xC8);
+    }
+
+    public static Color sectionLine() {
+        return isDark() ? new Color(0x49, 0x49, 0x49) : new Color(0xC0, 0xC0, 0xC0);
+    }
+
     /** Installs the dark theme (FlatDarkLaf) with AnarCry UI customizations. */
     public static void install() {
         FlatDarkLaf.setup();
@@ -41,7 +77,7 @@ public final class AnarCryLaf {
      */
     public static void installLight() {
         FlatIntelliJLaf.setup();
-        applySharedCustomizations();
+        applyLightCustomizations();
     }
 
     /** Returns {@code true} if the current Look and Feel is a dark theme. */
@@ -58,8 +94,62 @@ public final class AnarCryLaf {
         }
     }
 
+    /** Registers a callback invoked after every theme change. */
+    public static void addThemeListener(Runnable listener) {
+        THEME_LISTENERS.add(listener);
+    }
+
+    public static void removeThemeListener(Runnable listener) {
+        THEME_LISTENERS.remove(listener);
+    }
+
+    /**
+     * Resets non-UIResource backgrounds/foregrounds on all descendants so that
+     * components whose colors were explicitly set in a previous theme get the
+     * current UIManager defaults, then notifies registered listeners for custom
+     * components (RSyntaxTextArea, JFreeChart, etc.).
+     *
+     * <p>
+     * Must be called AFTER {@code SwingUtilities.updateComponentTreeUI()}.
+     */
+    public static void fireThemeChanged(Container root) {
+        if (root != null) {
+            resetColors(root);
+        }
+        for (Runnable r : THEME_LISTENERS) {
+            r.run();
+        }
+    }
+
+    /** Overload for callers without a root container (listeners-only). */
+    public static void fireThemeChanged() {
+        for (Runnable r : THEME_LISTENERS) {
+            r.run();
+        }
+    }
+
+    private static void resetColors(Container container) {
+        if (container instanceof JComponent jc) {
+            Color bg = jc.getBackground();
+            if (bg != null && !(bg instanceof ColorUIResource)) {
+                jc.setBackground(null);
+            }
+            Color fg = jc.getForeground();
+            if (fg != null && !(fg instanceof ColorUIResource)) {
+                jc.setForeground(null);
+            }
+        }
+        for (Component child : container.getComponents()) {
+            if (child instanceof Container c) {
+                resetColors(c);
+            }
+        }
+    }
+
     private static void applyDarkCustomizations() {
         applySharedCustomizations();
+
+        Color darkFg = new Color(0xCE, 0xCE, 0xCE);
 
         // TabbedPane -- orange underline like Burp, taller tabs
         UIManager.put("TabbedPane.underlineColor", ACCENT);
@@ -74,16 +164,20 @@ public final class AnarCryLaf {
 
         // Table -- dark rows with alternation
         UIManager.put("Table.background", BG_DARK);
+        UIManager.put("Table.foreground", darkFg);
         UIManager.put("Table.alternateRowColor", BG);
         UIManager.put("Table.selectionBackground", SELECTION);
+        UIManager.put("Table.selectionForeground", darkFg);
         UIManager.put("Table.gridColor", GRID);
 
         // TableHeader
         UIManager.put("TableHeader.background", HEADER_BG);
+        UIManager.put("TableHeader.foreground", darkFg);
         UIManager.put("TableHeader.separatorColor", new Color(0x4D, 0x4D, 0x4D));
         UIManager.put("TableHeader.bottomSeparatorColor", new Color(0x4D, 0x4D, 0x4D));
 
         // CheckBox -- blue selected like Burp
+        UIManager.put("CheckBox.foreground", darkFg);
         UIManager.put("CheckBox.icon.selectedBorderColor", BLUE);
         UIManager.put("CheckBox.icon.selectedBackground", BLUE);
         UIManager.put("CheckBox.icon.focusedBorderColor", BLUE);
@@ -100,6 +194,7 @@ public final class AnarCryLaf {
 
         // Buttons
         UIManager.put("Button.background", new Color(0x4C, 0x50, 0x52));
+        UIManager.put("Button.foreground", darkFg);
 
         // Separator
         UIManager.put("Separator.foreground", SEPARATOR);
@@ -110,13 +205,116 @@ public final class AnarCryLaf {
 
         // Tooltip
         UIManager.put("ToolTip.background", new Color(0x1E, 0x21, 0x23));
+        UIManager.put("ToolTip.foreground", darkFg);
 
         // Tree
         UIManager.put("Tree.hash", new Color(0x50, 0x53, 0x55));
         UIManager.put("Tree.selectionBackground", SELECTION);
+        UIManager.put("Tree.selectionForeground", darkFg);
+        UIManager.put("Tree.foreground", darkFg);
+
+        // List
+        UIManager.put("List.foreground", darkFg);
+        UIManager.put("List.selectionBackground", SELECTION);
+        UIManager.put("List.selectionForeground", darkFg);
+
+        // Text components
+        UIManager.put("TextArea.background", BG_DARK);
+        UIManager.put("TextArea.foreground", darkFg);
+        UIManager.put("TextField.background", BG_DARK);
+        UIManager.put("TextField.foreground", darkFg);
+        UIManager.put("TextPane.background", BG_DARK);
+        UIManager.put("TextPane.foreground", darkFg);
+
+        // Panel / Label
+        UIManager.put("Panel.background", BG);
+        UIManager.put("Panel.foreground", darkFg);
+        UIManager.put("Label.foreground", darkFg);
+
+        // ScrollPane
+        UIManager.put("ScrollPane.background", BG);
 
         // SplitPane
         UIManager.put("SplitPaneDivider.draggingColor", new Color(0x64, 0x64, 0x64));
+    }
+
+    private static void applyLightCustomizations() {
+        applySharedCustomizations();
+
+        Color lightBg = new Color(0xF5, 0xF5, 0xF5);
+        Color lightBgAlt = new Color(0xEB, 0xEB, 0xEB);
+        Color lightFg = new Color(0x1A, 0x1A, 0x1A);
+        Color lightBorder = new Color(0xC0, 0xC0, 0xC0);
+        Color lightSelection = new Color(0xCC, 0xDE, 0xF5);
+        Color lightGrid = new Color(0xD8, 0xD8, 0xD8);
+        Color lightHeader = new Color(0xE8, 0xE8, 0xE8);
+        Color lightAccent = new Color(0xC0, 0x50, 0x20);
+
+        UIManager.put("TabbedPane.underlineColor", lightAccent);
+        UIManager.put("TabbedPane.selectedBackground", Color.WHITE);
+        UIManager.put("TabbedPane.hoverColor", lightBgAlt);
+        UIManager.put("TabbedPane.focusColor", Color.WHITE);
+        UIManager.put("TabbedPane.tabHeight", 28);
+        UIManager.put("TabbedPane.tabInsets", new Insets(2, 12, 4, 12));
+        UIManager.put("TabbedPane.tabSelectionHeight", 2);
+        UIManager.put("TabbedPane.showTabSeparators", false);
+        UIManager.put("TabbedPane.contentSeparatorHeight", 1);
+
+        UIManager.put("Table.background", Color.WHITE);
+        UIManager.put("Table.alternateRowColor", lightBg);
+        UIManager.put("Table.selectionBackground", lightSelection);
+        UIManager.put("Table.selectionForeground", lightFg);
+        UIManager.put("Table.foreground", lightFg);
+        UIManager.put("Table.gridColor", lightGrid);
+
+        UIManager.put("TableHeader.background", lightHeader);
+        UIManager.put("TableHeader.foreground", lightFg);
+        UIManager.put("TableHeader.separatorColor", lightBorder);
+        UIManager.put("TableHeader.bottomSeparatorColor", lightBorder);
+
+        UIManager.put("Tree.hash", lightBorder);
+        UIManager.put("Tree.selectionBackground", lightSelection);
+        UIManager.put("Tree.selectionForeground", lightFg);
+        UIManager.put("Tree.foreground", lightFg);
+
+        UIManager.put("List.foreground", lightFg);
+        UIManager.put("List.selectionBackground", lightSelection);
+        UIManager.put("List.selectionForeground", lightFg);
+
+        UIManager.put("TextArea.background", Color.WHITE);
+        UIManager.put("TextArea.foreground", lightFg);
+        UIManager.put("TextField.background", Color.WHITE);
+        UIManager.put("TextField.foreground", lightFg);
+        UIManager.put("TextPane.background", Color.WHITE);
+        UIManager.put("TextPane.foreground", lightFg);
+
+        UIManager.put("Panel.background", lightBg);
+        UIManager.put("Panel.foreground", lightFg);
+        UIManager.put("Label.foreground", lightFg);
+
+        UIManager.put("Component.borderColor", lightBorder);
+        UIManager.put("Component.focusedBorderColor", new Color(0x00, 0x66, 0xCC));
+
+        UIManager.put("CheckBox.foreground", lightFg);
+        UIManager.put("CheckBox.icon.selectedBorderColor", new Color(0x26, 0x64, 0x9D));
+        UIManager.put("CheckBox.icon.selectedBackground", new Color(0x26, 0x64, 0x9D));
+
+        UIManager.put("Button.background", new Color(0xE0, 0xE0, 0xE0));
+        UIManager.put("Button.foreground", lightFg);
+
+        UIManager.put("Separator.foreground", lightBorder);
+        UIManager.put("MenuBar.borderColor", lightBorder);
+        UIManager.put("PopupMenu.borderColor", lightBorder);
+
+        UIManager.put("ProgressBar.foreground", lightAccent);
+        UIManager.put("ProgressBar.arc", 999);
+
+        UIManager.put("ToolTip.background", new Color(0xF0, 0xF0, 0xF0));
+        UIManager.put("ToolTip.foreground", lightFg);
+
+        UIManager.put("SplitPaneDivider.draggingColor", lightBorder);
+
+        UIManager.put("ScrollPane.background", lightBg);
     }
 
     private static void applySharedCustomizations() {

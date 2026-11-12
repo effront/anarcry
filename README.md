@@ -34,7 +34,7 @@
 |  (15 providers) + circuit breaker. OAST blind detection infra.            |
 |  TUI + Swing GUI + AI Assistant.                                          |
 |  Built-in API Client (Bruno-inspired) with collections, environments,     |
-|  auth injectors, variable interpolation, runner + assertions.             |
+|  auth injectors, variable interpolation, scripting, runner + assertions.  |
 +===========================================================================+
 ```
 
@@ -123,7 +123,7 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-2.2.0.jar
+java -jar build/libs/anarcry-2.2.1.jar
 ```
 
 Or use the launcher (auto-builds if source changed):
@@ -141,7 +141,7 @@ With `.env.local` for pre-configured targets:
 Launch in GUI mode (Swing + FlatLaf):
 
 ```bash
-java -jar build/libs/anarcry-2.2.0.jar --gui
+java -jar build/libs/anarcry-2.2.1.jar --gui
 ```
 
 ---
@@ -163,7 +163,8 @@ java -jar build/libs/anarcry-2.2.0.jar --gui
 |  Knowledge Base      |  knowledge_base.json (34 entries, CWE+CVSS+VRT)    |
 |                      |  knowledge-base/*.md (27 enriched entries)         |
 |  AI Assistant        |  Multi-provider (Claude, OpenAI, Gemini, Ollama)   |
-|  GUI                 |  Swing + FlatLaf + RSyntaxTextArea + JFreeChart    |
+|  GUI                 |  Swing + FlatLaf (dark/light) + RSyntaxTextArea    |
+|                      |  + JFreeChart                                      |
 |  Test                |  JUnit 5.11.3                                      |
 +======================+====================================================+
 ```
@@ -222,7 +223,7 @@ without knowing their credentials.
 
 ## 05 - Interface
 
-Two interfaces: **TUI** (Lanterna, terminal-native) and **GUI** (Swing + FlatLaf, desktop). Both offer the same core functionality: Target scan, Repeater, Findings, SiteMap, Export. The GUI adds a Dashboard with severity chart (JFreeChart), Preferences dialog, and the AI Assistant chat view.
+Two interfaces: **TUI** (Lanterna, terminal-native) and **GUI** (Swing + FlatLaf, desktop). Both offer the same core functionality: Target scan, Repeater, Findings, SiteMap, Export. The GUI adds a Dashboard with severity chart (JFreeChart), Preferences dialog with persistent settings (`~/.anarcry/settings.json`), dark/light theme, and the AI Assistant chat view.
 
 ### TUI
 
@@ -318,6 +319,11 @@ Test suite covers: JWT probes (alg:none, weak secret, RS256->HS256, JKU, null si
 
 ## 07 - Architecture
 
+
+
+<details>
+<summary><kbd> wanna see? (click to expand)</kbd></summary>
+
 ```
 src/main/java/gg/effront/anarcry/
 +-- Main.java                        Entry point
@@ -388,6 +394,7 @@ src/main/java/gg/effront/anarcry/
 |       +-- SaveDocTool            Save markdown documents to ~/.anarcry/reports/
 +-- gui/
 |   +-- AnarCryGui.java            Main Swing window (FlatLaf theme)
+|   +-- AppSettings.java           Singleton: ~/.anarcry/settings.json persistence (Gson)
 |   +-- GuiController.java         View orchestration and scan lifecycle
 |   +-- PrivacyFilter.java         URL/JWT/IP redaction (Ctrl+Shift+P)
 |   +-- views/
@@ -399,10 +406,12 @@ src/main/java/gg/effront/anarcry/
 |   |   +-- ReportView             Report generation and export
 |   |   +-- ApiClientView          API Client with collection tree + request tabs
 |   |   +-- AssistantView          AI Assistant chat with streaming + tools
+|   |   +-- PreferencesDialog      Settings dialog with persistence (10 categories)
 |   |   +-- EnvironmentEditorDialog  API Client environment variable editor
-|   |   +-- GlobalSearchDialog     Cross-tab search (Ctrl+F)
+|   |   +-- GlobalSearchDialog     Cross-tab search (Ctrl+K)
 |   |   +-- ExportDialog           Multi-format export (MD, JSON, SARIF, H1, BC)
 |   +-- components/                Reusable GUI components
+|   |   +-- StatusBarIcons.java    Tabler Icons loader (PNG, 16x16)
 |   +-- theme/                     FlatLaf theme customization
 +-- tui/
     +-- AnarCryTui.java            Main TUI window (Lanterna)
@@ -433,6 +442,8 @@ ScanRunner.run(ScanContext)
   -> fire onFinding callback for each result
   -> fire onScanFinish when all modules complete
 ```
+</details>
+
 
 ---
 
@@ -499,22 +510,72 @@ Built-in API client inspired by [Bruno](https://www.usebruno.com/) for manual AP
 |                     (built-in > env > collection > folder > request >     |
 |                     runtime) + circular reference detection               |
 |  Request Builder -- method, URL, headers, body (JSON/form/multipart/      |
-|                     XML/GraphQL/file), query/path params                  |
+|                     XML/GraphQL/file), query/path params, descriptions    |
+|  Scripting       -- pre-request + post-response + tests (GraalJS)         |
 |  Runner          -- sequential execution with variable chaining           |
 |  Assertions      -- declarative validation (status, JSON path, header,    |
 |                     regex, timing, size)                                  |
-|  Import          -- Postman v2.1, OpenAPI 3.0, Bruno .bru, cURL           |
-|  Export          -- Markdown + JSON collection run reports                |
+|  Import          -- Postman v2.1, OpenAPI 3.0, Bruno .bru, Insomnia,      |
+|                     cURL                                                  |
+|  Export          -- cURL command, Markdown + JSON collection run reports  |
+|  Proxy           -- HTTP/HTTPS/SOCKS5 with auth (via Preferences)         |
 +===========================================================================+
 ```
 
-**GUI (F8):** Collection tree, request tabs (color-coded by method), environment editor dialog, right-click context menu (new/duplicate/delete/rename), Send (Ctrl+Enter), Run All.
+**GUI (F8):** Collection tree, request tabs (color-coded by method), environment editor dialog, right-click context menu (new/duplicate/delete/rename), pre-request/post-response/test scripts (GraalJS), cURL export, keyboard shortcuts (Ctrl+Enter send, Ctrl+N new request), tab content badges, query/path param split, global search integration. Proxy and SSL configured via Preferences.
 
 **TUI (F8):** Simplified collection list, request builder, environment selector, Send/Run All, response viewer.
 
 ---
 
 ## 11 - Changelog
+
+### v2.2.1
+
+**GUI + API Client bugfixes, Preferences persistence, light theme**
+
+Preferences:
+- **AppSettings persistence**: singleton saves all preferences to `~/.anarcry/settings.json` via Gson -- loads on startup, saves on Apply, survives restarts
+- **Light theme**: AnarCryLaf.installLight() with theme-aware color helpers (fg(), bg(), border(), isDark()), saved theme applied on app launch
+- **Preferences rework**: tab reorder (General, Themes, Display, Proxy, Certificates, Notifications, Keybindings, License, Support, About -- info tabs grouped at end)
+- **Check for Updates**: dedicated sidebar button queries GitHub Releases API, compares with Version.get(), offers to open release page
+- **Proxy centralized**: proxy config moved from API Client sidebar to Preferences -- single source of truth, ApiClientView receives ProxySelector/SSLContext via setNetworkConfig()
+- **Certificates panel**: client cert table (Enable, Domain, Type PEM/PKCS12, Cert/PFX File, Key File, Passphrase) with Browse buttons, custom CA certificate with keep-default-CA toggle
+- **SSL context builder**: PEM private key loading (RSA/EC/Ed25519), PKCS12 keystore, custom CA merge with JVM defaults, trust-all toggle for SSL verification off
+- **Support panel**: support-art.png image, documentation and repository hyperlinks with Desktop.browse()
+- **Display defaults**: resolution combo defaults to 1920x1080, saved resolution applied on app launch (including Maximized state)
+
+API Client enhancements:
+- **Auth interpolation**: `{{var}}` resolved in all 12 AuthConfig sealed interface variants (Bearer, Basic, Digest, API Key, OAuth2 CC/PKCE/Password/Implicit, WSSE, AWS SigV4, NTLM, custom)
+- **GraalJS scripting**: pre-request, post-response, and test scripts with console output panel
+- **cURL export**: generate cURL command from any request (CurlGenerator)
+- **Insomnia import**: InsomniaImporter for Insomnia v4 JSON collections
+- **Tab content badges**: "Headers 1", "Body *", "Script *" indicators on editor tabs
+- **Query/Path params split**: separate KvTableEditors for query and path parameters
+- **Keyboard shortcuts**: Ctrl+Enter send, Ctrl+N new request, Ctrl+E edit environment, empty state panel with shortcut hints
+- **Description column**: KvTableEditor now has 4 columns (checkbox, Key, Value, Description)
+- **Tab state cache**: per-tab editor state and response preserved when switching tabs
+- **Auto-select editor tab**: first tab with content is auto-selected on request load
+- **Sidebar width**: increased from 250px to 320px for longer request names
+- **Method label fix**: full method names shown in tree (POST, DELETE, PATCH, OPTIONS) instead of 3-char truncation
+
+GUI fixes:
+- **Status bar icons**: Tabler Icons (MIT) replace Unicode/emoji text -- settings, theme, GitHub, search, cookie, license, proxy icons as 16x16 PNGs
+- **Status bar actions**: Theme toggle, GitHub repo link, License info buttons with icon-only labels
+- **Global search rewrite**: empty query shows all items (API requests, findings, sitemap), endpoint matching, wrap-around arrow navigation, single-click select, focus-loss dismissal
+- **Global keyboard shortcuts**: Ctrl+K opens global search (works in text fields), Ctrl+, opens Preferences
+- **Cookies status bar click**: opens PreferencesDialog
+- **Search popup fix**: Enter no longer closes empty search dialog
+- **API requests in search**: API Client request names wired into GlobalSearchDialog
+- **Status reason phrase**: "401 Unauthorized" instead of "401 401"
+- **Response status badges**: color-coded HTTP status in response panel
+
+Other:
+- **RequestExecutor**: auth variable interpolation in all auth config fields
+- Version bump to 2.2.1
+
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v2.2.0
 
@@ -553,10 +614,6 @@ Other:
 - **Knowledge base**: expanded from 25 to 34 entries with new module coverage
 - Version bump to 2.2.0
 
-
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
-
 ### v2.1.0
 
 **API Client Module - Bruno-inspired collections, environments, runner**
@@ -573,7 +630,7 @@ Other:
 **GUI/TUI Integration**
 - **API Client tab (F8)**: request tabs color-coded by method (GET=green, POST=yellow, DELETE=red), collection tree with right-click menu (new request/folder, duplicate, delete, rename), environment selector with "..." configure button
 - **Environment Editor**: modal dialog for managing environments and variables (name, value, secret toggle, enabled toggle)
-- **PreferencesDialog**: Bruno-style categorized settings (General, Display, Proxy, Certificates, Keybindings, About) - SSL/TLS toggle, proxy config for Burp/ZAP, client certificates table
+- **PreferencesDialog**: Bruno-style categorized settings (General, Themes, Display, Proxy, Certificates, Notifications, Keybindings, License, Support, About) - SSL/TLS toggle, proxy config for Burp/ZAP, client certificates table
 - **StatusBar shortcuts**: Search (jumps to Findings search), Cookies count, Proxy status, Privacy toggle, version display
 - **F-key shift**: API Client on F8, Assistant moved to F9
 

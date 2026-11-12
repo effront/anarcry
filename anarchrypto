@@ -56,15 +56,15 @@ if [ "$TUI_MODE" = true ]; then
         if command -v kitty &>/dev/null; then
             export _ANARCRY_READY=1
             exec kitty \
-                --override initial_window_width=180c \
-                --override initial_window_height=82c \
+                --override initial_window_width=200c \
+                --override initial_window_height=92c \
                 --title "AnarCry v${VERSION}" \
                 bash "$SELF" "$@"
         fi
         printf '\e[8;54;220t'
         if command -v xdotool &>/dev/null; then
             WID=$(xdotool getactivewindow 2>/dev/null)
-            [ -n "$WID" ] && xdotool windowsize "$WID" 1660 1080 2>/dev/null
+            [ -n "$WID" ] && xdotool windowsize "$WID" 1920 1200 2>/dev/null
         fi
         sleep 0.4
         stty rows 54 cols 220 2>/dev/null

@@ -63,7 +63,8 @@ public class WsseInjector implements AuthInjector {
     @SuppressWarnings("java:S4790")
     private static byte[] sha1(byte[] input) {
         try {
-            return MessageDigest.getInstance("SHA-1").digest(input);
+            return MessageDigest.getInstance("SHA-1").digest(input); // nosemgrep: use-of-sha1 -- WSSE PasswordDigest
+                                                                     // spec requires SHA-1
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-1 not available", e);
         }

@@ -15,7 +15,10 @@ import gg.effront.anarcry.apiclient.model.RequestItem;
 import gg.effront.anarcry.apiclient.model.RequestResult;
 import gg.effront.anarcry.apiclient.model.RequestSettings;
 import gg.effront.anarcry.apiclient.model.ResponseData;
+import gg.effront.anarcry.apiclient.model.ScriptDef;
 import gg.effront.anarcry.apiclient.model.VarsDef;
+import gg.effront.anarcry.apiclient.script.ScriptEngine;
+import gg.effront.anarcry.apiclient.script.ScriptResult;
 import gg.effront.anarcry.apiclient.vars.Interpolator;
 import gg.effront.anarcry.apiclient.vars.VariableStore;
 
@@ -42,6 +45,7 @@ public class RequestExecutor {
     private final Interpolator interpolator;
     private final AuthInjectorRegistry authRegistry;
     private final AssertionEngine assertionEngine;
+    private final ScriptEngine scriptEngine;
 
     public RequestExecutor(HttpClient httpClient, Interpolator interpolator, AuthInjectorRegistry authRegistry,
             AssertionEngine assertionEngine) {
@@ -49,6 +53,7 @@ public class RequestExecutor {
         this.interpolator = interpolator;
         this.authRegistry = authRegistry;
         this.assertionEngine = assertionEngine;
+        this.scriptEngine = new ScriptEngine();
     }
 
     public RequestResult execute(RequestItem item, RunContext ctx, Collection collection, Consumer<String> log) {
@@ -56,10 +61,15 @@ public class RequestExecutor {
 
         try {
             // Phase 1: MERGE - cascade folder/collection headers, auth, vars
-            HttpRequestDef merged = mergeInherited(item, collection);
+            HttpRequestDef merged = mergeInherited(item, collection, ctx.vars());
 
             // Phase 2: PRE-VARS - resolve pre-request variables
             resolvePreVars(item.vars().pre(), ctx.vars());
+
+            // Phase 2.5: PRE-REQUEST SCRIPT
+            ScriptDef scripts = item.scripts();
+            ScriptResult preScriptResult = scriptEngine.runPreRequest(scripts, merged, ctx.vars());
+            logScriptOutput(preScriptResult, "pre-request", log);
 
             // Phase 3: INTERPOLATE - {{var}} in URL, headers, body, auth, params
             HttpRequestDef interpolated = interpolateRequest(merged, ctx.vars());
@@ -73,11 +83,17 @@ public class RequestExecutor {
             // Phase 6: POST-VARS - extract from response
             resolvePostVars(item.vars().post(), response, ctx.vars());
 
+            // Phase 6.5: POST-RESPONSE SCRIPT + TESTS
+            ScriptResult postScriptResult = scriptEngine.runPostResponse(scripts, interpolated, response, ctx.vars());
+            logScriptOutput(postScriptResult, "post-response", log);
+            ctx.setLastScriptResult(postScriptResult);
+
             // Phase 7: ASSERTIONS
             List<AssertionResult> assertResults = assertionEngine.evaluate(item.assertions(), response, ctx.vars());
 
             long duration = (System.nanoTime() - start) / 1_000_000;
-            boolean passed = assertResults.stream().allMatch(AssertionResult::passed);
+            boolean passed = assertResults.stream().allMatch(AssertionResult::passed)
+                    && postScriptResult.testsFailed() == 0;
 
             return new RequestResult(item, interpolated, response, assertResults, duration, passed);
         } catch (Exception e) {
@@ -89,7 +105,24 @@ public class RequestExecutor {
         }
     }
 
-    HttpRequestDef mergeInherited(RequestItem item, Collection collection) {
+    private void logScriptOutput(ScriptResult result, String phase, Consumer<String> log) {
+        if (result == null) {
+            return;
+        }
+        for (String line : result.consoleLog()) {
+            log.accept("  [script:" + phase + "] " + line);
+        }
+        if (result.hasError()) {
+            log.accept("  [script:" + phase + "] ERROR: " + result.error());
+        }
+        for (ScriptResult.TestResult t : result.testResults()) {
+            String status = t.passed() ? "PASS" : "FAIL";
+            String msg = t.message().isEmpty() ? "" : " -- " + t.message();
+            log.accept("  [test] " + status + ": " + t.name() + msg);
+        }
+    }
+
+    HttpRequestDef mergeInherited(RequestItem item, Collection collection, VariableStore vars) {
         HttpRequestDef req = item.request();
 
         List<Header> mergedHeaders = new ArrayList<>(collection.root().headers());
@@ -112,8 +145,7 @@ public class RequestExecutor {
         }
 
         if (parentFolder != null) {
-            VariableStore dummyStore = new VariableStore();
-            dummyStore.loadFolder(parentFolder.root());
+            vars.loadFolder(parentFolder.root());
         }
 
         return new HttpRequestDef(req.method(), req.url(), req.params(), mergedHeaders, auth, req.body(),
@@ -124,7 +156,7 @@ public class RequestExecutor {
         for (CollectionItem ci : items) {
             if (ci instanceof Folder folder) {
                 for (CollectionItem child : folder.items()) {
-                    if (child instanceof RequestItem ri && ri.uid().equals(item.uid())) {
+                    if (child instanceof RequestItem ri && java.util.Objects.equals(ri.uid(), item.uid())) {
                         return folder;
                     }
                     if (child instanceof Folder sub) {
@@ -141,7 +173,7 @@ public class RequestExecutor {
 
     private boolean containsRequest(Folder folder, RequestItem target) {
         for (CollectionItem ci : folder.items()) {
-            if (ci instanceof RequestItem ri && ri.uid().equals(target.uid())) {
+            if (ci instanceof RequestItem ri && java.util.Objects.equals(ri.uid(), target.uid())) {
                 return true;
             }
             if (ci instanceof Folder sub && containsRequest(sub, target)) {
@@ -183,9 +215,9 @@ public class RequestExecutor {
                 .toList();
 
         BodyConfig body = interpolateBody(req.body(), vars);
+        AuthConfig auth = interpolateAuth(req.auth(), vars);
 
-        return new HttpRequestDef(req.method(), url, new ParamsDef(query, path), headers, req.auth(), body,
-                req.settings());
+        return new HttpRequestDef(req.method(), url, new ParamsDef(query, path), headers, auth, body, req.settings());
     }
 
     private BodyConfig interpolateBody(BodyConfig body, VariableStore vars) {
@@ -207,6 +239,39 @@ public class RequestExecutor {
             case BodyConfig.GraphQL g -> new BodyConfig.GraphQL(interpolator.interpolate(g.query(), vars),
                     interpolator.interpolateJson(g.variables(), vars));
             case BodyConfig.FileBody fb -> fb;
+        };
+    }
+
+    private AuthConfig interpolateAuth(AuthConfig auth, VariableStore vars) {
+        return switch (auth) {
+            case AuthConfig.None n -> n;
+            case AuthConfig.Inherit i -> i;
+            case AuthConfig.Bearer b -> new AuthConfig.Bearer(interpolator.interpolate(b.token(), vars));
+            case AuthConfig.Basic b -> new AuthConfig.Basic(interpolator.interpolate(b.username(), vars),
+                    interpolator.interpolate(b.password(), vars));
+            case AuthConfig.ApiKey a -> new AuthConfig.ApiKey(interpolator.interpolate(a.key(), vars),
+                    interpolator.interpolate(a.value(), vars), a.placement());
+            case AuthConfig.Digest d -> new AuthConfig.Digest(interpolator.interpolate(d.username(), vars),
+                    interpolator.interpolate(d.password(), vars));
+            case AuthConfig.OAuth2 o ->
+                new AuthConfig.OAuth2(o.grantType(), interpolator.interpolate(o.accessTokenUrl(), vars),
+                        interpolator.interpolate(o.refreshTokenUrl(), vars),
+                        interpolator.interpolate(o.clientId(), vars), interpolator.interpolate(o.clientSecret(), vars),
+                        o.scope(), o.callbackUrl(), o.authorizationUrl(), o.pkce(), o.credPlacement(),
+                        o.tokenPlacement(), o.autoRefresh(), o.autoFetch(), o.additionalParams());
+            case AuthConfig.AwsV4 a -> new AuthConfig.AwsV4(interpolator.interpolate(a.accessKeyId(), vars),
+                    interpolator.interpolate(a.secretAccessKey(), vars),
+                    interpolator.interpolate(a.sessionToken(), vars), interpolator.interpolate(a.service(), vars),
+                    interpolator.interpolate(a.region(), vars));
+            case AuthConfig.OAuth1 o -> new AuthConfig.OAuth1(interpolator.interpolate(o.consumerKey(), vars),
+                    interpolator.interpolate(o.consumerSecret(), vars), interpolator.interpolate(o.accessToken(), vars),
+                    interpolator.interpolate(o.tokenSecret(), vars), o.signatureMethod(), o.placement());
+            case AuthConfig.Ntlm n -> new AuthConfig.Ntlm(interpolator.interpolate(n.username(), vars),
+                    interpolator.interpolate(n.password(), vars), interpolator.interpolate(n.domain(), vars));
+            case AuthConfig.Wsse w -> new AuthConfig.Wsse(interpolator.interpolate(w.username(), vars),
+                    interpolator.interpolate(w.password(), vars));
+            case AuthConfig.EdgeGrid e -> new AuthConfig.EdgeGrid(interpolator.interpolate(e.accessToken(), vars),
+                    interpolator.interpolate(e.clientToken(), vars), interpolator.interpolate(e.clientSecret(), vars));
         };
     }
 

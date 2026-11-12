@@ -54,8 +54,8 @@ import javax.swing.text.JTextComponent;
 public class AnarCryGui {
 
     private static final String FRAME_TITLE = Version.label();
-    private static final int FRAME_WIDTH = 1400;
-    private static final int FRAME_HEIGHT = 950;
+    private static final int FRAME_WIDTH = 1920;
+    private static final int FRAME_HEIGHT = 1080;
     private static final int MODULES_PANEL_WIDTH = 260;
     private static final int LOG_DIVIDER_LOCATION = 350;
 
@@ -84,7 +84,14 @@ public class AnarCryGui {
     private Runnable startScanAction;
 
     public void start(EnvLoader env) {
-        AnarCryLaf.install();
+        if ("Light".equals(AppSettings.get().theme)) {
+            AnarCryLaf.installLight();
+        } else {
+            AnarCryLaf.install();
+        }
+
+        SplashScreen splash = new SplashScreen();
+        splash.show();
 
         logPane = new LogPane();
         statusBar = new GuiStatusBar();
@@ -129,7 +136,10 @@ public class AnarCryGui {
         }
         assistantView.configure(env != null ? env.asMap() : java.util.Map.of());
 
-        SwingUtilities.invokeLater(this::buildAndShowFrame);
+        SwingUtilities.invokeLater(() -> {
+            buildAndShowFrame();
+            splash.dismiss();
+        });
     }
 
     private void onFinding(Finding f) {
@@ -161,7 +171,7 @@ public class AnarCryGui {
             reportView.clear();
             logPane.clear();
             resetSeverityCounts();
-            statusBar.setSeverityCounts(0, 0, 0, 0);
+            statusBar.setSeverityCounts(0, 0, 0, 0, 0);
             statusBar.resetProgress();
             String target = modulesPanel.getTarget();
             siteMapView.setRootUrl(target);
@@ -217,6 +227,7 @@ public class AnarCryGui {
     private void buildAndShowFrame() {
         frame = new JFrame(FRAME_TITLE);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setIconImages(loadAppIcons());
         frame.setJMenuBar(buildMenuBar());
 
         installFindingDetailHandler(scanFindingsTable);
@@ -244,6 +255,7 @@ public class AnarCryGui {
         globalSearchDialog = new GlobalSearchDialog(frame);
         globalSearchDialog.setFindingsSupplier(() -> new ArrayList<>(allFindings));
         globalSearchDialog.setSiteMapSupplier(() -> siteMapView.getPaths());
+        globalSearchDialog.setApiRequestsSupplier(() -> apiClientView.getRequestNames());
         globalSearchDialog.setOnSelect(result -> {
             switch (result.category()) {
                 case FINDING -> {
@@ -257,9 +269,30 @@ public class AnarCryGui {
 
         statusBar.setOnSearchClick(() -> globalSearchDialog.showSearch());
 
-        statusBar.setOnProxyClick(() -> new PreferencesDialog(frame, "Proxy").setVisible(true));
+        statusBar.setOnCookiesClick(() -> openPreferences("General"));
 
-        statusBar.setOnSettingsClick(() -> new PreferencesDialog(frame).setVisible(true));
+        statusBar.setOnProxyClick(() -> openPreferences("Proxy"));
+
+        statusBar.setOnSettingsClick(() -> openPreferences(null));
+
+        statusBar.setOnThemeClick(() -> {
+            AnarCryLaf.toggle();
+            SwingUtilities.updateComponentTreeUI(frame);
+            AnarCryLaf.fireThemeChanged(frame);
+        });
+
+        statusBar.setOnKeybindingsClick(() -> openPreferences("Keybindings"));
+
+        statusBar.setOnGithubClick(() -> {
+            try {
+                java.awt.Desktop.getDesktop().browse(java.net.URI.create("https://github.com/effront/anarcry"));
+            } catch (Exception ignored) {
+            }
+        });
+
+        statusBar.setOnLicenseClick(() -> openPreferences("License"));
+
+        apiClientView.setProxyStatusCallback(on -> statusBar.setProxyEnabled(on));
 
         JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, modulesPanel, tabs);
         mainSplit.setDividerLocation(MODULES_PANEL_WIDTH);
@@ -270,9 +303,30 @@ public class AnarCryGui {
 
         installKeyShortcuts();
 
-        frame.setSize(FRAME_WIDTH, FRAME_HEIGHT);
+        String savedRes = AppSettings.get().resolution;
+        if ("Maximized".equals(savedRes)) {
+            frame.setSize(FRAME_WIDTH, FRAME_HEIGHT);
+            frame.setExtendedState(frame.getExtendedState() | JFrame.MAXIMIZED_BOTH);
+        } else if (savedRes != null && savedRes.contains("x")) {
+            String[] parts = savedRes.split("x");
+            frame.setSize(Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim()));
+        } else {
+            frame.setSize(FRAME_WIDTH, FRAME_HEIGHT);
+        }
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
+    }
+
+    private static java.util.List<java.awt.Image> loadAppIcons() {
+        java.util.List<java.awt.Image> icons = new ArrayList<>();
+        for (String name : new String[]{"/icons/app-icon-64.png", "/icons/app-icon-128.png",
+                "/icons/app-icon-256.png"}) {
+            java.net.URL url = AnarCryGui.class.getResource(name);
+            if (url != null) {
+                icons.add(new javax.swing.ImageIcon(url).getImage());
+            }
+        }
+        return icons;
     }
 
     private void wireSelectionDetail(FindingsTable table, FindingDetailPanel detail) {
@@ -333,8 +387,26 @@ public class AnarCryGui {
                 int mods = e.getModifiersEx();
                 boolean noMods = mods == 0;
 
+                boolean ctrl = (mods & InputEvent.CTRL_DOWN_MASK) == InputEvent.CTRL_DOWN_MASK
+                        && (mods & InputEvent.SHIFT_DOWN_MASK) == 0;
+                boolean ctrlShift = (mods
+                        & (InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK)) == (InputEvent.CTRL_DOWN_MASK
+                                | InputEvent.SHIFT_DOWN_MASK);
+
                 if (code >= KeyEvent.VK_F1 && code <= KeyEvent.VK_F8 && noMods) {
                     tabs.setSelectedIndex(code - KeyEvent.VK_F1);
+                    return true;
+                }
+                if (ctrl && code == KeyEvent.VK_K) {
+                    globalSearchDialog.showSearch();
+                    return true;
+                }
+                if (ctrl && code == KeyEvent.VK_COMMA) {
+                    openPreferences(null);
+                    return true;
+                }
+                if (ctrlShift && code == KeyEvent.VK_P) {
+                    PrivacyFilter.toggle();
                     return true;
                 }
 
@@ -344,14 +416,6 @@ public class AnarCryGui {
 
                 if (noMods && (code == KeyEvent.VK_E)) {
                     openExportDialog();
-                    return true;
-                }
-
-                boolean ctrlShift = (mods
-                        & (InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK)) == (InputEvent.CTRL_DOWN_MASK
-                                | InputEvent.SHIFT_DOWN_MASK);
-                if (ctrlShift && code == KeyEvent.VK_P) {
-                    PrivacyFilter.toggle();
                     return true;
                 }
                 return false;
@@ -436,13 +500,14 @@ public class AnarCryGui {
         toggleTheme.addActionListener(e -> {
             AnarCryLaf.toggle();
             SwingUtilities.updateComponentTreeUI(frame);
+            AnarCryLaf.fireThemeChanged(frame);
         });
         menu.add(toggleTheme);
 
         menu.addSeparator();
 
         JMenuItem prefs = new JMenuItem("Preferences...");
-        prefs.addActionListener(e -> new PreferencesDialog(frame).setVisible(true));
+        prefs.addActionListener(e -> openPreferences(null));
         menu.add(prefs);
 
         return menu;
@@ -472,8 +537,180 @@ public class AnarCryGui {
             severityCounts.merge(severity, 1, Integer::sum);
             statusBar.setSeverityCounts(severityCounts.getOrDefault(Severity.CRITICAL, 0),
                     severityCounts.getOrDefault(Severity.HIGH, 0), severityCounts.getOrDefault(Severity.MEDIUM, 0),
-                    severityCounts.getOrDefault(Severity.LOW, 0));
+                    severityCounts.getOrDefault(Severity.LOW, 0), severityCounts.getOrDefault(Severity.INFO, 0));
         });
+    }
+
+    private void openPreferences(String category) {
+        PreferencesDialog dlg = category != null
+                ? new PreferencesDialog(frame, category)
+                : new PreferencesDialog(frame);
+        dlg.setOnApply(() -> {
+            java.net.ProxySelector proxy = buildProxySelector(dlg);
+            javax.net.ssl.SSLContext sslCtx = buildSslContext(dlg.getCertEntries(), dlg.getCustomCaCertPath(),
+                    dlg.isKeepDefaultCa(), dlg.isSslVerificationEnabled());
+            apiClientView.setNetworkConfig(proxy, sslCtx, dlg.isProxyEnabled());
+        });
+        dlg.setVisible(true);
+    }
+
+    private static java.net.ProxySelector buildProxySelector(PreferencesDialog dlg) {
+        if (!dlg.isProxyEnabled() || dlg.getProxyHost().isBlank()) {
+            return null;
+        }
+        String protocol = dlg.getProxyProtocol();
+        java.net.Proxy.Type proxyType = "socks5".equalsIgnoreCase(protocol)
+                ? java.net.Proxy.Type.SOCKS
+                : java.net.Proxy.Type.HTTP;
+        java.net.InetSocketAddress addr = new java.net.InetSocketAddress(dlg.getProxyHost(), dlg.getProxyPort());
+        String user = dlg.getProxyUsername();
+        char[] pass = dlg.getProxyPassword();
+        if (user != null && !user.isBlank()) {
+            java.net.Authenticator.setDefault(new java.net.Authenticator() {
+
+                @Override
+                protected java.net.PasswordAuthentication getPasswordAuthentication() {
+                    if (getRequestorType() == RequestorType.PROXY) {
+                        return new java.net.PasswordAuthentication(user, pass);
+                    }
+                    return null;
+                }
+            });
+        }
+        return new java.net.ProxySelector() {
+
+            @Override
+            public java.util.List<java.net.Proxy> select(java.net.URI uri) {
+                return java.util.List.of(new java.net.Proxy(proxyType, addr));
+            }
+
+            @Override
+            public void connectFailed(java.net.URI uri, java.net.SocketAddress sa, java.io.IOException ioe) {
+            }
+        };
+    }
+
+    private static javax.net.ssl.SSLContext buildSslContext(java.util.List<PreferencesDialog.CertEntry> certs,
+            String caCertPath, boolean keepDefaultCa, boolean sslVerification) {
+        try {
+            if (!sslVerification) {
+                javax.net.ssl.SSLContext sc = javax.net.ssl.SSLContext.getInstance("TLS");
+                sc.init(null, new javax.net.ssl.TrustManager[]{new javax.net.ssl.X509TrustManager() {
+
+                    @Override
+                    public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) {
+                    }
+
+                    @Override
+                    public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType) {
+                    }
+
+                    @Override
+                    public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                        return new java.security.cert.X509Certificate[0];
+                    }
+                }}, new java.security.SecureRandom());
+                return sc;
+            }
+
+            java.util.List<javax.net.ssl.KeyManager> allKeyManagers = new java.util.ArrayList<>();
+            for (PreferencesDialog.CertEntry ce : certs) {
+                if (!ce.enabled()) {
+                    continue;
+                }
+                try {
+                    javax.net.ssl.KeyManagerFactory kmf;
+                    if ("PKCS12".equals(ce.type())) {
+                        java.security.KeyStore ks = java.security.KeyStore.getInstance("PKCS12");
+                        char[] pp = ce.passphrase().isEmpty() ? null : ce.passphrase().toCharArray();
+                        try (java.io.FileInputStream fis = new java.io.FileInputStream(ce.certFile())) {
+                            ks.load(fis, pp);
+                        }
+                        kmf = javax.net.ssl.KeyManagerFactory
+                                .getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+                        kmf.init(ks, pp);
+                    } else {
+                        java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory
+                                .getInstance("X.509");
+                        java.security.cert.X509Certificate cert;
+                        try (java.io.FileInputStream fis = new java.io.FileInputStream(ce.certFile())) {
+                            cert = (java.security.cert.X509Certificate) cf.generateCertificate(fis);
+                        }
+                        java.security.PrivateKey pk = loadPemPrivateKey(ce.keyFile());
+                        java.security.KeyStore ks = java.security.KeyStore.getInstance("JKS");
+                        ks.load(null, null);
+                        char[] pp = ce.passphrase().isEmpty()
+                                ? "changeit".toCharArray()
+                                : ce.passphrase().toCharArray();
+                        ks.setKeyEntry(ce.domain(), pk, pp, new java.security.cert.Certificate[]{cert});
+                        kmf = javax.net.ssl.KeyManagerFactory
+                                .getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+                        kmf.init(ks, pp);
+                    }
+                    allKeyManagers.addAll(java.util.Arrays.asList(kmf.getKeyManagers()));
+                } catch (Exception ex) {
+                    System.err.println("Failed to load client cert for " + ce.domain() + ": " + ex.getMessage());
+                }
+            }
+
+            javax.net.ssl.TrustManagerFactory tmf = javax.net.ssl.TrustManagerFactory
+                    .getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm());
+            if (caCertPath != null && !caCertPath.isEmpty()
+                    && java.nio.file.Files.exists(java.nio.file.Path.of(caCertPath))) {
+                java.security.KeyStore ts = java.security.KeyStore.getInstance("JKS");
+                ts.load(null, null);
+                if (keepDefaultCa) {
+                    javax.net.ssl.TrustManagerFactory defTmf = javax.net.ssl.TrustManagerFactory
+                            .getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm());
+                    defTmf.init((java.security.KeyStore) null);
+                    for (javax.net.ssl.TrustManager tm : defTmf.getTrustManagers()) {
+                        if (tm instanceof javax.net.ssl.X509TrustManager xtm) {
+                            for (java.security.cert.X509Certificate c : xtm.getAcceptedIssuers()) {
+                                ts.setCertificateEntry(c.getSubjectX500Principal().getName(), c);
+                            }
+                        }
+                    }
+                }
+                java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory.getInstance("X.509");
+                try (java.io.FileInputStream fis = new java.io.FileInputStream(caCertPath)) {
+                    int i = 0;
+                    for (java.security.cert.Certificate c : cf.generateCertificates(fis)) {
+                        ts.setCertificateEntry("custom-ca-" + i++, c);
+                    }
+                }
+                tmf.init(ts);
+            } else {
+                tmf.init((java.security.KeyStore) null);
+            }
+
+            if (allKeyManagers.isEmpty() && (caCertPath == null || caCertPath.isEmpty())) {
+                return null;
+            }
+
+            javax.net.ssl.SSLContext sc = javax.net.ssl.SSLContext.getInstance("TLS");
+            javax.net.ssl.KeyManager[] kms = allKeyManagers.isEmpty()
+                    ? null
+                    : allKeyManagers.toArray(new javax.net.ssl.KeyManager[0]);
+            sc.init(kms, tmf.getTrustManagers(), new java.security.SecureRandom());
+            return sc;
+        } catch (Exception ex) {
+            System.err.println("Failed to build SSLContext: " + ex.getMessage());
+            return null;
+        }
+    }
+
+    private static java.security.PrivateKey loadPemPrivateKey(String path) throws Exception {
+        String pem = java.nio.file.Files.readString(java.nio.file.Path.of(path));
+        String base64 = pem.replaceAll("-----[A-Z ]+-----", "").replaceAll("\\s", "");
+        byte[] der = java.util.Base64.getDecoder().decode(base64);
+        java.security.spec.PKCS8EncodedKeySpec spec = new java.security.spec.PKCS8EncodedKeySpec(der);
+        for (String algo : new String[]{"RSA", "EC", "Ed25519"}) {
+            try {
+                return java.security.KeyFactory.getInstance(algo).generatePrivate(spec);
+            } catch (java.security.spec.InvalidKeySpecException ignored) {
+            }
+        }
+        throw new java.security.spec.InvalidKeySpecException("Unsupported private key type in " + path);
     }
 
     private void dispose() {

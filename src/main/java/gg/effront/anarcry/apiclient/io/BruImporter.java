@@ -16,6 +16,7 @@ import gg.effront.anarcry.apiclient.model.ParamsDef;
 import gg.effront.anarcry.apiclient.model.RequestItem;
 import gg.effront.anarcry.apiclient.model.RequestMeta;
 import gg.effront.anarcry.apiclient.model.RootConfig;
+import gg.effront.anarcry.apiclient.model.ScriptDef;
 import gg.effront.anarcry.apiclient.model.VarsDef;
 
 import java.io.IOException;
@@ -29,13 +30,76 @@ import java.util.regex.Pattern;
 
 public class BruImporter {
 
-    private static final Pattern BLOCK_PATTERN = Pattern.compile("(\\S[^{\\n]*)\\s*\\{([^}]*)}", Pattern.DOTALL);
-
     private static final Pattern KV_PATTERN = Pattern.compile("^\\s*(~?)\\s*([^:]+):\\s*(.*)$", Pattern.MULTILINE);
+
+    private record Block(String tag, String content) {
+    }
+
+    private static List<Block> parseBlocks(String text) {
+        List<Block> blocks = new ArrayList<>();
+        int len = text.length();
+        int i = 0;
+        while (i < len) {
+            // Skip whitespace / blank lines between blocks
+            while (i < len && Character.isWhitespace(text.charAt(i))) {
+                i++;
+            }
+            if (i >= len) {
+                break;
+            }
+
+            // Read the tag -- everything up to the opening '{'
+            int tagStart = i;
+            while (i < len && text.charAt(i) != '{') {
+                i++;
+            }
+            if (i >= len) {
+                break;
+            }
+            String tag = text.substring(tagStart, i).trim();
+            if (tag.isEmpty()) {
+                i++;
+                continue;
+            }
+
+            // Skip the opening '{'
+            i++;
+            int depth = 1;
+            int contentStart = i;
+
+            // Walk forward counting braces to find the matching '}'
+            while (i < len && depth > 0) {
+                char c = text.charAt(i);
+                if (c == '{') {
+                    depth++;
+                } else if (c == '}') {
+                    depth--;
+                }
+                if (depth > 0) {
+                    i++;
+                }
+            }
+
+            String content = text.substring(contentStart, i).trim();
+            blocks.add(new Block(tag, content));
+
+            // Skip the closing '}'
+            if (i < len) {
+                i++;
+            }
+        }
+        return blocks;
+    }
 
     public Collection importDirectory(Path bruDir) throws IOException {
         String name = bruDir.getFileName().toString();
         List<CollectionItem> items = scanDir(bruDir);
+
+        RootConfig rootConfig = RootConfig.empty();
+        Path collectionBru = bruDir.resolve("collection.bru");
+        if (Files.isRegularFile(collectionBru)) {
+            rootConfig = parseRootConfig(Files.readString(collectionBru));
+        }
 
         List<Environment> environments = new ArrayList<>();
         Path envDir = bruDir.resolve("environments");
@@ -47,7 +111,7 @@ public class BruImporter {
             }
         }
 
-        return new Collection(null, name, "1", environments, items, RootConfig.empty(), null);
+        return new Collection(null, name, "1", environments, items, rootConfig, null);
     }
 
     public RequestItem importFile(Path bruFile) throws IOException {
@@ -63,9 +127,21 @@ public class BruImporter {
                 if (Files.isDirectory(entry) && !fileName.equals("environments") && !fileName.startsWith(".")) {
                     List<CollectionItem> children = scanDir(entry);
                     if (!children.isEmpty()) {
-                        items.add(new Folder(null, fileName, children, RootConfig.empty()));
+                        String folderName = fileName;
+                        RootConfig folderRoot = RootConfig.empty();
+                        Path folderBru = entry.resolve("folder.bru");
+                        if (Files.isRegularFile(folderBru)) {
+                            String content = Files.readString(folderBru);
+                            String metaName = parseMetaName(content);
+                            if (metaName != null && !metaName.isEmpty()) {
+                                folderName = metaName;
+                            }
+                            folderRoot = parseRootConfig(content);
+                        }
+                        items.add(new Folder(null, folderName, children, folderRoot));
                     }
-                } else if (fileName.endsWith(".bru")) {
+                } else if (fileName.endsWith(".bru") && !"collection.bru".equals(fileName)
+                        && !"folder.bru".equals(fileName)) {
                     items.add(importFile(entry));
                 }
             }
@@ -86,12 +162,14 @@ public class BruImporter {
         List<VarsDef.VarEntry> postVars = new ArrayList<>();
         List<Assertion> assertions = new ArrayList<>();
         String docs = "";
+        String preRequestScript = "";
+        String postResponseScript = "";
+        String testsScript = "";
         int seq = 0;
 
-        Matcher blockMatcher = BLOCK_PATTERN.matcher(content);
-        while (blockMatcher.find()) {
-            String tag = blockMatcher.group(1).trim();
-            String blockContent = blockMatcher.group(2).trim();
+        for (Block block : parseBlocks(content)) {
+            String tag = block.tag();
+            String blockContent = block.content();
 
             switch (tag) {
                 case "meta" -> {
@@ -114,6 +192,8 @@ public class BruImporter {
                     for (var kv : parseKv(blockContent)) {
                         if ("url".equals(kv.key())) {
                             url = kv.value();
+                        } else if ("auth".equals(kv.key()) && "inherit".equals(kv.value())) {
+                            auth = new AuthConfig.Inherit();
                         }
                     }
                 }
@@ -194,6 +274,9 @@ public class BruImporter {
                         }
                     }
                 }
+                case "script:pre-request" -> preRequestScript = blockContent;
+                case "script:post-response" -> postResponseScript = blockContent;
+                case "tests" -> testsScript = blockContent;
                 case "docs" -> docs = blockContent;
                 default -> {
                 }
@@ -204,8 +287,9 @@ public class BruImporter {
                 body, null);
         VarsDef vars = new VarsDef(preVars, postVars);
         RequestMeta meta = RequestMeta.http(requestName, seq);
+        ScriptDef scripts = new ScriptDef(preRequestScript, postResponseScript, testsScript);
 
-        return new RequestItem(null, requestName, meta, request, vars, assertions, docs);
+        return new RequestItem(null, requestName, meta, request, vars, assertions, docs, scripts);
     }
 
     private Environment parseEnvironment(Path file) throws IOException {
@@ -213,10 +297,9 @@ public class BruImporter {
         String name = file.getFileName().toString().replace(".bru", "");
         List<EnvVariable> variables = new ArrayList<>();
 
-        Matcher blockMatcher = BLOCK_PATTERN.matcher(content);
-        while (blockMatcher.find()) {
-            String tag = blockMatcher.group(1).trim();
-            String blockContent = blockMatcher.group(2).trim();
+        for (Block block : parseBlocks(content)) {
+            String tag = block.tag();
+            String blockContent = block.content();
             if ("vars".equals(tag) || "vars:secret".equals(tag)) {
                 boolean secret = tag.contains("secret");
                 for (var kv : parseKv(blockContent)) {
@@ -225,6 +308,77 @@ public class BruImporter {
             }
         }
         return new Environment(null, name, null, variables, null);
+    }
+
+    private RootConfig parseRootConfig(String content) {
+        List<Header> headers = new ArrayList<>();
+        String authMode = null;
+        AuthConfig bearerAuth = null;
+        AuthConfig basicAuth = null;
+
+        for (Block block : parseBlocks(content)) {
+            switch (block.tag()) {
+                case "auth" -> {
+                    for (var kv : parseKv(block.content())) {
+                        if ("mode".equals(kv.key())) {
+                            authMode = kv.value();
+                        }
+                    }
+                }
+                case "auth:bearer" -> {
+                    for (var kv : parseKv(block.content())) {
+                        if ("token".equals(kv.key())) {
+                            bearerAuth = new AuthConfig.Bearer(kv.value());
+                        }
+                    }
+                }
+                case "auth:basic" -> {
+                    String user = "";
+                    String pass = "";
+                    for (var kv : parseKv(block.content())) {
+                        if ("username".equals(kv.key())) {
+                            user = kv.value();
+                        }
+                        if ("password".equals(kv.key())) {
+                            pass = kv.value();
+                        }
+                    }
+                    basicAuth = new AuthConfig.Basic(user, pass);
+                }
+                case "headers" -> {
+                    for (var kv : parseKv(block.content())) {
+                        headers.add(new Header(kv.key(), kv.value(), kv.enabled()));
+                    }
+                }
+                default -> {
+                }
+            }
+        }
+
+        AuthConfig auth = new AuthConfig.None();
+        if (authMode != null) {
+            auth = switch (authMode) {
+                case "bearer" -> bearerAuth != null ? bearerAuth : new AuthConfig.None();
+                case "basic" -> basicAuth != null ? basicAuth : new AuthConfig.None();
+                case "inherit" -> new AuthConfig.Inherit();
+                default -> new AuthConfig.None();
+            };
+        }
+
+        return new RootConfig(headers, auth, List.of());
+    }
+
+    private String parseMetaName(String content) {
+        for (Block block : parseBlocks(content)) {
+            if ("meta".equals(block.tag())) {
+                for (var kv : parseKv(block.content())) {
+                    if ("name".equals(kv.key())) {
+                        return kv.value();
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private Assertion parseAssertion(String lhs, String rhs, boolean enabled) {

@@ -58,10 +58,21 @@ public class LogPane extends JPanel {
     private static final Color COLOR_GREEN = new Color(0x3F, 0xB9, 0x50);
     private static final Color COLOR_BLUE = new Color(0x58, 0xA6, 0xFF);
     private static final Color COLOR_GRAY = new Color(0x8B, 0x94, 0x9E);
-    private static final Color BG_LOG = new Color(0x2B, 0x2B, 0x2B);
-    private static final Color BTN_BG = new Color(0x3C, 0x3C, 0x3C);
-    private static final Color BTN_BG_ON = new Color(0x2A, 0x4A, 0x2A);
-    private static final Color BTN_BORDER = new Color(0x55, 0x55, 0x55);
+    private static Color bgLog() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.bgDark();
+    }
+
+    private static Color btnBg() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.buttonBg();
+    }
+
+    private static Color btnBgOn() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.buttonBgOn();
+    }
+
+    private static Color btnBorder() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.border();
+    }
 
     private final JScrollPane scrollPane;
     private final JTextPane textPane;
@@ -75,8 +86,8 @@ public class LogPane extends JPanel {
         textPane.setEditable(false);
         ((DefaultCaret) textPane.getCaret()).setUpdatePolicy(DefaultCaret.NEVER_UPDATE);
         textPane.setFont(resolveMonoFont());
-        textPane.setBackground(BG_LOG);
-        textPane.setForeground(new Color(0xCE, 0xCE, 0xCE));
+        textPane.setBackground(bgLog());
+        textPane.setForeground(gg.effront.anarcry.gui.theme.AnarCryLaf.fg());
 
         scrollPane = new JScrollPane(textPane);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
@@ -89,6 +100,13 @@ public class LogPane extends JPanel {
         setComponentZOrder(debugToggle, 0);
 
         PrivacyFilter.addListener(() -> SwingUtilities.invokeLater(this::rerender));
+        gg.effront.anarcry.gui.theme.AnarCryLaf.addThemeListener(() -> {
+            textPane.setBackground(bgLog());
+            textPane.setForeground(gg.effront.anarcry.gui.theme.AnarCryLaf.fg());
+            debugToggle.setBackground(debugToggle.isSelected() ? btnBgOn() : btnBg());
+            debugToggle.setBorder(BorderFactory.createLineBorder(btnBorder()));
+            rerender();
+        });
         installContextMenu();
     }
 
@@ -113,10 +131,10 @@ public class LogPane extends JPanel {
         btn.setPreferredSize(new Dimension(BTN_SIZE, BTN_SIZE));
         btn.setFocusPainted(false);
         btn.setOpaque(true);
-        btn.setBackground(BTN_BG);
-        btn.setBorder(BorderFactory.createLineBorder(BTN_BORDER));
+        btn.setBackground(btnBg());
+        btn.setBorder(BorderFactory.createLineBorder(btnBorder()));
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        btn.addChangeListener(e -> btn.setBackground(btn.isSelected() ? BTN_BG_ON : BTN_BG));
+        btn.addChangeListener(e -> btn.setBackground(btn.isSelected() ? btnBgOn() : btnBg()));
         return btn;
     }
 
@@ -147,7 +165,7 @@ public class LogPane extends JPanel {
                 g2.fillRoundRect(cx - bw, bTop, bw * 2, bH, 4, 4);
 
                 // Wing seam
-                g2.setColor(c != null && c.getBackground() != null ? c.getBackground() : BTN_BG);
+                g2.setColor(c != null && c.getBackground() != null ? c.getBackground() : btnBg());
                 g2.setStroke(new BasicStroke(1.0f));
                 g2.drawLine(cx, bTop + 1, cx, bTop + bH - 2);
 

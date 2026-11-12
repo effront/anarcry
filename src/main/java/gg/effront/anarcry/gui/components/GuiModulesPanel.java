@@ -38,7 +38,9 @@ public class GuiModulesPanel extends JPanel {
     private static final Color COLOR_CRYPTO = new Color(0x53, 0x84, 0xB2);
     private static final Color COLOR_WEB = new Color(0xFF, 0x9E, 0x7A);
     private static final Color ACCENT = new Color(0xD8, 0x66, 0x33);
-    private static final Color SECTION_LINE = new Color(0x49, 0x49, 0x49);
+    private static Color sectionLine() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.sectionLine();
+    }
 
     private final Map<String, JCheckBox> moduleChecks = new LinkedHashMap<>();
 
@@ -70,7 +72,7 @@ public class GuiModulesPanel extends JPanel {
         super(new BorderLayout());
         setPreferredSize(new Dimension(PREFERRED_WIDTH, 0));
         setMinimumSize(new Dimension(PREFERRED_WIDTH, 0));
-        setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, SECTION_LINE));
+        setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, sectionLine()));
 
         // -- Scrollable module checkboxes (CENTER) --
         JPanel checksPanel = new JPanel();
@@ -209,6 +211,7 @@ public class GuiModulesPanel extends JPanel {
         stopButton = new JButton("Parar");
         stopButton.setEnabled(false);
         stopButton.setPreferredSize(new Dimension(80, 32));
+        stopButton.setFont(stopButton.getFont().deriveFont(Font.BOLD, 13f));
         stopButton.addActionListener(e -> onStop.run());
 
         buttonPanel.add(startButton);
@@ -429,7 +432,7 @@ public class GuiModulesPanel extends JPanel {
 
     private static JSeparator separator() {
         JSeparator sep = new JSeparator(SwingConstants.HORIZONTAL);
-        sep.setForeground(SECTION_LINE);
+        sep.setForeground(sectionLine());
         sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
         sep.setAlignmentX(Component.LEFT_ALIGNMENT);
         return sep;

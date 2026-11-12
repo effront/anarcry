@@ -63,16 +63,26 @@ public class VariableStore {
         folder.put(key, value);
     }
 
+    private final java.util.Set<String> secretKeys = new java.util.LinkedHashSet<>();
+
     public void loadEnv(Environment environment) {
         env.clear();
+        secretKeys.clear();
         if (environment == null || environment.variables() == null) {
             return;
         }
         for (EnvVariable v : environment.variables()) {
             if (v.enabled()) {
                 env.put(v.name(), v.value());
+                if (v.secret()) {
+                    secretKeys.add(v.name());
+                }
             }
         }
+    }
+
+    public boolean isSecret(String key) {
+        return secretKeys.contains(key);
     }
 
     public void loadCollection(RootConfig root) {
@@ -113,6 +123,22 @@ public class VariableStore {
 
     public Map<String, String> runtimeVars() {
         return Collections.unmodifiableMap(runtime);
+    }
+
+    public Map<String, String> requestVars() {
+        return Collections.unmodifiableMap(request);
+    }
+
+    public Map<String, String> folderVars() {
+        return Collections.unmodifiableMap(folder);
+    }
+
+    public Map<String, String> envVars() {
+        return Collections.unmodifiableMap(env);
+    }
+
+    public Map<String, String> collectionVars() {
+        return Collections.unmodifiableMap(collection);
     }
 
     private Map<String, String> processEnv() {

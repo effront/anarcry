@@ -44,14 +44,15 @@ public class GlobalSearchDialog extends JDialog {
         setLocationRelativeTo(parent);
 
         JPanel root = new JPanel(new BorderLayout());
-        root.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(0x55, 0x55, 0x55)),
+        root.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(gg.effront.anarcry.gui.theme.AnarCryLaf.border()),
                 BorderFactory.createEmptyBorder(8, 8, 8, 8)));
 
         searchField = new JTextField();
         searchField.setFont(searchField.getFont().deriveFont(14f));
         searchField.putClientProperty("JTextField.placeholderText", "Search findings, endpoints, requests...");
         searchField.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(0x55, 0x55, 0x55)),
+                BorderFactory.createMatteBorder(0, 0, 1, 0, gg.effront.anarcry.gui.theme.AnarCryLaf.border()),
                 BorderFactory.createEmptyBorder(6, 6, 6, 6)));
 
         searchField.getDocument().addDocumentListener(new DocumentListener() {
@@ -80,16 +81,14 @@ public class GlobalSearchDialog extends JDialog {
                     dispose();
                 } else if (e.getKeyCode() == KeyEvent.VK_DOWN) {
                     int idx = resultList.getSelectedIndex();
-                    if (idx < listModel.size() - 1) {
-                        resultList.setSelectedIndex(idx + 1);
-                        resultList.ensureIndexIsVisible(idx + 1);
-                    }
+                    int next = (idx + 1) % Math.max(1, listModel.size());
+                    resultList.setSelectedIndex(next);
+                    resultList.ensureIndexIsVisible(next);
                 } else if (e.getKeyCode() == KeyEvent.VK_UP) {
                     int idx = resultList.getSelectedIndex();
-                    if (idx > 0) {
-                        resultList.setSelectedIndex(idx - 1);
-                        resultList.ensureIndexIsVisible(idx - 1);
-                    }
+                    int prev = idx <= 0 ? listModel.size() - 1 : idx - 1;
+                    resultList.setSelectedIndex(prev);
+                    resultList.ensureIndexIsVisible(prev);
                 } else if (e.getKeyCode() == KeyEvent.VK_ENTER) {
                     selectCurrent();
                 }
@@ -103,9 +102,7 @@ public class GlobalSearchDialog extends JDialog {
 
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) {
-                    selectCurrent();
-                }
+                selectCurrent();
             }
         });
 
@@ -113,6 +110,18 @@ public class GlobalSearchDialog extends JDialog {
         root.add(new JScrollPane(resultList), BorderLayout.CENTER);
 
         setContentPane(root);
+
+        addWindowFocusListener(new java.awt.event.WindowFocusListener() {
+
+            @Override
+            public void windowGainedFocus(java.awt.event.WindowEvent e) {
+            }
+
+            @Override
+            public void windowLostFocus(java.awt.event.WindowEvent e) {
+                dispose();
+            }
+        });
     }
 
     public void setFindingsSupplier(Supplier<List<Finding>> supplier) {
@@ -134,8 +143,22 @@ public class GlobalSearchDialog extends JDialog {
     public void showSearch() {
         searchField.setText("");
         listModel.clear();
+        setLocationRelativeTo(getOwner());
         setVisible(true);
-        SwingUtilities.invokeLater(searchField::requestFocusInWindow);
+        SwingUtilities.invokeLater(() -> {
+            searchField.requestFocusInWindow();
+            populateDefaults();
+        });
+    }
+
+    private void populateDefaults() {
+        listModel.clear();
+        addApiRequests("");
+        addFindings("");
+        addSiteMapPaths("");
+        if (!listModel.isEmpty()) {
+            resultList.setSelectedIndex(0);
+        }
     }
 
     private void search() {
@@ -143,42 +166,53 @@ public class GlobalSearchDialog extends JDialog {
         listModel.clear();
 
         if (query.isEmpty()) {
+            populateDefaults();
             return;
         }
 
-        List<Finding> findings = findingsSupplier.get();
-        for (Finding f : findings) {
-            String text = f.title() + " " + f.severity() + " " + f.module();
-            if (text.toLowerCase().contains(query)) {
-                listModel.addElement(new SearchResult(Category.FINDING, f.severity() + " - " + f.title(), f.module()));
-            }
-            if (listModel.size() >= 50) {
-                break;
-            }
-        }
-
-        List<String> paths = siteMapSupplier.get();
-        for (String path : paths) {
-            if (path.toLowerCase().contains(query)) {
-                listModel.addElement(new SearchResult(Category.SITEMAP, path, "SiteMap"));
-            }
-            if (listModel.size() >= 50) {
-                break;
-            }
-        }
-
-        List<String> requests = apiRequestsSupplier.get();
-        for (String req : requests) {
-            if (req.toLowerCase().contains(query)) {
-                listModel.addElement(new SearchResult(Category.API_REQUEST, req, "API Client"));
-            }
-            if (listModel.size() >= 50) {
-                break;
-            }
-        }
+        addApiRequests(query);
+        addFindings(query);
+        addSiteMapPaths(query);
 
         if (!listModel.isEmpty()) {
             resultList.setSelectedIndex(0);
+        }
+    }
+
+    private void addFindings(String query) {
+        List<Finding> findings = findingsSupplier.get();
+        for (Finding f : findings) {
+            if (listModel.size() >= 50) {
+                break;
+            }
+            String text = (f.title() + " " + f.severity() + " " + f.module() + " " + f.endpoint()).toLowerCase();
+            if (query.isEmpty() || text.contains(query)) {
+                listModel.addElement(new SearchResult(Category.FINDING, f.severity() + " - " + f.title(), f.module()));
+            }
+        }
+    }
+
+    private void addSiteMapPaths(String query) {
+        List<String> paths = siteMapSupplier.get();
+        for (String path : paths) {
+            if (listModel.size() >= 50) {
+                break;
+            }
+            if (query.isEmpty() || path.toLowerCase().contains(query)) {
+                listModel.addElement(new SearchResult(Category.SITEMAP, path, "SiteMap"));
+            }
+        }
+    }
+
+    private void addApiRequests(String query) {
+        List<String> requests = apiRequestsSupplier.get();
+        for (String req : requests) {
+            if (listModel.size() >= 50) {
+                break;
+            }
+            if (query.isEmpty() || req.toLowerCase().contains(query)) {
+                listModel.addElement(new SearchResult(Category.API_REQUEST, req, "API Client"));
+            }
         }
     }
 
@@ -186,8 +220,8 @@ public class GlobalSearchDialog extends JDialog {
         SearchResult selected = resultList.getSelectedValue();
         if (selected != null && onSelect != null) {
             onSelect.accept(selected);
+            dispose();
         }
-        dispose();
     }
 
     public enum Category {

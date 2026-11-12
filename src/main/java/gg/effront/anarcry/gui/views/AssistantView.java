@@ -49,12 +49,31 @@ import javax.swing.text.StyledDocument;
 
 public class AssistantView extends JPanel {
 
-    private static final Color DARK_BG = new Color(0x1E, 0x1E, 0x2E);
+    private static Color darkBg() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.isDark()
+                ? new Color(0x1E, 0x1E, 0x2E)
+                : new Color(0xF5, 0xF5, 0xF5);
+    }
+
     private static final Color USER_COLOR = new Color(0x4E, 0xC9, 0xB0);
-    private static final Color ASSISTANT_COLOR = new Color(0xD4, 0xD4, 0xD4);
+
+    private static Color assistantColor() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.isDark()
+                ? new Color(0xD4, 0xD4, 0xD4)
+                : new Color(0x2A, 0x2A, 0x2A);
+    }
+
     private static final Color SYSTEM_COLOR = new Color(0xE5, 0xC0, 0x7B);
-    private static final Color INPUT_BG = new Color(0x2D, 0x2D, 0x3D);
-    private static final Color LABEL_COLOR = new Color(0x88, 0x88, 0x99);
+
+    private static Color inputBg() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.isDark() ? new Color(0x2D, 0x2D, 0x3D) : Color.WHITE;
+    }
+
+    private static Color labelColor() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.isDark()
+                ? new Color(0x88, 0x88, 0x99)
+                : new Color(0x66, 0x66, 0x77);
+    }
     private static final Font CHAT_FONT = new Font(Font.MONOSPACED, Font.PLAIN, 13);
     private static final Font INPUT_FONT = new Font(Font.MONOSPACED, Font.PLAIN, 14);
 
@@ -84,11 +103,11 @@ public class AssistantView extends JPanel {
 
     public AssistantView() {
         super(new BorderLayout(0, 4));
-        setBackground(DARK_BG);
+        setBackground(darkBg());
 
         providerCombo = new JComboBox<>();
-        providerCombo.setBackground(INPUT_BG);
-        providerCombo.setForeground(ASSISTANT_COLOR);
+        providerCombo.setBackground(inputBg());
+        providerCombo.setForeground(assistantColor());
         providerCombo.setFont(CHAT_FONT);
         providerCombo.setPreferredSize(new Dimension(140, 26));
         providerCombo.addItemListener(e -> {
@@ -99,12 +118,12 @@ public class AssistantView extends JPanel {
 
         modelCombo = new JComboBox<>();
         modelCombo.setEditable(true);
-        modelCombo.setBackground(INPUT_BG);
-        modelCombo.setForeground(ASSISTANT_COLOR);
+        modelCombo.setBackground(inputBg());
+        modelCombo.setForeground(assistantColor());
         modelCombo.setFont(CHAT_FONT);
         modelCombo.setPreferredSize(new Dimension(250, 26));
-        modelCombo.getEditor().getEditorComponent().setBackground(INPUT_BG);
-        modelCombo.getEditor().getEditorComponent().setForeground(ASSISTANT_COLOR);
+        modelCombo.getEditor().getEditorComponent().setBackground(inputBg());
+        modelCombo.getEditor().getEditorComponent().setForeground(assistantColor());
         modelCombo.addItemListener(e -> {
             if (!suppressComboEvents && e.getStateChange() == ItemEvent.SELECTED) {
                 onModelChanged();
@@ -112,15 +131,15 @@ public class AssistantView extends JPanel {
         });
 
         JLabel providerLabel = new JLabel(" Provider:");
-        providerLabel.setForeground(LABEL_COLOR);
+        providerLabel.setForeground(labelColor());
         providerLabel.setFont(CHAT_FONT);
 
         JLabel modelLabel = new JLabel("  Model:");
-        modelLabel.setForeground(LABEL_COLOR);
+        modelLabel.setForeground(labelColor());
         modelLabel.setFont(CHAT_FONT);
 
         JPanel selectorBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 4));
-        selectorBar.setBackground(DARK_BG);
+        selectorBar.setBackground(darkBg());
         selectorBar.add(providerLabel);
         selectorBar.add(providerCombo);
         selectorBar.add(modelLabel);
@@ -128,7 +147,7 @@ public class AssistantView extends JPanel {
 
         chatPane = new JTextPane();
         chatPane.setEditable(false);
-        chatPane.setBackground(DARK_BG);
+        chatPane.setBackground(darkBg());
         chatPane.setFont(CHAT_FONT);
         initStyles();
 
@@ -136,27 +155,27 @@ public class AssistantView extends JPanel {
         scrollPane.setBorder(null);
 
         JPanel centerPanel = new JPanel(new BorderLayout());
-        centerPanel.setBackground(DARK_BG);
+        centerPanel.setBackground(darkBg());
         centerPanel.add(selectorBar, BorderLayout.NORTH);
         centerPanel.add(scrollPane, BorderLayout.CENTER);
         add(centerPanel, BorderLayout.CENTER);
 
         JPanel bottomPanel = new JPanel(new BorderLayout(4, 0));
-        bottomPanel.setBackground(DARK_BG);
+        bottomPanel.setBackground(darkBg());
 
         JLabel hintLabel = new JLabel(" /findings /explain /remediate /plan /kb /report /clear");
-        hintLabel.setForeground(LABEL_COLOR);
+        hintLabel.setForeground(labelColor());
         hintLabel.setFont(CHAT_FONT);
 
         inputField = new JTextField();
-        inputField.setBackground(INPUT_BG);
-        inputField.setForeground(ASSISTANT_COLOR);
-        inputField.setCaretColor(ASSISTANT_COLOR);
+        inputField.setBackground(inputBg());
+        inputField.setForeground(assistantColor());
+        inputField.setCaretColor(assistantColor());
         inputField.setFont(INPUT_FONT);
         inputField.setPreferredSize(new Dimension(0, 38));
-        inputField.setBorder(
-                BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(0x44, 0x44, 0x55)),
-                        BorderFactory.createEmptyBorder(8, 8, 8, 8)));
+        inputField.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(gg.effront.anarcry.gui.theme.AnarCryLaf.border()),
+                BorderFactory.createEmptyBorder(8, 8, 8, 8)));
 
         inputField.addKeyListener(new KeyAdapter() {
             @Override
@@ -172,16 +191,16 @@ public class AssistantView extends JPanel {
         sendBtn.addActionListener(e -> handleSubmit());
 
         usageLabel = new JLabel("");
-        usageLabel.setForeground(LABEL_COLOR);
+        usageLabel.setForeground(labelColor());
         usageLabel.setFont(CHAT_FONT);
 
         JPanel inputRow = new JPanel(new BorderLayout(4, 0));
-        inputRow.setBackground(DARK_BG);
+        inputRow.setBackground(darkBg());
         inputRow.add(inputField, BorderLayout.CENTER);
         inputRow.add(sendBtn, BorderLayout.EAST);
 
         JPanel usageRow = new JPanel(new BorderLayout());
-        usageRow.setBackground(DARK_BG);
+        usageRow.setBackground(darkBg());
         usageRow.add(hintLabel, BorderLayout.WEST);
         usageRow.add(usageLabel, BorderLayout.EAST);
 
@@ -189,6 +208,25 @@ public class AssistantView extends JPanel {
         bottomPanel.add(inputRow, BorderLayout.SOUTH);
 
         add(bottomPanel, BorderLayout.SOUTH);
+
+        gg.effront.anarcry.gui.theme.AnarCryLaf.addThemeListener(this::onThemeChanged);
+    }
+
+    private void onThemeChanged() {
+        setBackground(darkBg());
+        chatPane.setBackground(darkBg());
+        inputField.setBackground(inputBg());
+        inputField.setForeground(assistantColor());
+        inputField.setCaretColor(assistantColor());
+        providerCombo.setBackground(inputBg());
+        providerCombo.setForeground(assistantColor());
+        modelCombo.setBackground(inputBg());
+        modelCombo.setForeground(assistantColor());
+        modelCombo.getEditor().getEditorComponent().setBackground(inputBg());
+        modelCombo.getEditor().getEditorComponent().setForeground(assistantColor());
+        usageLabel.setForeground(labelColor());
+        initStyles();
+        repaint();
     }
 
     public void configure(Map<String, String> envMap) {
@@ -451,7 +489,7 @@ public class AssistantView extends JPanel {
         StyleConstants.setFontSize(userStyle, 13);
 
         Style assistantStyle = doc.addStyle("assistant", null);
-        StyleConstants.setForeground(assistantStyle, ASSISTANT_COLOR);
+        StyleConstants.setForeground(assistantStyle, assistantColor());
         StyleConstants.setFontFamily(assistantStyle, Font.MONOSPACED);
         StyleConstants.setFontSize(assistantStyle, 13);
 
