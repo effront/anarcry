@@ -60,11 +60,14 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 import javax.swing.BorderFactory;
 import javax.swing.DropMode;
 import javax.swing.JButton;
 import javax.swing.DefaultListModel;
+import javax.swing.ActionMap;
+import javax.swing.InputMap;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
@@ -104,7 +107,7 @@ import org.fife.ui.rtextarea.RTextScrollPane;
 
 public class ApiClientView extends JPanel {
 
-    private static final int SIDEBAR_WIDTH = 250;
+    private static final int SIDEBAR_WIDTH = 320;
     private static final int REQUEST_TIMEOUT_SECONDS = 30;
     private static final int MAX_OPEN_TABS = 10;
 
@@ -113,8 +116,29 @@ public class ApiClientView extends JPanel {
     private static final Color METHOD_PUT = new Color(0x58, 0xA6, 0xFF);
     private static final Color METHOD_DELETE = new Color(0xF8, 0x51, 0x49);
     private static final Color METHOD_PATCH = new Color(0xBB, 0x6B, 0xD9);
-    private static final Color TAB_ACTIVE_BG = new Color(0x3A, 0x3A, 0x4E);
-    private static final Color TAB_INACTIVE_BG = new Color(0x24, 0x24, 0x34);
+    private static Color tabActiveBg() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.isDark()
+                ? new Color(0x3A, 0x3A, 0x4E)
+                : new Color(0xDE, 0xDE, 0xE8);
+    }
+
+    private static Color tabInactiveBg() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.isDark()
+                ? new Color(0x24, 0x24, 0x34)
+                : new Color(0xEA, 0xEA, 0xEA);
+    }
+
+    private static Color panelBorder() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.isDark()
+                ? new Color(0x44, 0x44, 0x4F)
+                : new Color(0xC0, 0xC0, 0xC0);
+    }
+
+    private static Color badgeBg() {
+        return gg.effront.anarcry.gui.theme.AnarCryLaf.isDark()
+                ? new Color(0x2A, 0x2A, 0x3A)
+                : new Color(0xE0, 0xE0, 0xEC);
+    }
 
     private JTree collectionTree;
     private DefaultMutableTreeNode treeRoot;
@@ -130,7 +154,8 @@ public class ApiClientView extends JPanel {
     private KvTableEditor formBodyEditor;
     private CardLayout bodyCardLayout;
     private JPanel bodyCardPanel;
-    private KvTableEditor paramsEditor;
+    private KvTableEditor queryParamsEditor;
+    private KvTableEditor pathParamsEditor;
     private JComboBox<String> authTypeCombo;
     private CardLayout authCardLayout;
     private JPanel authCards;
@@ -151,9 +176,15 @@ public class ApiClientView extends JPanel {
     private JCheckBox settingsFollowRedirects;
     private JSpinner settingsTimeout;
     private JCheckBox settingsEncodeUrl;
-    private JLabel responseStatus;
+    private JLabel responseStatusLabel;
+    private JLabel responseTimeLabel;
+    private JLabel responseSizeLabel;
     private RSyntaxTextArea responseBody;
+    private JTabbedPane requestEditorTabs;
     private JTabbedPane responseTabPane;
+    private JComboBox<String> responseFormatCombo;
+    private CardLayout rightCardLayout;
+    private JPanel rightCardPanel;
     private JTextArea responseHeaders;
     private JTextArea assertionsResultArea;
     private DefaultTableModel cookiesTableModel;
@@ -189,33 +220,75 @@ public class ApiClientView extends JPanel {
     private RSyntaxTextArea postResponseScriptArea;
     private RSyntaxTextArea testsScriptArea;
     private JTextArea scriptConsoleArea;
-    private JCheckBox proxyEnabled;
-    private JComboBox<String> proxyProtocolCombo;
-    private JTextField proxyHost;
-    private JSpinner proxyPort;
-    private JTextField proxyUser;
-    private JPasswordField proxyPass;
+    private Consumer<Boolean> proxyStatusCallback;
+    private java.net.ProxySelector currentProxy;
+    private javax.net.ssl.SSLContext currentSslContext;
 
     private Collection currentCollection;
     private Path collectionPath;
     private RequestItem activeRequest;
     private final List<RequestItem> openRequests = new ArrayList<>();
+    private final java.util.Map<String, RequestItem> tabStateCache = new java.util.HashMap<>();
+    private final java.util.Map<String, RequestResult> tabResponseCache = new java.util.HashMap<>();
     private final java.net.CookieManager cookieManager;
-    private final HttpClient httpClient;
+    private HttpClient httpClient;
     private final List<String> runLog = new ArrayList<>();
     private RunContext sessionContext;
     private DefaultListModel<RequestResult> historyModel;
     private JList<RequestResult> historyList;
 
+    public void setProxyStatusCallback(Consumer<Boolean> callback) {
+        this.proxyStatusCallback = callback;
+    }
+
+    public List<String> getRequestNames() {
+        if (currentCollection == null) {
+            return List.of();
+        }
+        List<String> names = new ArrayList<>();
+        collectRequestNames(currentCollection.items(), names);
+        return names;
+    }
+
+    private void collectRequestNames(List<CollectionItem> items, List<String> out) {
+        for (CollectionItem item : items) {
+            if (item instanceof RequestItem ri) {
+                out.add(ri.request().method() + " " + ri.name() + " - " + ri.request().url());
+            } else if (item instanceof Folder f) {
+                collectRequestNames(f.items(), out);
+            }
+        }
+    }
+
     public ApiClientView() {
         super(new BorderLayout());
         cookieManager = new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL);
-        httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).cookieHandler(cookieManager)
-                .connectTimeout(Duration.ofSeconds(REQUEST_TIMEOUT_SECONDS)).build();
+        httpClient = buildHttpClient();
 
         JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildSidebar(), buildRightPanel());
         mainSplit.setDividerLocation(SIDEBAR_WIDTH);
         add(mainSplit, BorderLayout.CENTER);
+    }
+
+    private HttpClient buildHttpClient() {
+        HttpClient.Builder builder = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL)
+                .cookieHandler(cookieManager).connectTimeout(Duration.ofSeconds(REQUEST_TIMEOUT_SECONDS));
+        if (currentProxy != null) {
+            builder.proxy(currentProxy);
+        }
+        if (currentSslContext != null) {
+            builder.sslContext(currentSslContext);
+        }
+        return builder.build();
+    }
+
+    public void setNetworkConfig(java.net.ProxySelector proxy, javax.net.ssl.SSLContext sslCtx, boolean proxyActive) {
+        this.currentProxy = proxy;
+        this.currentSslContext = sslCtx;
+        httpClient = buildHttpClient();
+        if (proxyStatusCallback != null) {
+            proxyStatusCallback.accept(proxyActive);
+        }
     }
 
     // ==================== SIDEBAR ====================
@@ -250,7 +323,7 @@ public class ApiClientView extends JPanel {
         topBar.add(sidebarSearchField, BorderLayout.CENTER);
 
         JPanel sortBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 1));
-        sortBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(0x44, 0x44, 0x44)));
+        sortBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, panelBorder()));
         JButton sortAz = new JButton("A-Z");
         sortAz.setFont(sortAz.getFont().deriveFont(10f));
         sortAz.setMargin(new java.awt.Insets(1, 4, 1, 4));
@@ -298,15 +371,21 @@ public class ApiClientView extends JPanel {
 
         collectionTree.setCellRenderer(new javax.swing.tree.TreeCellRenderer() {
 
-            private final JPanel panel = new JPanel(new BorderLayout(4, 0));
+            private final JPanel panel = new JPanel(new BorderLayout(6, 0));
             private final JLabel methodLabel = new JLabel();
             private final JLabel nameLabel = new JLabel();
             private final DefaultTreeCellRenderer fallback = new DefaultTreeCellRenderer();
 
             {
-                methodLabel.setFont(new Font(Font.MONOSPACED, Font.BOLD, 12));
+                methodLabel.setFont(new Font(Font.MONOSPACED, Font.BOLD, 10));
+                methodLabel.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+                methodLabel.setPreferredSize(new Dimension(52, 16));
+                methodLabel.setMinimumSize(new Dimension(52, 16));
+                methodLabel.setMaximumSize(new Dimension(52, 16));
+                methodLabel.setOpaque(true);
                 nameLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
                 panel.setOpaque(true);
+                panel.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 0));
                 panel.add(methodLabel, BorderLayout.WEST);
                 panel.add(nameLabel, BorderLayout.CENTER);
             }
@@ -317,9 +396,11 @@ public class ApiClientView extends JPanel {
                 if (value instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof RequestItem ri) {
                     String method = ri.request().method();
                     methodLabel.setText(method);
-                    methodLabel.setForeground(methodColor(method));
-                    nameLabel.setText(ri.name());
-                    Color bg = sel ? new Color(0x3A, 0x3A, 0x4E) : tree.getBackground();
+                    Color mc = methodColor(method);
+                    methodLabel.setForeground(mc);
+                    methodLabel.setBackground(new Color(mc.getRed() / 6, mc.getGreen() / 6, mc.getBlue() / 6));
+                    nameLabel.setText(" " + ri.name());
+                    Color bg = sel ? tabActiveBg() : tree.getBackground();
                     Color fg = sel ? Color.WHITE : tree.getForeground();
                     panel.setBackground(bg);
                     nameLabel.setForeground(fg);
@@ -345,10 +426,13 @@ public class ApiClientView extends JPanel {
                 if (value instanceof RequestResult rr) {
                     String method = rr.interpolatedRequest() != null ? rr.interpolatedRequest().method() : "?";
                     int status = rr.response() != null ? rr.response().status() : 0;
+                    long timeMs = rr.response() != null ? rr.response().responseTimeMs() : 0;
                     String url = rr.interpolatedRequest() != null ? rr.interpolatedRequest().url() : "";
-                    setText(method + " " + status + " " + url);
+                    String timeStr = timeMs > 0 ? " " + formatDuration(timeMs) : "";
+                    setText(method + " " + status + timeStr + " " + url);
                     setForeground(statusColor(status));
                 }
+                setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
                 return this;
             }
         });
@@ -529,12 +613,116 @@ public class ApiClientView extends JPanel {
 
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, buildRequestEditor(), buildResponseViewer());
         split.setResizeWeight(0.45);
-        right.add(split, BorderLayout.CENTER);
 
-        KeyStroke ctrlEnter = KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.CTRL_DOWN_MASK);
-        right.registerKeyboardAction(e -> sendRequest(), ctrlEnter, JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+        rightCardLayout = new CardLayout();
+        rightCardPanel = new JPanel(rightCardLayout);
+        rightCardPanel.add(buildEmptyStatePanel(), "empty");
+        rightCardPanel.add(split, "editor");
+        rightCardLayout.show(rightCardPanel, "empty");
+
+        right.add(rightCardPanel, BorderLayout.CENTER);
+
+        InputMap im = right.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+        ActionMap am = right.getActionMap();
+
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.CTRL_DOWN_MASK), "send");
+        am.put("send", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                sendRequest();
+            }
+        });
+
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK), "newRequest");
+        am.put("newRequest", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                addNewRequest();
+            }
+        });
+
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_E, InputEvent.CTRL_DOWN_MASK), "editEnv");
+        am.put("editEnv", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                openEnvEditor();
+            }
+        });
+
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_L, InputEvent.CTRL_DOWN_MASK), "focusUrl");
+        am.put("focusUrl", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                urlField.requestFocusInWindow();
+                urlField.selectAll();
+            }
+        });
+
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK), "saveRequest");
+        am.put("saveRequest", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                saveCurrentRequest();
+            }
+        });
 
         return right;
+    }
+
+    private JPanel buildEmptyStatePanel() {
+        JPanel panel = new JPanel(new java.awt.GridBagLayout());
+        java.awt.GridBagConstraints gbc = new java.awt.GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = java.awt.GridBagConstraints.RELATIVE;
+        gbc.anchor = java.awt.GridBagConstraints.CENTER;
+        gbc.insets = new java.awt.Insets(4, 0, 4, 0);
+
+        Color hintColor = new Color(0x6B, 0x73, 0x7C);
+        Color shortcutColor = new Color(0x8B, 0x94, 0x9E);
+        Color accentColor = new Color(0x3F, 0xB9, 0x50, 0x40);
+
+        JLabel titleLabel = new JLabel("Select a request or create a new one");
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.PLAIN, 16f));
+        titleLabel.setForeground(hintColor);
+        gbc.insets = new java.awt.Insets(0, 0, 20, 0);
+        panel.add(titleLabel, gbc);
+
+        gbc.insets = new java.awt.Insets(4, 0, 4, 0);
+        java.util.List<String[]> shortcuts = java.util.List.of(new String[]{"Send Request", "Ctrl+Enter"},
+                new String[]{"New Request", "Ctrl+N"}, new String[]{"Edit Environments", "Ctrl+E"},
+                new String[]{"Global Search", "Ctrl+Shift+F"});
+
+        for (String[] shortcut : shortcuts) {
+            JPanel row = new JPanel(new BorderLayout(0, 0));
+            row.setOpaque(false);
+            row.setPreferredSize(new Dimension(280, 28));
+
+            JLabel actionLabel = new JLabel(shortcut[0]);
+            actionLabel.setForeground(hintColor);
+            actionLabel.setFont(actionLabel.getFont().deriveFont(13f));
+
+            JLabel keyLabel = new JLabel(shortcut[1]);
+            keyLabel.setForeground(shortcutColor);
+            keyLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            keyLabel.setOpaque(true);
+            keyLabel.setBackground(accentColor);
+            keyLabel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(panelBorder(), 1),
+                    BorderFactory.createEmptyBorder(2, 6, 2, 6)));
+            keyLabel.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+
+            row.add(actionLabel, BorderLayout.WEST);
+            row.add(keyLabel, BorderLayout.EAST);
+            panel.add(row, gbc);
+        }
+        return panel;
+    }
+
+    private void showEditorCard() {
+        rightCardLayout.show(rightCardPanel, "editor");
+    }
+
+    private void showEmptyCard() {
+        rightCardLayout.show(rightCardPanel, "empty");
     }
 
     private JPanel buildTopBar() {
@@ -584,6 +772,7 @@ public class ApiClientView extends JPanel {
 
     private JTabbedPane buildRequestEditor() {
         JTabbedPane tabs = new JTabbedPane();
+        requestEditorTabs = tabs;
 
         headersEditor = new KvTableEditor();
         headersEditor.addRow("User-Agent", gg.effront.anarcry.Version.userAgent(), true);
@@ -607,8 +796,31 @@ public class ApiClientView extends JPanel {
         bodyPanel.add(bodyCardPanel, BorderLayout.CENTER);
         tabs.addTab("Body", bodyPanel);
 
-        paramsEditor = new KvTableEditor();
-        tabs.addTab("Params", paramsEditor);
+        JPanel paramsPanel = new JPanel(new BorderLayout(0, 0));
+        JSplitPane paramsSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        paramsSplit.setResizeWeight(0.5);
+        paramsSplit.setBorder(BorderFactory.createEmptyBorder());
+
+        JPanel querySection = new JPanel(new BorderLayout());
+        JLabel queryLabel = new JLabel("  Query");
+        queryLabel.setFont(queryLabel.getFont().deriveFont(java.awt.Font.BOLD));
+        queryLabel.setBorder(BorderFactory.createEmptyBorder(4, 0, 2, 0));
+        querySection.add(queryLabel, BorderLayout.NORTH);
+        queryParamsEditor = new KvTableEditor();
+        querySection.add(queryParamsEditor, BorderLayout.CENTER);
+
+        JPanel pathSection = new JPanel(new BorderLayout());
+        JLabel pathLabel = new JLabel("  Path");
+        pathLabel.setFont(pathLabel.getFont().deriveFont(java.awt.Font.BOLD));
+        pathLabel.setBorder(BorderFactory.createEmptyBorder(4, 0, 2, 0));
+        pathSection.add(pathLabel, BorderLayout.NORTH);
+        pathParamsEditor = new KvTableEditor();
+        pathSection.add(pathParamsEditor, BorderLayout.CENTER);
+
+        paramsSplit.setTopComponent(querySection);
+        paramsSplit.setBottomComponent(pathSection);
+        paramsPanel.add(paramsSplit, BorderLayout.CENTER);
+        tabs.addTab("Params", paramsPanel);
 
         JPanel authPanel = new JPanel(new BorderLayout(4, 4));
         authPanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
@@ -716,37 +928,6 @@ public class ApiClientView extends JPanel {
         timeoutRow.add(settingsTimeout);
         settingsPanel.add(timeoutRow, gbc);
         gbc.gridy++;
-        gbc.gridx = 0;
-        gbc.weightx = 0;
-        gbc.fill = java.awt.GridBagConstraints.NONE;
-        settingsPanel.add(new JLabel("--- Proxy ---"), gbc);
-        gbc.gridy++;
-        proxyEnabled = new JCheckBox("Enable Proxy");
-        settingsPanel.add(proxyEnabled, gbc);
-        gbc.gridy++;
-        JPanel proxyRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        proxyProtocolCombo = new JComboBox<>(new String[]{"http", "https", "socks5"});
-        proxyHost = new JTextField(15);
-        proxyHost.setFont(monoFont());
-        proxyPort = new JSpinner(new SpinnerNumberModel(8080, 1, 65535, 1));
-        proxyRow.add(proxyProtocolCombo);
-        proxyRow.add(new JLabel("://"));
-        proxyRow.add(proxyHost);
-        proxyRow.add(new JLabel(":"));
-        proxyRow.add(proxyPort);
-        settingsPanel.add(proxyRow, gbc);
-        gbc.gridy++;
-        JPanel proxyAuthRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        proxyAuthRow.add(new JLabel("User:"));
-        proxyUser = new JTextField(10);
-        proxyUser.setFont(monoFont());
-        proxyAuthRow.add(proxyUser);
-        proxyAuthRow.add(new JLabel("Pass:"));
-        proxyPass = new JPasswordField(10);
-        proxyPass.setFont(monoFont());
-        proxyAuthRow.add(proxyPass);
-        settingsPanel.add(proxyAuthRow, gbc);
-        gbc.gridy++;
         gbc.weighty = 1.0;
         settingsPanel.add(new JLabel(), gbc);
         tabs.addTab("Settings", settingsPanel);
@@ -794,9 +975,40 @@ public class ApiClientView extends JPanel {
     private JPanel buildResponseViewer() {
         JPanel panel = new JPanel(new BorderLayout());
 
-        JPanel statusBar = new JPanel(new BorderLayout());
-        responseStatus = new JLabel("");
+        JPanel statusBar = new JPanel(new BorderLayout(4, 0));
+        statusBar.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+
+        JPanel badges = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 1));
+        badges.setOpaque(false);
+
+        responseStatusLabel = createBadge("");
+        responseTimeLabel = createBadge("");
+        responseSizeLabel = createBadge("");
+        responseStatusLabel.setVisible(false);
+        responseTimeLabel.setVisible(false);
+        responseSizeLabel.setVisible(false);
+        badges.add(responseStatusLabel);
+        badges.add(responseTimeLabel);
+        badges.add(responseSizeLabel);
+
         JPanel respButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        respButtons.setOpaque(false);
+
+        responseFormatCombo = new JComboBox<>(new String[]{"JSON", "HTML", "XML", "Raw"});
+        responseFormatCombo.setFont(responseFormatCombo.getFont().deriveFont(11f));
+        responseFormatCombo.setPreferredSize(new Dimension(70, 22));
+        responseFormatCombo.addActionListener(e -> {
+            String fmt = (String) responseFormatCombo.getSelectedItem();
+            if (fmt != null) {
+                responseBody.setSyntaxEditingStyle(switch (fmt) {
+                    case "JSON" -> SyntaxConstants.SYNTAX_STYLE_JSON;
+                    case "HTML" -> SyntaxConstants.SYNTAX_STYLE_HTML;
+                    case "XML" -> SyntaxConstants.SYNTAX_STYLE_XML;
+                    default -> SyntaxConstants.SYNTAX_STYLE_NONE;
+                });
+            }
+        });
+
         JButton copyBtn = new JButton("Copy");
         copyBtn.setFont(copyBtn.getFont().deriveFont(11f));
         copyBtn.addActionListener(e -> {
@@ -812,10 +1024,15 @@ public class ApiClientView extends JPanel {
         JButton saveRespBtn = new JButton("Save");
         saveRespBtn.setFont(saveRespBtn.getFont().deriveFont(11f));
         saveRespBtn.addActionListener(e -> saveResponse());
+        JButton clearRespBtn = new JButton("Clear");
+        clearRespBtn.setFont(clearRespBtn.getFont().deriveFont(11f));
+        clearRespBtn.addActionListener(e -> clearResponsePanel());
+        respButtons.add(responseFormatCombo);
         respButtons.add(copyBtn);
         respButtons.add(prettifyBtn);
         respButtons.add(saveRespBtn);
-        statusBar.add(responseStatus, BorderLayout.CENTER);
+        respButtons.add(clearRespBtn);
+        statusBar.add(badges, BorderLayout.CENTER);
         statusBar.add(respButtons, BorderLayout.EAST);
         panel.add(statusBar, BorderLayout.NORTH);
 
@@ -886,7 +1103,9 @@ public class ApiClientView extends JPanel {
     private void saveResponse() {
         String text = responseBody.getText();
         if (text.isBlank()) {
-            responseStatus.setText("  No response to save");
+            responseStatusLabel.setText("No response to save");
+            responseStatusLabel.setForeground(Color.GRAY);
+            responseStatusLabel.setVisible(true);
             return;
         }
         JFileChooser chooser = new JFileChooser();
@@ -900,7 +1119,9 @@ public class ApiClientView extends JPanel {
         if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
             try {
                 java.nio.file.Files.writeString(chooser.getSelectedFile().toPath(), text);
-                responseStatus.setText("  Saved to " + chooser.getSelectedFile().getName());
+                responseStatusLabel.setText("Saved to " + chooser.getSelectedFile().getName());
+                responseStatusLabel.setForeground(METHOD_GET);
+                responseStatusLabel.setVisible(true);
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Save failed: " + ex.getMessage(), "Error",
                         JOptionPane.ERROR_MESSAGE);
@@ -919,16 +1140,21 @@ public class ApiClientView extends JPanel {
         }
         activeRequest = item;
         refreshRequestTabs();
+        showEditorCard();
     }
 
     private void closeRequestTab(RequestItem item) {
         openRequests.remove(item);
+        tabStateCache.remove(item.uid());
+        tabResponseCache.remove(item.uid());
         if (activeRequest == item) {
             activeRequest = openRequests.isEmpty() ? null : openRequests.getLast();
         }
         refreshRequestTabs();
         if (activeRequest != null) {
             loadRequestIntoEditor(activeRequest);
+        } else {
+            showEmptyCard();
         }
     }
 
@@ -1000,22 +1226,37 @@ public class ApiClientView extends JPanel {
 
     private JPanel createRequestTabButton(RequestItem item) {
         String method = item.request().method();
-        String label = method + " " + item.name();
-        if (label.length() > 25) {
-            label = label.substring(0, 22) + "...";
+        String name = item.name();
+        if (name.length() > 20) {
+            name = name.substring(0, 17) + "...";
         }
 
         JPanel tab = new JPanel(new BorderLayout(4, 0));
         tab.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        tab.setBackground(item == activeRequest ? TAB_ACTIVE_BG : TAB_INACTIVE_BG);
-        tab.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(item == activeRequest ? methodColor(method) : TAB_INACTIVE_BG, 1),
-                BorderFactory.createEmptyBorder(2, 6, 2, 2)));
+        boolean isActive = item == activeRequest;
+        tab.setBackground(isActive ? tabActiveBg() : tabInactiveBg());
+        Color mc = methodColor(method);
+        tab.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, isActive ? 2 : 0, 0, mc),
+                BorderFactory.createEmptyBorder(2, 4, 2, 2)));
 
-        JLabel textLabel = new JLabel(label);
-        textLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-        textLabel.setForeground(methodColor(method));
-        tab.add(textLabel, BorderLayout.CENTER);
+        String shortMethod = method.length() > 3 ? method.substring(0, 3) : method;
+        JLabel methodTag = new JLabel(shortMethod);
+        methodTag.setFont(new Font(Font.MONOSPACED, Font.BOLD, 10));
+        methodTag.setForeground(mc);
+        methodTag.setOpaque(true);
+        methodTag.setBackground(new Color(mc.getRed() / 6, mc.getGreen() / 6, mc.getBlue() / 6));
+        methodTag.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        methodTag.setBorder(BorderFactory.createEmptyBorder(1, 3, 1, 3));
+
+        JLabel nameLabel = new JLabel(name);
+        nameLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        nameLabel.setForeground(isActive ? Color.WHITE : new Color(0x8B, 0x94, 0x9E));
+
+        JPanel labelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        labelPanel.setOpaque(false);
+        labelPanel.add(methodTag);
+        labelPanel.add(nameLabel);
+        tab.add(labelPanel, BorderLayout.CENTER);
 
         JLabel closeLabel = new JLabel("×");
         closeLabel.setFont(closeLabel.getFont().deriveFont(14f));
@@ -1051,6 +1292,7 @@ public class ApiClientView extends JPanel {
                 if (SwingUtilities.isMiddleMouseButton(e)) {
                     closeRequestTab(item);
                 } else {
+                    saveEditorState();
                     activeRequest = item;
                     loadRequestIntoEditor(item);
                     refreshRequestTabs();
@@ -1373,11 +1615,32 @@ public class ApiClientView extends JPanel {
         if (node == null || !(node.getUserObject() instanceof RequestItem item)) {
             return;
         }
+        saveEditorState();
         openRequestTab(item);
         loadRequestIntoEditor(item);
     }
 
+    private void saveEditorState() {
+        if (activeRequest == null) {
+            return;
+        }
+        RequestItem snapshot = buildCurrentRequestItem();
+        tabStateCache.put(activeRequest.uid(), snapshot);
+    }
+
+    private RequestItem resolveTabState(RequestItem item) {
+        RequestItem cached = tabStateCache.get(item.uid());
+        return cached != null ? cached : item;
+    }
+
     private void loadRequestIntoEditor(RequestItem item) {
+        item = resolveTabState(item);
+        RequestResult cachedResponse = tabResponseCache.get(item.uid());
+        if (cachedResponse != null) {
+            displayResult(cachedResponse);
+        } else {
+            clearResponsePanel();
+        }
         HttpRequestDef req = item.request();
         methodCombo.setSelectedItem(req.method());
         urlField.setText(req.url());
@@ -1388,16 +1651,18 @@ public class ApiClientView extends JPanel {
         }
         headersEditor.setEntries(headerEntries);
 
-        List<KvTableEditor.Entry> paramEntries = new ArrayList<>();
+        List<KvTableEditor.Entry> queryEntries = new ArrayList<>();
+        List<KvTableEditor.Entry> pathEntries = new ArrayList<>();
         if (req.params() != null) {
             for (Param p : req.params().query()) {
-                paramEntries.add(new KvTableEditor.Entry(p.name(), p.value(), p.enabled()));
+                queryEntries.add(new KvTableEditor.Entry(p.name(), p.value(), p.enabled()));
             }
             for (Param p : req.params().path()) {
-                paramEntries.add(new KvTableEditor.Entry(":" + p.name(), p.value(), p.enabled()));
+                pathEntries.add(new KvTableEditor.Entry(p.name(), p.value(), p.enabled()));
             }
         }
-        paramsEditor.setEntries(paramEntries);
+        queryParamsEditor.setEntries(queryEntries);
+        pathParamsEditor.setEntries(pathEntries);
 
         if (req.body() instanceof BodyConfig.FormUrlEncoded f) {
             List<KvTableEditor.Entry> formEntries = new ArrayList<>();
@@ -1452,6 +1717,70 @@ public class ApiClientView extends JPanel {
             postResponseScriptArea.setText("");
             testsScriptArea.setText("");
         }
+
+        autoSelectEditorTab(req);
+        updateTabBadges(req, item);
+    }
+
+    private static final int TAB_HEADERS = 0;
+    private static final int TAB_BODY = 1;
+    private static final int TAB_PARAMS = 2;
+    private static final int TAB_AUTH = 3;
+    private static final int TAB_VARS = 4;
+    private static final int TAB_ASSERT = 5;
+    private static final int TAB_DOCS = 6;
+    private static final int TAB_SCRIPT = 7;
+    private static final int TAB_SETTINGS = 8;
+
+    private void autoSelectEditorTab(HttpRequestDef req) {
+        boolean hasBody = !(req.body() instanceof BodyConfig.None);
+        boolean hasParams = req.params() != null && (!req.params().query().isEmpty() || !req.params().path().isEmpty());
+        boolean hasAuth = req.auth() != null && !(req.auth() instanceof AuthConfig.None)
+                && !(req.auth() instanceof AuthConfig.Inherit);
+        boolean hasHeaders = !req.headers().isEmpty();
+
+        if (hasBody) {
+            requestEditorTabs.setSelectedIndex(TAB_BODY);
+        } else if (hasParams) {
+            requestEditorTabs.setSelectedIndex(TAB_PARAMS);
+        } else if (hasAuth) {
+            requestEditorTabs.setSelectedIndex(TAB_AUTH);
+        } else if (hasHeaders) {
+            requestEditorTabs.setSelectedIndex(TAB_HEADERS);
+        } else {
+            requestEditorTabs.setSelectedIndex(TAB_PARAMS);
+        }
+    }
+
+    private void updateTabBadges(HttpRequestDef req, RequestItem item) {
+        int headerCount = req.headers().size();
+        requestEditorTabs.setTitleAt(TAB_HEADERS, headerCount > 0 ? "Headers " + headerCount : "Headers");
+
+        boolean hasBody = !(req.body() instanceof BodyConfig.None);
+        requestEditorTabs.setTitleAt(TAB_BODY, hasBody ? "Body *" : "Body");
+
+        int paramCount = 0;
+        if (req.params() != null) {
+            paramCount = req.params().query().size() + req.params().path().size();
+        }
+        requestEditorTabs.setTitleAt(TAB_PARAMS, paramCount > 0 ? "Params " + paramCount : "Params");
+
+        boolean hasAuth = req.auth() != null && !(req.auth() instanceof AuthConfig.None)
+                && !(req.auth() instanceof AuthConfig.Inherit);
+        requestEditorTabs.setTitleAt(TAB_AUTH, hasAuth ? "Auth *" : "Auth");
+
+        boolean hasVars = item.vars() != null && (!item.vars().pre().isEmpty() || !item.vars().post().isEmpty());
+        requestEditorTabs.setTitleAt(TAB_VARS, hasVars ? "Vars *" : "Vars");
+
+        int assertCount = item.assertions() != null ? item.assertions().size() : 0;
+        requestEditorTabs.setTitleAt(TAB_ASSERT, assertCount > 0 ? "Assert " + assertCount : "Assert");
+
+        boolean hasDocs = item.docs() != null && !item.docs().isBlank();
+        requestEditorTabs.setTitleAt(TAB_DOCS, hasDocs ? "Docs *" : "Docs");
+
+        boolean hasScript = item.scripts() != null && (!item.scripts().preRequest().isBlank()
+                || !item.scripts().postResponse().isBlank() || !item.scripts().tests().isBlank());
+        requestEditorTabs.setTitleAt(TAB_SCRIPT, hasScript ? "Script *" : "Script");
     }
 
     private String extractBodyText(BodyConfig body) {
@@ -2065,13 +2394,20 @@ public class ApiClientView extends JPanel {
         }
     }
 
+    private void saveCurrentRequest() {
+        saveEditorState();
+        saveCollection();
+    }
+
     // ==================== SEND / RUN ====================
 
     private void copyAsCurl() {
         RequestItem item = buildCurrentRequestItem();
         String curl = CurlGenerator.generate(item.request());
         copyToClipboard(curl);
-        responseStatus.setText("  cURL copied to clipboard");
+        responseStatusLabel.setText("cURL copied to clipboard");
+        responseStatusLabel.setForeground(METHOD_GET);
+        responseStatusLabel.setVisible(true);
     }
 
     private void copyToClipboard(String text) {
@@ -2083,12 +2419,18 @@ public class ApiClientView extends JPanel {
         String method = (String) methodCombo.getSelectedItem();
         String url = urlField.getText().trim();
         if (url.isBlank() || "https://".equals(url)) {
-            responseStatus.setText("  URL required");
+            responseStatusLabel.setText("URL required");
+            responseStatusLabel.setForeground(METHOD_DELETE);
+            responseStatusLabel.setVisible(true);
             return;
         }
 
         sendButton.setEnabled(false);
-        responseStatus.setText("  Sending...");
+        responseStatusLabel.setText("Sending...");
+        responseStatusLabel.setForeground(new Color(0x8B, 0x94, 0x9E));
+        responseStatusLabel.setVisible(true);
+        responseTimeLabel.setVisible(false);
+        responseSizeLabel.setVisible(false);
         responseBody.setText("");
         responseHeaders.setText("");
         assertionsResultArea.setText("");
@@ -2115,7 +2457,11 @@ public class ApiClientView extends JPanel {
                     addToHistory(result);
                 });
             } catch (Exception ex) {
-                SwingUtilities.invokeLater(() -> responseStatus.setText("  Error: " + ex.getMessage()));
+                SwingUtilities.invokeLater(() -> {
+                    responseStatusLabel.setText("Error: " + ex.getMessage());
+                    responseStatusLabel.setForeground(METHOD_DELETE);
+                    responseStatusLabel.setVisible(true);
+                });
             } finally {
                 SwingUtilities.invokeLater(() -> sendButton.setEnabled(true));
             }
@@ -2132,13 +2478,12 @@ public class ApiClientView extends JPanel {
         }
 
         List<Param> queryParams = new ArrayList<>();
+        for (KvTableEditor.Entry e : queryParamsEditor.getEntries()) {
+            queryParams.add(new Param(e.key(), e.value(), Param.ParamType.QUERY, e.enabled()));
+        }
         List<Param> pathParams = new ArrayList<>();
-        for (KvTableEditor.Entry e : paramsEditor.getEntries()) {
-            if (e.key().startsWith(":")) {
-                pathParams.add(new Param(e.key().substring(1), e.value(), Param.ParamType.PATH, e.enabled()));
-            } else {
-                queryParams.add(new Param(e.key(), e.value(), Param.ParamType.QUERY, e.enabled()));
-            }
+        for (KvTableEditor.Entry e : pathParamsEditor.getEntries()) {
+            pathParams.add(new Param(e.key(), e.value(), Param.ParamType.PATH, e.enabled()));
         }
         ParamsDef params = new ParamsDef(queryParams, pathParams);
 
@@ -2283,22 +2628,52 @@ public class ApiClientView extends JPanel {
         }
     }
 
+    private void clearResponsePanel() {
+        responseStatusLabel.setVisible(false);
+        responseTimeLabel.setVisible(false);
+        responseSizeLabel.setVisible(false);
+        responseBody.setText("");
+        responseHeaders.setText("");
+        assertionsResultArea.setText("");
+        cookiesTableModel.setRowCount(0);
+        responseTabPane.setTitleAt(1, "Headers");
+        responseTabPane.setTitleAt(3, "Cookies");
+        scriptConsoleArea.setText("");
+    }
+
     private void displayResult(RequestResult result) {
+        if (activeRequest != null) {
+            tabResponseCache.put(activeRequest.uid(), result);
+        }
         cookiesTableModel.setRowCount(0);
         if (result.response() != null) {
             var resp = result.response();
             String statusText = resp.statusText() != null && !resp.statusText().isEmpty()
                     ? resp.statusText()
-                    : String.valueOf(resp.status());
-            responseStatus.setText(String.format("  %d %s  %dms  %s", resp.status(), statusText, resp.responseTimeMs(),
-                    formatBytes(resp.body().length())));
-            responseStatus.setForeground(statusColor(resp.status()));
+                    : httpReasonPhrase(resp.status());
+
+            Color sc = statusColor(resp.status());
+            responseStatusLabel.setText(resp.status() + " " + statusText);
+            responseStatusLabel.setForeground(sc);
+            responseStatusLabel.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(sc.darker(), 1), BorderFactory.createEmptyBorder(1, 6, 1, 6)));
+            responseStatusLabel.setVisible(true);
+
+            responseTimeLabel.setText(formatDuration(resp.responseTimeMs()));
+            responseTimeLabel.setForeground(new Color(0x8B, 0x94, 0x9E));
+            responseTimeLabel.setVisible(true);
+
+            responseSizeLabel.setText(formatBytes(resp.body().length()));
+            responseSizeLabel.setForeground(new Color(0x8B, 0x94, 0x9E));
+            responseSizeLabel.setVisible(true);
 
             responseBody.setText(resp.body());
             responseBody.setCaretPosition(0);
 
             String ct = resp.header("content-type");
-            responseBody.setSyntaxEditingStyle(detectSyntax(ct != null ? ct : ""));
+            String syntax = detectSyntax(ct != null ? ct : "");
+            responseBody.setSyntaxEditingStyle(syntax);
+            selectResponseFormat(syntax);
 
             StringBuilder hdr = new StringBuilder();
             int headerCount = 0;
@@ -2315,8 +2690,11 @@ public class ApiClientView extends JPanel {
             int cookieCount = cookiesTableModel.getRowCount();
             responseTabPane.setTitleAt(3, cookieCount > 0 ? "Cookies " + cookieCount : "Cookies");
         } else {
-            responseStatus.setText("  No response");
-            responseStatus.setForeground(Color.GRAY);
+            responseStatusLabel.setText("No response");
+            responseStatusLabel.setForeground(Color.GRAY);
+            responseStatusLabel.setVisible(true);
+            responseTimeLabel.setVisible(false);
+            responseSizeLabel.setVisible(false);
         }
 
         if (result.assertions() != null && !result.assertions().isEmpty()) {
@@ -2398,11 +2776,41 @@ public class ApiClientView extends JPanel {
         vars.requestVars().forEach((k, v) -> variablesTableModel.addRow(new Object[]{"request", k, v}));
     }
 
+    private void selectResponseFormat(String syntax) {
+        String fmt = switch (syntax) {
+            case SyntaxConstants.SYNTAX_STYLE_JSON -> "JSON";
+            case SyntaxConstants.SYNTAX_STYLE_HTML -> "HTML";
+            case SyntaxConstants.SYNTAX_STYLE_XML -> "XML";
+            default -> "Raw";
+        };
+        responseFormatCombo.setSelectedItem(fmt);
+    }
+
+    private static JLabel createBadge(String text) {
+        JLabel badge = new JLabel(text);
+        badge.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+        badge.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(panelBorder(), 1),
+                BorderFactory.createEmptyBorder(1, 6, 1, 6)));
+        badge.setOpaque(true);
+        badge.setBackground(badgeBg());
+        return badge;
+    }
+
+    private static String formatDuration(long ms) {
+        if (ms < 1000) {
+            return ms + "ms";
+        }
+        return String.format("%.2fs", ms / 1000.0);
+    }
+
     private static String formatBytes(int bytes) {
         if (bytes < 1024) {
-            return bytes + "B";
+            return bytes + " B";
         }
-        return String.format("%.1fKB", bytes / 1024.0);
+        if (bytes < 1024 * 1024) {
+            return String.format("%.1f KB", bytes / 1024.0);
+        }
+        return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
     }
 
     private static Color statusColor(int code) {
@@ -2419,6 +2827,36 @@ public class ApiClientView extends JPanel {
             return METHOD_DELETE;
         }
         return Color.GRAY;
+    }
+
+    @SuppressWarnings("checkstyle:MagicNumber")
+    private static String httpReasonPhrase(int code) {
+        return switch (code) {
+            case 200 -> "OK";
+            case 201 -> "Created";
+            case 202 -> "Accepted";
+            case 204 -> "No Content";
+            case 301 -> "Moved Permanently";
+            case 302 -> "Found";
+            case 304 -> "Not Modified";
+            case 307 -> "Temporary Redirect";
+            case 308 -> "Permanent Redirect";
+            case 400 -> "Bad Request";
+            case 401 -> "Unauthorized";
+            case 403 -> "Forbidden";
+            case 404 -> "Not Found";
+            case 405 -> "Method Not Allowed";
+            case 409 -> "Conflict";
+            case 413 -> "Payload Too Large";
+            case 415 -> "Unsupported Media Type";
+            case 422 -> "Unprocessable Entity";
+            case 429 -> "Too Many Requests";
+            case 500 -> "Internal Server Error";
+            case 502 -> "Bad Gateway";
+            case 503 -> "Service Unavailable";
+            case 504 -> "Gateway Timeout";
+            default -> String.valueOf(code);
+        };
     }
 
     private void parseCookies(java.util.Map<String, java.util.List<String>> headers) {
@@ -2493,6 +2931,8 @@ public class ApiClientView extends JPanel {
             }
             collectionPath = dir;
             openRequests.clear();
+            tabStateCache.clear();
+            tabResponseCache.clear();
             activeRequest = null;
             resetSessionContext();
             loadDotEnv(dir);

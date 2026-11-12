@@ -18,7 +18,11 @@ import javax.swing.table.TableCellRenderer;
 
 public class KvTableEditor extends JPanel {
 
-    public record Entry(String key, String value, boolean enabled) {
+    public record Entry(String key, String value, boolean enabled, String description) {
+
+        public Entry(String key, String value, boolean enabled) {
+            this(key, value, enabled, "");
+        }
     }
 
     private final DefaultTableModel model;
@@ -27,7 +31,7 @@ public class KvTableEditor extends JPanel {
     public KvTableEditor() {
         super(new BorderLayout());
 
-        model = new DefaultTableModel(new String[]{"", "Key", "Value"}, 0) {
+        model = new DefaultTableModel(new String[]{"", "Key", "Value", "Description"}, 0) {
             @Override
             public Class<?> getColumnClass(int column) {
                 if (column == 0) {
@@ -49,14 +53,15 @@ public class KvTableEditor extends JPanel {
         table.setShowGrid(true);
         table.setGridColor(UIManager.getColor("Separator.foreground") != null
                 ? UIManager.getColor("Separator.foreground")
-                : new java.awt.Color(0x30, 0x36, 0x3d));
+                : gg.effront.anarcry.gui.theme.AnarCryLaf.border());
         table.getTableHeader().setReorderingAllowed(false);
 
         table.getColumnModel().getColumn(0).setMaxWidth(32);
         table.getColumnModel().getColumn(0).setMinWidth(32);
         table.getColumnModel().getColumn(0).setPreferredWidth(32);
         table.getColumnModel().getColumn(1).setPreferredWidth(160);
-        table.getColumnModel().getColumn(2).setPreferredWidth(300);
+        table.getColumnModel().getColumn(2).setPreferredWidth(240);
+        table.getColumnModel().getColumn(3).setPreferredWidth(180);
 
         table.getColumnModel().getColumn(0).setHeaderRenderer(new CheckHeaderRenderer());
 
@@ -87,7 +92,11 @@ public class KvTableEditor extends JPanel {
     }
 
     public void addRow(String key, String value, boolean enabled) {
-        model.addRow(new Object[]{enabled, key, value});
+        addRow(key, value, enabled, "");
+    }
+
+    public void addRow(String key, String value, boolean enabled, String description) {
+        model.addRow(new Object[]{enabled, key, value, description});
     }
 
     public List<Entry> getEntries() {
@@ -99,8 +108,9 @@ public class KvTableEditor extends JPanel {
             boolean enabled = Boolean.TRUE.equals(model.getValueAt(i, 0));
             String key = String.valueOf(model.getValueAt(i, 1)).trim();
             String value = String.valueOf(model.getValueAt(i, 2)).trim();
+            String desc = String.valueOf(model.getValueAt(i, 3)).trim();
             if (!key.isEmpty()) {
-                entries.add(new Entry(key, value, enabled));
+                entries.add(new Entry(key, value, enabled, desc));
             }
         }
         return entries;
@@ -109,7 +119,7 @@ public class KvTableEditor extends JPanel {
     public void setEntries(List<Entry> entries) {
         model.setRowCount(0);
         for (Entry e : entries) {
-            model.addRow(new Object[]{e.enabled(), e.key(), e.value()});
+            model.addRow(new Object[]{e.enabled(), e.key(), e.value(), e.description()});
         }
     }
 

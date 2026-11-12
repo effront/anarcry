@@ -215,9 +215,9 @@ public class RequestExecutor {
                 .toList();
 
         BodyConfig body = interpolateBody(req.body(), vars);
+        AuthConfig auth = interpolateAuth(req.auth(), vars);
 
-        return new HttpRequestDef(req.method(), url, new ParamsDef(query, path), headers, req.auth(), body,
-                req.settings());
+        return new HttpRequestDef(req.method(), url, new ParamsDef(query, path), headers, auth, body, req.settings());
     }
 
     private BodyConfig interpolateBody(BodyConfig body, VariableStore vars) {
@@ -239,6 +239,39 @@ public class RequestExecutor {
             case BodyConfig.GraphQL g -> new BodyConfig.GraphQL(interpolator.interpolate(g.query(), vars),
                     interpolator.interpolateJson(g.variables(), vars));
             case BodyConfig.FileBody fb -> fb;
+        };
+    }
+
+    private AuthConfig interpolateAuth(AuthConfig auth, VariableStore vars) {
+        return switch (auth) {
+            case AuthConfig.None n -> n;
+            case AuthConfig.Inherit i -> i;
+            case AuthConfig.Bearer b -> new AuthConfig.Bearer(interpolator.interpolate(b.token(), vars));
+            case AuthConfig.Basic b -> new AuthConfig.Basic(interpolator.interpolate(b.username(), vars),
+                    interpolator.interpolate(b.password(), vars));
+            case AuthConfig.ApiKey a -> new AuthConfig.ApiKey(interpolator.interpolate(a.key(), vars),
+                    interpolator.interpolate(a.value(), vars), a.placement());
+            case AuthConfig.Digest d -> new AuthConfig.Digest(interpolator.interpolate(d.username(), vars),
+                    interpolator.interpolate(d.password(), vars));
+            case AuthConfig.OAuth2 o ->
+                new AuthConfig.OAuth2(o.grantType(), interpolator.interpolate(o.accessTokenUrl(), vars),
+                        interpolator.interpolate(o.refreshTokenUrl(), vars),
+                        interpolator.interpolate(o.clientId(), vars), interpolator.interpolate(o.clientSecret(), vars),
+                        o.scope(), o.callbackUrl(), o.authorizationUrl(), o.pkce(), o.credPlacement(),
+                        o.tokenPlacement(), o.autoRefresh(), o.autoFetch(), o.additionalParams());
+            case AuthConfig.AwsV4 a -> new AuthConfig.AwsV4(interpolator.interpolate(a.accessKeyId(), vars),
+                    interpolator.interpolate(a.secretAccessKey(), vars),
+                    interpolator.interpolate(a.sessionToken(), vars), interpolator.interpolate(a.service(), vars),
+                    interpolator.interpolate(a.region(), vars));
+            case AuthConfig.OAuth1 o -> new AuthConfig.OAuth1(interpolator.interpolate(o.consumerKey(), vars),
+                    interpolator.interpolate(o.consumerSecret(), vars), interpolator.interpolate(o.accessToken(), vars),
+                    interpolator.interpolate(o.tokenSecret(), vars), o.signatureMethod(), o.placement());
+            case AuthConfig.Ntlm n -> new AuthConfig.Ntlm(interpolator.interpolate(n.username(), vars),
+                    interpolator.interpolate(n.password(), vars), interpolator.interpolate(n.domain(), vars));
+            case AuthConfig.Wsse w -> new AuthConfig.Wsse(interpolator.interpolate(w.username(), vars),
+                    interpolator.interpolate(w.password(), vars));
+            case AuthConfig.EdgeGrid e -> new AuthConfig.EdgeGrid(interpolator.interpolate(e.accessToken(), vars),
+                    interpolator.interpolate(e.clientToken(), vars), interpolator.interpolate(e.clientSecret(), vars));
         };
     }
 
