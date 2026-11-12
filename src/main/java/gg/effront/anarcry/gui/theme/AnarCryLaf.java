@@ -5,13 +5,21 @@ import com.formdev.flatlaf.FlatIntelliJLaf;
 import com.formdev.flatlaf.FlatLaf;
 
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Insets;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
+import javax.swing.JComponent;
 import javax.swing.UIManager;
+import javax.swing.plaf.ColorUIResource;
 
 /** FlatLaf theme setup utility for the AnarCry GUI. */
 public final class AnarCryLaf {
+
+    private static final List<Runnable> THEME_LISTENERS = new CopyOnWriteArrayList<>();
 
     // Burp-inspired palette
     static final Color BG = new Color(0x32, 0x33, 0x34);
@@ -86,8 +94,62 @@ public final class AnarCryLaf {
         }
     }
 
+    /** Registers a callback invoked after every theme change. */
+    public static void addThemeListener(Runnable listener) {
+        THEME_LISTENERS.add(listener);
+    }
+
+    public static void removeThemeListener(Runnable listener) {
+        THEME_LISTENERS.remove(listener);
+    }
+
+    /**
+     * Resets non-UIResource backgrounds/foregrounds on all descendants so that
+     * components whose colors were explicitly set in a previous theme get the
+     * current UIManager defaults, then notifies registered listeners for custom
+     * components (RSyntaxTextArea, JFreeChart, etc.).
+     *
+     * <p>
+     * Must be called AFTER {@code SwingUtilities.updateComponentTreeUI()}.
+     */
+    public static void fireThemeChanged(Container root) {
+        if (root != null) {
+            resetColors(root);
+        }
+        for (Runnable r : THEME_LISTENERS) {
+            r.run();
+        }
+    }
+
+    /** Overload for callers without a root container (listeners-only). */
+    public static void fireThemeChanged() {
+        for (Runnable r : THEME_LISTENERS) {
+            r.run();
+        }
+    }
+
+    private static void resetColors(Container container) {
+        if (container instanceof JComponent jc) {
+            Color bg = jc.getBackground();
+            if (bg != null && !(bg instanceof ColorUIResource)) {
+                jc.setBackground(null);
+            }
+            Color fg = jc.getForeground();
+            if (fg != null && !(fg instanceof ColorUIResource)) {
+                jc.setForeground(null);
+            }
+        }
+        for (Component child : container.getComponents()) {
+            if (child instanceof Container c) {
+                resetColors(c);
+            }
+        }
+    }
+
     private static void applyDarkCustomizations() {
         applySharedCustomizations();
+
+        Color darkFg = new Color(0xCE, 0xCE, 0xCE);
 
         // TabbedPane -- orange underline like Burp, taller tabs
         UIManager.put("TabbedPane.underlineColor", ACCENT);
@@ -102,16 +164,20 @@ public final class AnarCryLaf {
 
         // Table -- dark rows with alternation
         UIManager.put("Table.background", BG_DARK);
+        UIManager.put("Table.foreground", darkFg);
         UIManager.put("Table.alternateRowColor", BG);
         UIManager.put("Table.selectionBackground", SELECTION);
+        UIManager.put("Table.selectionForeground", darkFg);
         UIManager.put("Table.gridColor", GRID);
 
         // TableHeader
         UIManager.put("TableHeader.background", HEADER_BG);
+        UIManager.put("TableHeader.foreground", darkFg);
         UIManager.put("TableHeader.separatorColor", new Color(0x4D, 0x4D, 0x4D));
         UIManager.put("TableHeader.bottomSeparatorColor", new Color(0x4D, 0x4D, 0x4D));
 
         // CheckBox -- blue selected like Burp
+        UIManager.put("CheckBox.foreground", darkFg);
         UIManager.put("CheckBox.icon.selectedBorderColor", BLUE);
         UIManager.put("CheckBox.icon.selectedBackground", BLUE);
         UIManager.put("CheckBox.icon.focusedBorderColor", BLUE);
@@ -128,6 +194,7 @@ public final class AnarCryLaf {
 
         // Buttons
         UIManager.put("Button.background", new Color(0x4C, 0x50, 0x52));
+        UIManager.put("Button.foreground", darkFg);
 
         // Separator
         UIManager.put("Separator.foreground", SEPARATOR);
@@ -138,10 +205,34 @@ public final class AnarCryLaf {
 
         // Tooltip
         UIManager.put("ToolTip.background", new Color(0x1E, 0x21, 0x23));
+        UIManager.put("ToolTip.foreground", darkFg);
 
         // Tree
         UIManager.put("Tree.hash", new Color(0x50, 0x53, 0x55));
         UIManager.put("Tree.selectionBackground", SELECTION);
+        UIManager.put("Tree.selectionForeground", darkFg);
+        UIManager.put("Tree.foreground", darkFg);
+
+        // List
+        UIManager.put("List.foreground", darkFg);
+        UIManager.put("List.selectionBackground", SELECTION);
+        UIManager.put("List.selectionForeground", darkFg);
+
+        // Text components
+        UIManager.put("TextArea.background", BG_DARK);
+        UIManager.put("TextArea.foreground", darkFg);
+        UIManager.put("TextField.background", BG_DARK);
+        UIManager.put("TextField.foreground", darkFg);
+        UIManager.put("TextPane.background", BG_DARK);
+        UIManager.put("TextPane.foreground", darkFg);
+
+        // Panel / Label
+        UIManager.put("Panel.background", BG);
+        UIManager.put("Panel.foreground", darkFg);
+        UIManager.put("Label.foreground", darkFg);
+
+        // ScrollPane
+        UIManager.put("ScrollPane.background", BG);
 
         // SplitPane
         UIManager.put("SplitPaneDivider.draggingColor", new Color(0x64, 0x64, 0x64));

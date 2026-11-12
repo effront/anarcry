@@ -766,6 +766,7 @@ public class PreferencesDialog extends JDialog {
         currentFontSize = (Integer) fontSizeSpinner.getValue();
         applyGlobalFontSize(currentFontSize);
         SwingUtilities.updateComponentTreeUI(getOwner());
+        gg.effront.anarcry.gui.theme.AnarCryLaf.fireThemeChanged(owner);
 
         if (onApply != null) {
             onApply.run();

@@ -278,6 +278,7 @@ public class AnarCryGui {
         statusBar.setOnThemeClick(() -> {
             AnarCryLaf.toggle();
             SwingUtilities.updateComponentTreeUI(frame);
+            AnarCryLaf.fireThemeChanged(frame);
         });
 
         statusBar.setOnKeybindingsClick(() -> openPreferences("Keybindings"));
@@ -499,6 +500,7 @@ public class AnarCryGui {
         toggleTheme.addActionListener(e -> {
             AnarCryLaf.toggle();
             SwingUtilities.updateComponentTreeUI(frame);
+            AnarCryLaf.fireThemeChanged(frame);
         });
         menu.add(toggleTheme);
 

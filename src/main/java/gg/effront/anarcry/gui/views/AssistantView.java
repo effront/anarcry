@@ -208,6 +208,25 @@ public class AssistantView extends JPanel {
         bottomPanel.add(inputRow, BorderLayout.SOUTH);
 
         add(bottomPanel, BorderLayout.SOUTH);
+
+        gg.effront.anarcry.gui.theme.AnarCryLaf.addThemeListener(this::onThemeChanged);
+    }
+
+    private void onThemeChanged() {
+        setBackground(darkBg());
+        chatPane.setBackground(darkBg());
+        inputField.setBackground(inputBg());
+        inputField.setForeground(assistantColor());
+        inputField.setCaretColor(assistantColor());
+        providerCombo.setBackground(inputBg());
+        providerCombo.setForeground(assistantColor());
+        modelCombo.setBackground(inputBg());
+        modelCombo.setForeground(assistantColor());
+        modelCombo.getEditor().getEditorComponent().setBackground(inputBg());
+        modelCombo.getEditor().getEditorComponent().setForeground(assistantColor());
+        usageLabel.setForeground(labelColor());
+        initStyles();
+        repaint();
     }
 
     public void configure(Map<String, String> envMap) {

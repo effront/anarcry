@@ -211,6 +211,7 @@ public class GuiModulesPanel extends JPanel {
         stopButton = new JButton("Parar");
         stopButton.setEnabled(false);
         stopButton.setPreferredSize(new Dimension(80, 32));
+        stopButton.setFont(stopButton.getFont().deriveFont(Font.BOLD, 13f));
         stopButton.addActionListener(e -> onStop.run());
 
         buttonPanel.add(startButton);

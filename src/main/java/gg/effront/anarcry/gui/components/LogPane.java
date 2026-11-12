@@ -100,6 +100,13 @@ public class LogPane extends JPanel {
         setComponentZOrder(debugToggle, 0);
 
         PrivacyFilter.addListener(() -> SwingUtilities.invokeLater(this::rerender));
+        gg.effront.anarcry.gui.theme.AnarCryLaf.addThemeListener(() -> {
+            textPane.setBackground(bgLog());
+            textPane.setForeground(gg.effront.anarcry.gui.theme.AnarCryLaf.fg());
+            debugToggle.setBackground(debugToggle.isSelected() ? btnBgOn() : btnBg());
+            debugToggle.setBorder(BorderFactory.createLineBorder(btnBorder()));
+            rerender();
+        });
         installContextMenu();
     }
 

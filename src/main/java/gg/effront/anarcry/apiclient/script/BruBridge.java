@@ -30,7 +30,7 @@ public class BruBridge {
 
     @HostAccess.Export
     public void setEnvVar(String key, String value) {
-        vars.setRequest(key, value);
+        vars.setRuntime(key, value);
     }
 
     @HostAccess.Export

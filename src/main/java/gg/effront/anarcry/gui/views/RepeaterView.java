@@ -59,6 +59,13 @@ public class RepeaterView extends JPanel {
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildRequestPanel(), buildResponsePanel());
         split.setResizeWeight(0.5);
         add(split, BorderLayout.CENTER);
+
+        gg.effront.anarcry.gui.theme.AnarCryLaf.addThemeListener(this::onThemeChanged);
+    }
+
+    private void onThemeChanged() {
+        applySyntaxTheme(requestBody);
+        applySyntaxTheme(responseBody);
     }
 
     public void setTargetUrl(String url) {
@@ -257,19 +264,29 @@ public class RepeaterView extends JPanel {
         area.setCodeFoldingEnabled(true);
         area.setAntiAliasingEnabled(true);
         area.setTabSize(2);
-        applyDarkTheme(area);
+        applySyntaxTheme(area);
         return area;
     }
 
-    private void applyDarkTheme(RSyntaxTextArea area) {
+    private void applySyntaxTheme(RSyntaxTextArea area) {
+        boolean dark = gg.effront.anarcry.gui.theme.AnarCryLaf.isDark();
+        String themePath = dark
+                ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
+                : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
         try {
-            Theme theme = Theme.load(getClass().getResourceAsStream("/org/fife/ui/rsyntaxtextarea/themes/dark.xml"));
+            Theme theme = Theme.load(getClass().getResourceAsStream(themePath));
             theme.apply(area);
         } catch (Exception e) {
-            area.setBackground(DARK_BG);
-            area.setForeground(Color.WHITE);
-            area.setCaretColor(Color.WHITE);
-            area.setCurrentLineHighlightColor(new Color(0x2A, 0x2A, 0x3E));
+            if (dark) {
+                area.setBackground(DARK_BG);
+                area.setForeground(Color.WHITE);
+                area.setCaretColor(Color.WHITE);
+                area.setCurrentLineHighlightColor(new Color(0x2A, 0x2A, 0x3E));
+            } else {
+                area.setBackground(Color.WHITE);
+                area.setForeground(new Color(0x1A, 0x1A, 0x1A));
+                area.setCaretColor(new Color(0x1A, 0x1A, 0x1A));
+            }
         }
     }
 

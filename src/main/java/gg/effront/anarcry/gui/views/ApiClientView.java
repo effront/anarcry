@@ -3,6 +3,7 @@ package gg.effront.anarcry.gui.views;
 import gg.effront.anarcry.apiclient.auth.AuthInjectorRegistry;
 import gg.effront.anarcry.apiclient.io.BruImporter;
 import gg.effront.anarcry.apiclient.io.CollectionLoader;
+import gg.effront.anarcry.gui.PrivacyFilter;
 import gg.effront.anarcry.apiclient.io.CollectionWriter;
 import gg.effront.anarcry.apiclient.io.CurlGenerator;
 import gg.effront.anarcry.apiclient.io.CurlImporter;
@@ -59,7 +60,9 @@ import java.net.http.HttpClient;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import javax.swing.BorderFactory;
@@ -236,6 +239,9 @@ public class ApiClientView extends JPanel {
     private DefaultListModel<RequestResult> historyModel;
     private JList<RequestResult> historyList;
 
+    private final Map<javax.swing.text.JTextComponent, String> privacyRawValues = new LinkedHashMap<>();
+    private final List<javax.swing.text.JTextComponent> privacyManagedFields = new ArrayList<>();
+
     public void setProxyStatusCallback(Consumer<Boolean> callback) {
         this.proxyStatusCallback = callback;
     }
@@ -267,6 +273,19 @@ public class ApiClientView extends JPanel {
         JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, buildSidebar(), buildRightPanel());
         mainSplit.setDividerLocation(SIDEBAR_WIDTH);
         add(mainSplit, BorderLayout.CENTER);
+
+        registerPrivacyFields();
+        PrivacyFilter.addListener(() -> SwingUtilities.invokeLater(this::onPrivacyChanged));
+        gg.effront.anarcry.gui.theme.AnarCryLaf.addThemeListener(this::onThemeChanged);
+    }
+
+    private void onThemeChanged() {
+        applySyntaxTheme(bodyArea);
+        applySyntaxTheme(responseBody);
+        applySyntaxTheme(preRequestScriptArea);
+        applySyntaxTheme(postResponseScriptArea);
+        applySyntaxTheme(testsScriptArea);
+        refreshRequestTabs();
     }
 
     private HttpClient buildHttpClient() {
@@ -298,9 +317,9 @@ public class ApiClientView extends JPanel {
 
         sidebarSearchField = new JTextField();
         sidebarSearchField.putClientProperty("JTextField.placeholderText", "Filter requests...");
-        sidebarSearchField.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(0x55, 0x55, 0x55)),
-                BorderFactory.createEmptyBorder(4, 6, 4, 6)));
+        sidebarSearchField.setBorder(
+                BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, panelBorder()),
+                        BorderFactory.createEmptyBorder(4, 6, 4, 6)));
         sidebarSearchField.getDocument().addDocumentListener(new DocumentListener() {
 
             @Override
@@ -328,30 +347,35 @@ public class ApiClientView extends JPanel {
         sortAz.setMargin(new java.awt.Insets(1, 4, 1, 4));
         sortAz.setToolTipText("Sort by name");
         sortAz.addActionListener(e -> sortCollection(SortMode.NAME));
+
         sortBar.add(sortAz);
         JButton sortMethod = new JButton("MTD");
         sortMethod.setFont(sortMethod.getFont().deriveFont(10f));
         sortMethod.setMargin(new java.awt.Insets(1, 4, 1, 4));
         sortMethod.setToolTipText("Sort by method");
         sortMethod.addActionListener(e -> sortCollection(SortMode.METHOD));
+
         sortBar.add(sortMethod);
         JButton sortType = new JButton("TYP");
         sortType.setFont(sortType.getFont().deriveFont(10f));
         sortType.setMargin(new java.awt.Insets(1, 4, 1, 4));
         sortType.setToolTipText("Sort by type (folders first)");
         sortType.addActionListener(e -> sortCollection(SortMode.TYPE));
+
         sortBar.add(sortType);
         JButton expandAll = new JButton("+");
         expandAll.setFont(expandAll.getFont().deriveFont(10f));
         expandAll.setMargin(new java.awt.Insets(1, 6, 1, 6));
         expandAll.setToolTipText("Expand all");
         expandAll.addActionListener(e -> expandAllNodes());
+
         sortBar.add(expandAll);
         JButton collapseAll = new JButton("-");
         collapseAll.setFont(collapseAll.getFont().deriveFont(10f));
         collapseAll.setMargin(new java.awt.Insets(1, 6, 1, 6));
         collapseAll.setToolTipText("Collapse all");
         collapseAll.addActionListener(e -> collapseAllNodes());
+
         sortBar.add(collapseAll);
         topBar.add(sortBar, BorderLayout.SOUTH);
 
@@ -397,13 +421,13 @@ public class ApiClientView extends JPanel {
                     methodLabel.setText(method);
                     Color mc = methodColor(method);
                     methodLabel.setForeground(mc);
-                    methodLabel.setBackground(new Color(mc.getRed() / 6, mc.getGreen() / 6, mc.getBlue() / 6));
+                    methodLabel.setBackground(methodBadgeBg(mc));
                     nameLabel.setText(" " + ri.name());
                     Color bg = sel ? tabActiveBg() : tree.getBackground();
-                    Color fg = sel ? Color.WHITE : tree.getForeground();
+                    Color fg = sel ? gg.effront.anarcry.gui.theme.AnarCryLaf.fg() : tree.getForeground();
                     panel.setBackground(bg);
                     nameLabel.setForeground(fg);
-                    panel.setToolTipText(method + " " + ri.name() + " - " + ri.request().url());
+                    panel.setToolTipText(method + " " + ri.name() + " - " + pf(ri.request().url()));
                     return panel;
                 }
                 Component c = fallback.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
@@ -428,7 +452,7 @@ public class ApiClientView extends JPanel {
                     long timeMs = rr.response() != null ? rr.response().responseTimeMs() : 0;
                     String url = rr.interpolatedRequest() != null ? rr.interpolatedRequest().url() : "";
                     String timeStr = timeMs > 0 ? " " + formatDuration(timeMs) : "";
-                    setText(method + " " + status + timeStr + " " + url);
+                    setText(method + " " + status + timeStr + " " + pf(url));
                     setForeground(statusColor(status));
                 }
                 setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
@@ -451,6 +475,7 @@ public class ApiClientView extends JPanel {
         clearHistBtn.setFont(clearHistBtn.getFont().deriveFont(10f));
         clearHistBtn.setMargin(new java.awt.Insets(1, 4, 1, 4));
         clearHistBtn.addActionListener(e -> historyModel.clear());
+
         JPanel histTop = new JPanel(new BorderLayout());
         histTop.add(historyLabel, BorderLayout.WEST);
         histTop.add(clearHistBtn, BorderLayout.EAST);
@@ -467,22 +492,27 @@ public class ApiClientView extends JPanel {
 
         JButton loadBtn = new JButton("Load Collection");
         loadBtn.addActionListener(e -> chooseAndLoadCollection());
+
         buttons.add(loadBtn);
 
         JButton importBtn = new JButton("Import...");
         importBtn.addActionListener(e -> showImportMenu(importBtn));
+
         buttons.add(importBtn);
 
         JButton newReqBtn = new JButton("New Request");
         newReqBtn.addActionListener(e -> addNewRequest());
+
         buttons.add(newReqBtn);
 
         JButton saveBtn = new JButton("Save");
         saveBtn.addActionListener(e -> saveCollection());
+
         buttons.add(saveBtn);
 
         JButton runBtn = new JButton("Run All");
         runBtn.addActionListener(e -> runCollection());
+
         buttons.add(runBtn);
 
         sidebar.add(buttons, BorderLayout.SOUTH);
@@ -1092,7 +1122,8 @@ public class ApiClientView extends JPanel {
         }
         try {
             com.google.gson.JsonElement el = com.google.gson.JsonParser.parseString(text);
-            responseBody.setText(new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(el));
+            String pretty = new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(el);
+            responseBody.setText(pf(pretty));
             responseBody.setCaretPosition(0);
         } catch (Exception ex) {
             // not JSON, ignore
@@ -1243,13 +1274,13 @@ public class ApiClientView extends JPanel {
         methodTag.setFont(new Font(Font.MONOSPACED, Font.BOLD, 10));
         methodTag.setForeground(mc);
         methodTag.setOpaque(true);
-        methodTag.setBackground(new Color(mc.getRed() / 6, mc.getGreen() / 6, mc.getBlue() / 6));
+        methodTag.setBackground(methodBadgeBg(mc));
         methodTag.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         methodTag.setBorder(BorderFactory.createEmptyBorder(1, 3, 1, 3));
 
         JLabel nameLabel = new JLabel(name);
         nameLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        nameLabel.setForeground(isActive ? Color.WHITE : new Color(0x8B, 0x94, 0x9E));
+        nameLabel.setForeground(isActive ? gg.effront.anarcry.gui.theme.AnarCryLaf.fg() : new Color(0x8B, 0x94, 0x9E));
 
         JPanel labelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         labelPanel.setOpaque(false);
@@ -1271,7 +1302,7 @@ public class ApiClientView extends JPanel {
 
             @Override
             public void mouseEntered(MouseEvent e) {
-                closeLabel.setForeground(Color.WHITE);
+                closeLabel.setForeground(gg.effront.anarcry.gui.theme.AnarCryLaf.fg());
             }
 
             @Override
@@ -1310,6 +1341,13 @@ public class ApiClientView extends JPanel {
             case "PATCH" -> METHOD_PATCH;
             default -> Color.LIGHT_GRAY;
         };
+    }
+
+    private static Color methodBadgeBg(Color mc) {
+        if (gg.effront.anarcry.gui.theme.AnarCryLaf.isDark()) {
+            return new Color(mc.getRed() / 6, mc.getGreen() / 6, mc.getBlue() / 6);
+        }
+        return new Color(mc.getRed() / 3 + 170, mc.getGreen() / 3 + 170, mc.getBlue() / 3 + 170);
     }
 
     // ==================== TREE CONTEXT MENU ====================
@@ -1372,7 +1410,7 @@ public class ApiClientView extends JPanel {
 
             JMenuItem copyCurl = new JMenuItem("Copy as cURL");
             copyCurl.addActionListener(ev -> {
-                String curl = CurlGenerator.generate(reqItem.request());
+                String curl = pf(CurlGenerator.generate(reqItem.request()));
                 copyToClipboard(curl);
             });
             menu.add(copyCurl);
@@ -1642,7 +1680,7 @@ public class ApiClientView extends JPanel {
         }
         HttpRequestDef req = item.request();
         methodCombo.setSelectedItem(req.method());
-        urlField.setText(req.url());
+        setFieldWithPrivacy(urlField, req.url());
 
         List<KvTableEditor.Entry> headerEntries = new ArrayList<>();
         for (Header h : req.headers()) {
@@ -2231,56 +2269,56 @@ public class ApiClientView extends JPanel {
         authTypeCombo.setSelectedItem(auth.mode());
         clearAuthCards();
         switch (auth) {
-            case AuthConfig.Bearer b -> authBearerToken.setText(b.token());
+            case AuthConfig.Bearer b -> setFieldWithPrivacy(authBearerToken, b.token());
             case AuthConfig.Basic b -> {
-                authBasicUser.setText(b.username());
-                authBasicPass.setText(b.password());
+                setFieldWithPrivacy(authBasicUser, b.username());
+                setFieldWithPrivacy(authBasicPass, b.password());
             }
             case AuthConfig.ApiKey a -> {
-                authApiKeyKey.setText(a.key());
-                authApiKeyValue.setText(a.value());
+                setFieldWithPrivacy(authApiKeyKey, a.key());
+                setFieldWithPrivacy(authApiKeyValue, a.value());
                 authApiKeyPlacement.setSelectedItem(a.placement());
             }
             case AuthConfig.Digest d -> {
-                authDigestUser.setText(d.username());
-                authDigestPass.setText(d.password());
+                setFieldWithPrivacy(authDigestUser, d.username());
+                setFieldWithPrivacy(authDigestPass, d.password());
             }
             case AuthConfig.Wsse w -> {
-                authWsseUser.setText(w.username());
-                authWssePass.setText(w.password());
+                setFieldWithPrivacy(authWsseUser, w.username());
+                setFieldWithPrivacy(authWssePass, w.password());
             }
             case AuthConfig.OAuth2 o -> {
-                authOAuth2GrantType.setText(o.grantType());
-                authOAuth2TokenUrl.setText(o.accessTokenUrl());
-                authOAuth2ClientId.setText(o.clientId());
-                authOAuth2ClientSecret.setText(o.clientSecret());
-                authOAuth2Scope.setText(o.scope());
-                authOAuth2AuthUrl.setText(o.authorizationUrl() != null ? o.authorizationUrl() : "");
-                authOAuth2CallbackUrl.setText(o.callbackUrl() != null ? o.callbackUrl() : "");
+                setFieldWithPrivacy(authOAuth2GrantType, o.grantType());
+                setFieldWithPrivacy(authOAuth2TokenUrl, o.accessTokenUrl());
+                setFieldWithPrivacy(authOAuth2ClientId, o.clientId());
+                setFieldWithPrivacy(authOAuth2ClientSecret, o.clientSecret());
+                setFieldWithPrivacy(authOAuth2Scope, o.scope());
+                setFieldWithPrivacy(authOAuth2AuthUrl, o.authorizationUrl() != null ? o.authorizationUrl() : "");
+                setFieldWithPrivacy(authOAuth2CallbackUrl, o.callbackUrl() != null ? o.callbackUrl() : "");
                 authOAuth2Pkce.setSelected(o.pkce());
             }
             case AuthConfig.Ntlm n -> {
-                authNtlmUser.setText(n.username());
-                authNtlmPass.setText(n.password());
-                authNtlmDomain.setText(n.domain());
+                setFieldWithPrivacy(authNtlmUser, n.username());
+                setFieldWithPrivacy(authNtlmPass, n.password());
+                setFieldWithPrivacy(authNtlmDomain, n.domain());
             }
             case AuthConfig.AwsV4 a -> {
-                authAwsAccessKey.setText(a.accessKeyId());
-                authAwsSecretKey.setText(a.secretAccessKey());
-                authAwsSession.setText(a.sessionToken() != null ? a.sessionToken() : "");
-                authAwsService.setText(a.service());
-                authAwsRegion.setText(a.region());
+                setFieldWithPrivacy(authAwsAccessKey, a.accessKeyId());
+                setFieldWithPrivacy(authAwsSecretKey, a.secretAccessKey());
+                setFieldWithPrivacy(authAwsSession, a.sessionToken() != null ? a.sessionToken() : "");
+                setFieldWithPrivacy(authAwsService, a.service());
+                setFieldWithPrivacy(authAwsRegion, a.region());
             }
             case AuthConfig.OAuth1 o -> {
-                authOAuth1ConsumerKey.setText(o.consumerKey());
-                authOAuth1ConsumerSecret.setText(o.consumerSecret());
-                authOAuth1AccessToken.setText(o.accessToken());
-                authOAuth1TokenSecret.setText(o.tokenSecret());
+                setFieldWithPrivacy(authOAuth1ConsumerKey, o.consumerKey());
+                setFieldWithPrivacy(authOAuth1ConsumerSecret, o.consumerSecret());
+                setFieldWithPrivacy(authOAuth1AccessToken, o.accessToken());
+                setFieldWithPrivacy(authOAuth1TokenSecret, o.tokenSecret());
             }
             case AuthConfig.EdgeGrid eg -> {
-                authEdgeAccessToken.setText(eg.accessToken());
-                authEdgeClientToken.setText(eg.clientToken());
-                authEdgeClientSecret.setText(eg.clientSecret());
+                setFieldWithPrivacy(authEdgeAccessToken, eg.accessToken());
+                setFieldWithPrivacy(authEdgeClientToken, eg.clientToken());
+                setFieldWithPrivacy(authEdgeClientSecret, eg.clientSecret());
             }
             default -> {
             }
@@ -2402,7 +2440,7 @@ public class ApiClientView extends JPanel {
 
     private void copyAsCurl() {
         RequestItem item = buildCurrentRequestItem();
-        String curl = CurlGenerator.generate(item.request());
+        String curl = pf(CurlGenerator.generate(item.request()));
         copyToClipboard(curl);
         responseStatusLabel.setText("cURL copied to clipboard");
         responseStatusLabel.setForeground(METHOD_GET);
@@ -2469,7 +2507,7 @@ public class ApiClientView extends JPanel {
 
     private RequestItem buildCurrentRequestItem() {
         String method = (String) methodCombo.getSelectedItem();
-        String url = urlField.getText().trim();
+        String url = rawFieldValue(urlField).trim();
 
         List<Header> headers = new ArrayList<>();
         for (KvTableEditor.Entry e : headersEditor.getEntries()) {
@@ -2554,24 +2592,26 @@ public class ApiClientView extends JPanel {
         String mode = (String) authTypeCombo.getSelectedItem();
         return switch (mode) {
             case "inherit" -> new AuthConfig.Inherit();
-            case "bearer" -> new AuthConfig.Bearer(authBearerToken.getText());
-            case "basic" -> new AuthConfig.Basic(authBasicUser.getText(), authBasicPass.getText());
-            case "apikey" -> new AuthConfig.ApiKey(authApiKeyKey.getText(), authApiKeyValue.getText(),
+            case "bearer" -> new AuthConfig.Bearer(rawFieldValue(authBearerToken));
+            case "basic" -> new AuthConfig.Basic(rawFieldValue(authBasicUser), rawFieldValue(authBasicPass));
+            case "apikey" -> new AuthConfig.ApiKey(rawFieldValue(authApiKeyKey), rawFieldValue(authApiKeyValue),
                     (String) authApiKeyPlacement.getSelectedItem());
-            case "digest" -> new AuthConfig.Digest(authDigestUser.getText(), authDigestPass.getText());
-            case "wsse" -> new AuthConfig.Wsse(authWsseUser.getText(), authWssePass.getText());
-            case "oauth2" -> new AuthConfig.OAuth2(authOAuth2GrantType.getText(), authOAuth2TokenUrl.getText(), "",
-                    authOAuth2ClientId.getText(), authOAuth2ClientSecret.getText(), authOAuth2Scope.getText(),
-                    authOAuth2CallbackUrl.getText(), authOAuth2AuthUrl.getText(), authOAuth2Pkce.isSelected(), "body",
-                    "header", false, false, java.util.Map.of());
-            case "ntlm" ->
-                new AuthConfig.Ntlm(authNtlmUser.getText(), authNtlmPass.getText(), authNtlmDomain.getText());
-            case "awsv4" -> new AuthConfig.AwsV4(authAwsAccessKey.getText(), authAwsSecretKey.getText(),
-                    authAwsSession.getText(), authAwsService.getText(), authAwsRegion.getText());
-            case "oauth1" -> new AuthConfig.OAuth1(authOAuth1ConsumerKey.getText(), authOAuth1ConsumerSecret.getText(),
-                    authOAuth1AccessToken.getText(), authOAuth1TokenSecret.getText(), "HMAC-SHA1", "header");
-            case "akamai-edgegrid" -> new AuthConfig.EdgeGrid(authEdgeAccessToken.getText(),
-                    authEdgeClientToken.getText(), authEdgeClientSecret.getText());
+            case "digest" -> new AuthConfig.Digest(rawFieldValue(authDigestUser), rawFieldValue(authDigestPass));
+            case "wsse" -> new AuthConfig.Wsse(rawFieldValue(authWsseUser), rawFieldValue(authWssePass));
+            case "oauth2" -> new AuthConfig.OAuth2(rawFieldValue(authOAuth2GrantType),
+                    rawFieldValue(authOAuth2TokenUrl), "", rawFieldValue(authOAuth2ClientId),
+                    rawFieldValue(authOAuth2ClientSecret), rawFieldValue(authOAuth2Scope),
+                    rawFieldValue(authOAuth2CallbackUrl), rawFieldValue(authOAuth2AuthUrl), authOAuth2Pkce.isSelected(),
+                    "body", "header", false, false, java.util.Map.of());
+            case "ntlm" -> new AuthConfig.Ntlm(rawFieldValue(authNtlmUser), rawFieldValue(authNtlmPass),
+                    rawFieldValue(authNtlmDomain));
+            case "awsv4" -> new AuthConfig.AwsV4(rawFieldValue(authAwsAccessKey), rawFieldValue(authAwsSecretKey),
+                    rawFieldValue(authAwsSession), rawFieldValue(authAwsService), rawFieldValue(authAwsRegion));
+            case "oauth1" -> new AuthConfig.OAuth1(rawFieldValue(authOAuth1ConsumerKey),
+                    rawFieldValue(authOAuth1ConsumerSecret), rawFieldValue(authOAuth1AccessToken),
+                    rawFieldValue(authOAuth1TokenSecret), "HMAC-SHA1", "header");
+            case "akamai-edgegrid" -> new AuthConfig.EdgeGrid(rawFieldValue(authEdgeAccessToken),
+                    rawFieldValue(authEdgeClientToken), rawFieldValue(authEdgeClientSecret));
             default -> new AuthConfig.None();
         };
     }
@@ -2614,17 +2654,27 @@ public class ApiClientView extends JPanel {
         }
         try {
             com.google.gson.JsonObject obj = com.google.gson.JsonParser.parseString(body).getAsJsonObject();
-            for (String field : TOKEN_FIELDS) {
-                if (obj.has(field) && obj.get(field).isJsonPrimitive()) {
-                    String value = obj.get(field).getAsString();
-                    if (value != null && !value.isBlank()) {
-                        sessionContext.vars().setRuntime("token", value);
-                        return;
-                    }
-                }
+            String token = findTokenField(obj);
+            if (token == null && obj.has("data") && obj.get("data").isJsonObject()) {
+                token = findTokenField(obj.getAsJsonObject("data"));
+            }
+            if (token != null) {
+                sessionContext.vars().setRuntime("token", token);
             }
         } catch (Exception ignored) {
         }
+    }
+
+    private static String findTokenField(com.google.gson.JsonObject obj) {
+        for (String field : TOKEN_FIELDS) {
+            if (obj.has(field) && obj.get(field).isJsonPrimitive()) {
+                String value = obj.get(field).getAsString();
+                if (value != null && !value.isBlank()) {
+                    return value;
+                }
+            }
+        }
+        return null;
     }
 
     private void clearResponsePanel() {
@@ -2666,7 +2716,7 @@ public class ApiClientView extends JPanel {
             responseSizeLabel.setForeground(new Color(0x8B, 0x94, 0x9E));
             responseSizeLabel.setVisible(true);
 
-            responseBody.setText(resp.body());
+            responseBody.setText(pf(resp.body()));
             responseBody.setCaretPosition(0);
 
             String ct = resp.header("content-type");
@@ -2682,7 +2732,7 @@ public class ApiClientView extends JPanel {
                     headerCount++;
                 }
             }
-            responseHeaders.setText(hdr.toString());
+            responseHeaders.setText(pf(hdr.toString()));
             responseTabPane.setTitleAt(1, "Headers " + headerCount);
 
             parseCookies(resp.headers());
@@ -2707,7 +2757,7 @@ public class ApiClientView extends JPanel {
                 }
                 sb.append("\n");
             }
-            assertionsResultArea.setText(sb.toString());
+            assertionsResultArea.setText(pf(sb.toString()));
         }
 
         populateVariablesTab();
@@ -2749,7 +2799,7 @@ public class ApiClientView extends JPanel {
             }
             sb.append("\n").append(passed).append(" passed, ").append(failed).append(" failed\n");
         }
-        scriptConsoleArea.setText(sb.toString());
+        scriptConsoleArea.setText(pf(sb.toString()));
         int consoleIdx = responseTabPane.indexOfTab("Console");
         if (consoleIdx >= 0 && !sr.testResults().isEmpty()) {
             int total = sr.testResults().size();
@@ -2768,11 +2818,11 @@ public class ApiClientView extends JPanel {
         }
         VariableStore vars = sessionContext.vars();
         vars.envVars().forEach(
-                (k, v) -> variablesTableModel.addRow(new Object[]{"env", k, vars.isSecret(k) ? "********" : v}));
-        vars.collectionVars().forEach((k, v) -> variablesTableModel.addRow(new Object[]{"collection", k, v}));
-        vars.folderVars().forEach((k, v) -> variablesTableModel.addRow(new Object[]{"folder", k, v}));
-        vars.runtimeVars().forEach((k, v) -> variablesTableModel.addRow(new Object[]{"runtime", k, v}));
-        vars.requestVars().forEach((k, v) -> variablesTableModel.addRow(new Object[]{"request", k, v}));
+                (k, v) -> variablesTableModel.addRow(new Object[]{"env", k, vars.isSecret(k) ? "********" : pf(v)}));
+        vars.collectionVars().forEach((k, v) -> variablesTableModel.addRow(new Object[]{"collection", k, pf(v)}));
+        vars.folderVars().forEach((k, v) -> variablesTableModel.addRow(new Object[]{"folder", k, pf(v)}));
+        vars.runtimeVars().forEach((k, v) -> variablesTableModel.addRow(new Object[]{"runtime", k, pf(v)}));
+        vars.requestVars().forEach((k, v) -> variablesTableModel.addRow(new Object[]{"request", k, pf(v)}));
     }
 
     private void selectResponseFormat(String syntax) {
@@ -2898,7 +2948,7 @@ public class ApiClientView extends JPanel {
                         }
                     }
                 }
-                cookiesTableModel.addRow(new Object[]{name, value, domain, path, expires, httpOnly, secure});
+                cookiesTableModel.addRow(new Object[]{name, pf(value), pf(domain), path, expires, httpOnly, secure});
             }
         }
     }
@@ -3135,7 +3185,7 @@ public class ApiClientView extends JPanel {
                 populateEnvCombo();
                 onTreeSelection();
                 methodCombo.setSelectedItem(item.request().method());
-                urlField.setText(item.request().url());
+                setFieldWithPrivacy(urlField, item.request().url());
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Import failed: " + ex.getMessage(), "Error",
                         JOptionPane.ERROR_MESSAGE);
@@ -3212,7 +3262,7 @@ public class ApiClientView extends JPanel {
             String assertText = assertCount > 0 ? assertPassed + "/" + assertCount : "-";
             String passText = rr.passed() ? "PASS" : "FAIL";
 
-            model.addRow(new Object[]{i + 1, name, method, url, status, time + "ms", assertText, passText});
+            model.addRow(new Object[]{i + 1, name, method, pf(url), status, time + "ms", assertText, passText});
         }
 
         JTable table = new JTable(model);
@@ -3272,6 +3322,75 @@ public class ApiClientView extends JPanel {
         return label;
     }
 
+    // ==================== PRIVACY ====================
+
+    private void registerPrivacyFields() {
+        privacyManagedFields.addAll(List.of(urlField, authBearerToken, authBasicUser, authBasicPass, authApiKeyKey,
+                authApiKeyValue, authDigestUser, authDigestPass, authWsseUser, authWssePass, authOAuth2GrantType,
+                authOAuth2TokenUrl, authOAuth2ClientId, authOAuth2ClientSecret, authOAuth2Scope, authOAuth2CallbackUrl,
+                authOAuth2AuthUrl, authNtlmUser, authNtlmPass, authNtlmDomain, authAwsAccessKey, authAwsSecretKey,
+                authAwsSession, authAwsService, authAwsRegion, authOAuth1ConsumerKey, authOAuth1ConsumerSecret,
+                authOAuth1AccessToken, authOAuth1TokenSecret, authEdgeAccessToken, authEdgeClientToken,
+                authEdgeClientSecret));
+    }
+
+    private void onPrivacyChanged() {
+        if (PrivacyFilter.isEnabled()) {
+            for (javax.swing.text.JTextComponent field : privacyManagedFields) {
+                String raw = field.getText();
+                privacyRawValues.put(field, raw);
+                field.setText(PrivacyFilter.apply(raw));
+                field.setEditable(false);
+            }
+        } else {
+            for (javax.swing.text.JTextComponent field : privacyManagedFields) {
+                String raw = privacyRawValues.getOrDefault(field, field.getText());
+                field.setText(raw);
+                field.setEditable(true);
+            }
+            privacyRawValues.clear();
+        }
+
+        refreshResponsePrivacy();
+        collectionTree.repaint();
+        historyList.repaint();
+    }
+
+    private void refreshResponsePrivacy() {
+        if (activeRequest != null) {
+            RequestResult cached = tabResponseCache.get(activeRequest.uid());
+            if (cached != null) {
+                displayResult(cached);
+                return;
+            }
+        }
+        responseBody.setText(PrivacyFilter.apply(responseBody.getText()));
+        responseHeaders.setText(PrivacyFilter.apply(responseHeaders.getText()));
+        assertionsResultArea.setText(PrivacyFilter.apply(assertionsResultArea.getText()));
+        scriptConsoleArea.setText(PrivacyFilter.apply(scriptConsoleArea.getText()));
+    }
+
+    private static String pf(String text) {
+        return PrivacyFilter.apply(text);
+    }
+
+    private void setFieldWithPrivacy(javax.swing.text.JTextComponent field, String rawValue) {
+        if (PrivacyFilter.isEnabled()) {
+            privacyRawValues.put(field, rawValue);
+            field.setText(PrivacyFilter.apply(rawValue));
+            field.setEditable(false);
+        } else {
+            field.setText(rawValue);
+        }
+    }
+
+    String rawFieldValue(javax.swing.text.JTextComponent field) {
+        if (PrivacyFilter.isEnabled()) {
+            return privacyRawValues.getOrDefault(field, field.getText());
+        }
+        return field.getText();
+    }
+
     // ==================== UTIL ====================
 
     private RSyntaxTextArea createSyntaxArea(boolean readOnly) {
@@ -3280,15 +3399,29 @@ public class ApiClientView extends JPanel {
         area.setCodeFoldingEnabled(true);
         area.setAntiAliasingEnabled(true);
         area.setTabSize(2);
+        applySyntaxTheme(area);
+        return area;
+    }
+
+    private void applySyntaxTheme(RSyntaxTextArea area) {
+        boolean dark = gg.effront.anarcry.gui.theme.AnarCryLaf.isDark();
+        String themePath = dark
+                ? "/org/fife/ui/rsyntaxtextarea/themes/dark.xml"
+                : "/org/fife/ui/rsyntaxtextarea/themes/default.xml";
         try {
-            Theme theme = Theme.load(getClass().getResourceAsStream("/org/fife/ui/rsyntaxtextarea/themes/dark.xml"));
+            Theme theme = Theme.load(getClass().getResourceAsStream(themePath));
             theme.apply(area);
         } catch (Exception e) {
-            area.setBackground(new Color(0x1E, 0x1E, 0x2E));
-            area.setForeground(Color.WHITE);
-            area.setCaretColor(Color.WHITE);
+            if (dark) {
+                area.setBackground(new Color(0x1E, 0x1E, 0x2E));
+                area.setForeground(Color.WHITE);
+                area.setCaretColor(Color.WHITE);
+            } else {
+                area.setBackground(Color.WHITE);
+                area.setForeground(new Color(0x1A, 0x1A, 0x1A));
+                area.setCaretColor(new Color(0x1A, 0x1A, 0x1A));
+            }
         }
-        return area;
     }
 
     private static String detectSyntax(String contentType) {

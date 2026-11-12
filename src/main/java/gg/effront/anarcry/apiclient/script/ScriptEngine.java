@@ -154,6 +154,27 @@ public class ScriptEngine {
             }
             """;
 
+    private static final String RES_BRIDGE_WRAPPER_JS = """
+            (function() {
+                var __jres = res;
+                res = {
+                    getStatus: function() { return __jres.getStatus(); },
+                    getStatusText: function() { return __jres.getStatusText(); },
+                    getBody: function() {
+                        var raw = __jres.getBody();
+                        if (raw && typeof raw === 'string') {
+                            try { return JSON.parse(raw); } catch(e) { return raw; }
+                        }
+                        return raw;
+                    },
+                    getHeader: function(n) { return __jres.getHeader(n); },
+                    getHeaders: function() { return __jres.getHeaders(); },
+                    getResponseTime: function() { return __jres.getResponseTime(); },
+                    getSize: function() { return __jres.getSize(); }
+                };
+            })();
+            """;
+
     public ScriptResult runPreRequest(ScriptDef scripts, HttpRequestDef request, VariableStore vars) {
         if (scripts == null || !scripts.hasPreRequest()) {
             return ScriptResult.empty();
@@ -232,6 +253,8 @@ public class ScriptEngine {
                             + "error: function() { __console.error(Array.prototype.join.call(arguments, ' ')); }, "
                             + "info: function() { __console.info(Array.prototype.join.call(arguments, ' ')); } };",
                     "console-setup").build());
+
+            context.eval(Source.newBuilder("js", RES_BRIDGE_WRAPPER_JS, "res-wrapper").build());
 
             if (includeTestFramework) {
                 context.eval(Source.newBuilder("js", TEST_FRAMEWORK_JS, "test-framework").build());

@@ -136,6 +136,25 @@ public class DashboardView extends JPanel {
         add(cards, BorderLayout.NORTH);
         add(chartSplit, BorderLayout.CENTER);
         add(summaryPanel, BorderLayout.SOUTH);
+
+        gg.effront.anarcry.gui.theme.AnarCryLaf.addThemeListener(() -> {
+            setBackground(dashBg());
+            summaryPanel.setBackground(dashBg());
+            summaryPanel.setBorder(
+                    BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, dashBorder()),
+                            BorderFactory.createEmptyBorder(8, 4, 4, 4)));
+            for (java.awt.Component c : cards.getComponents()) {
+                c.setBackground(dashBg());
+            }
+            criticalCount.setForeground(dashFg());
+            highCount.setForeground(dashFg());
+            mediumCount.setForeground(dashFg());
+            lowCount.setForeground(dashFg());
+            infoCount.setForeground(dashFg());
+            stylePieChart(pieChart);
+            styleBarChart(barChart);
+            repaint();
+        });
     }
 
     /**
