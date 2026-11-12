@@ -124,7 +124,8 @@ public class DigestAuthInjector implements AuthInjector {
     @SuppressWarnings("java:S4790")
     private static String md5(String input) {
         try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
+            MessageDigest md = MessageDigest.getInstance("MD5"); // nosemgrep: use-of-md5 -- RFC 7616 Digest Auth
+                                                                 // requires MD5
             byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);
         } catch (NoSuchAlgorithmException e) {
