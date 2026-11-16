@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
 
 public class BruImporter {
 
-    private static final Pattern KV_PATTERN = Pattern.compile("^\\s*(~?)\\s*([^:]+):\\s*(.*)$", Pattern.MULTILINE);
+    private static final Pattern KV_PATTERN = Pattern.compile("^\\s*(~?)\\s*([^:]+):[ \\t]*(.*)$", Pattern.MULTILINE);
 
     private record Block(String tag, String content) {
     }
