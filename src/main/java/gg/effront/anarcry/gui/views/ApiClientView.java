@@ -3000,7 +3000,7 @@ public class ApiClientView extends JPanel {
             return;
         }
         try {
-            List<EnvVariable> vars = new ArrayList<>();
+            java.util.Map<String, String> dotEnvMap = new java.util.LinkedHashMap<>();
             for (String line : java.nio.file.Files.readAllLines(dotEnv)) {
                 String trimmed = line.trim();
                 if (trimmed.isEmpty() || trimmed.startsWith("#")) {
@@ -3013,16 +3013,33 @@ public class ApiClientView extends JPanel {
                     if (value.startsWith("\"") && value.endsWith("\"") && value.length() >= 2) {
                         value = value.substring(1, value.length() - 1);
                     }
-                    vars.add(EnvVariable.of(key, value));
+                    dotEnvMap.put(key, value);
                 }
             }
-            if (!vars.isEmpty()) {
-                List<Environment> envs = new ArrayList<>(currentCollection.environments());
-                envs.add(0, new Environment(null, ".env", null, vars, null));
-                currentCollection = new Collection(currentCollection.uid(), currentCollection.name(),
-                        currentCollection.version(), envs, currentCollection.items(), currentCollection.root(),
-                        currentCollection.settings());
+            if (dotEnvMap.isEmpty()) {
+                return;
             }
+
+            List<Environment> envs = new ArrayList<>();
+            for (Environment env : currentCollection.environments()) {
+                List<EnvVariable> merged = new ArrayList<>();
+                for (EnvVariable v : env.variables()) {
+                    if (v.secret() && v.value().isEmpty() && dotEnvMap.containsKey(v.name())) {
+                        merged.add(new EnvVariable(v.name(), dotEnvMap.get(v.name()), true, v.enabled()));
+                    } else {
+                        merged.add(v);
+                    }
+                }
+                envs.add(new Environment(env.uid(), env.name(), env.color(), merged, env.extendsEnv()));
+            }
+
+            List<EnvVariable> dotEnvVars = dotEnvMap.entrySet().stream()
+                    .map(e -> EnvVariable.of(e.getKey(), e.getValue())).toList();
+            envs.add(0, new Environment(null, ".env", null, dotEnvVars, null));
+
+            currentCollection = new Collection(currentCollection.uid(), currentCollection.name(),
+                    currentCollection.version(), envs, currentCollection.items(), currentCollection.root(),
+                    currentCollection.settings());
         } catch (Exception ignored) {
         }
     }

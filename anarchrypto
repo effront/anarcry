@@ -3,7 +3,7 @@ DIR="$(dirname "$(realpath "$0")")"
 SELF="$(realpath "$0")"
 
 # Resolve version from build.gradle so the launcher never goes stale
-VERSION=$(grep -oP "^version\s*=\s*'\K[^']+" "$DIR/build.gradle" 2>/dev/null || echo "")
+VERSION=$(sed -n "s/^version *= *'\([^']*\)'.*/\1/p" "$DIR/build.gradle" 2>/dev/null)
 JAR="$DIR/build/libs/anarcry-${VERSION}.jar"
 
 # Auto-build: rebuild JAR if missing or source is newer
