@@ -2375,6 +2375,7 @@ public class ApiClientView extends JPanel {
         dialog.setVisible(true);
         if (dialog.isSaved()) {
             currentCollection = dialog.getUpdatedCollection();
+            resetSessionContext();
             populateEnvCombo();
         }
     }
@@ -3078,12 +3079,16 @@ public class ApiClientView extends JPanel {
     }
 
     private void populateEnvCombo() {
+        String prev = (String) envCombo.getSelectedItem();
         envCombo.removeAllItems();
         envCombo.addItem("(no env)");
         if (currentCollection != null) {
             for (Environment env : currentCollection.environments()) {
                 envCombo.addItem(env.name());
             }
+        }
+        if (prev != null) {
+            envCombo.setSelectedItem(prev);
         }
     }
 
