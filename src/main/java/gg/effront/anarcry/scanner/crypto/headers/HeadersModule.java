@@ -15,6 +15,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -189,6 +191,115 @@ public class HeadersModule implements Scanner {
                 });
 
         log.accept("[+] HEADERS: " + findings.size() + " finding(s) de headers");
+
+        // --- Multi-page consistency check ---
+        Set<String> allPaths = ctx.discoveredPaths().paths();
+        if (!allPaths.isEmpty()) {
+            log.accept("[~] HEADERS: multi-page consistency check");
+
+            List<String> priorityKeywords = List.of("login", "account", "admin", "dashboard", "api", "payment",
+                    "referral", "swap", "wallet", "settings", "profile");
+
+            List<String> prioritized = new ArrayList<>();
+            List<String> others = new ArrayList<>();
+            for (String p : allPaths) {
+                String lower = p.toLowerCase(Locale.ROOT);
+                boolean isPriority = priorityKeywords.stream().anyMatch(lower::contains);
+                if (isPriority) {
+                    prioritized.add(p);
+                } else {
+                    others.add(p);
+                }
+            }
+
+            List<String> pagesToCheck = new ArrayList<>();
+            pagesToCheck.addAll(prioritized);
+            pagesToCheck.addAll(others);
+            if (pagesToCheck.size() > 15) {
+                pagesToCheck = pagesToCheck.subList(0, 15);
+            }
+            pagesToCheck.add("/anarcry-header-probe-404");
+
+            String[] criticalHeaders = {"Content-Security-Policy", "X-Frame-Options", "X-Content-Type-Options"};
+            Map<String, Map<String, Boolean>> pageHeaders = new LinkedHashMap<>();
+
+            Map<String, Boolean> rootResult = new HashMap<>();
+            for (String hdr : criticalHeaders) {
+                rootResult.put(hdr, hasHeader(headers, hdr));
+            }
+            pageHeaders.put("/", rootResult);
+
+            String baseUrl = ctx.targetUrl();
+            if (baseUrl.endsWith("/")) {
+                baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+            }
+
+            for (String path : pagesToCheck) {
+                String fullUrl = baseUrl + (path.startsWith("/") ? path : "/" + path);
+                try {
+                    Thread.sleep(100);
+                    HttpRequest pageReq = HttpRequest.newBuilder().uri(URI.create(fullUrl))
+                            .timeout(Duration.ofSeconds(10))
+                            .header("User-Agent", gg.effront.anarcry.Version.userAgent()).GET().build();
+                    HttpResponse<String> pageResp = Http.send(ctx, hc, pageReq, HttpResponse.BodyHandlers.ofString(),
+                            id());
+                    int pageCode = pageResp.statusCode();
+
+                    if (pageCode == 403) {
+                        String body = pageResp.body();
+                        if (body != null && (body.contains("challenge-platform")
+                                || body.contains("cf-browser-verification") || body.contains("Just a moment"))) {
+                            continue;
+                        }
+                    }
+
+                    Map<String, List<String>> pageHdrs = pageResp.headers().map();
+                    Map<String, Boolean> result = new HashMap<>();
+                    for (String hdr : criticalHeaders) {
+                        result.put(hdr, hasHeader(pageHdrs, hdr));
+                    }
+                    pageHeaders.put(path, result);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception e) {
+                    // Skip pages that fail (timeout, connection error, circuit breaker, etc.)
+                }
+            }
+
+            if (pageHeaders.size() > 1) {
+                for (String hdr : criticalHeaders) {
+                    List<String> presentOn = new ArrayList<>();
+                    List<String> absentOn = new ArrayList<>();
+                    for (var entry : pageHeaders.entrySet()) {
+                        if (Boolean.TRUE.equals(entry.getValue().get(hdr))) {
+                            presentOn.add(entry.getKey());
+                        } else {
+                            absentOn.add(entry.getKey());
+                        }
+                    }
+
+                    if (!presentOn.isEmpty() && !absentOn.isEmpty()) {
+                        String consistencyEvidence = "Present on: " + presentOn + ". Absent on: " + absentOn + ". "
+                                + presentOn.size() + " of " + pageHeaders.size() + " pages protected.";
+                        String reproUrl = absentOn.get(0).equals("/")
+                                ? ctx.targetUrl()
+                                : baseUrl + (absentOn.get(0).startsWith("/") ? absentOn.get(0) : "/" + absentOn.get(0));
+                        findings.add(Finding.of("Headers", ctx.targetUrl(), "Inconsistent " + hdr + " across routes",
+                                Severity.MEDIUM, consistencyEvidence,
+                                "Inconsistent security header deployment suggests route-level misconfiguration."
+                                        + " Unprotected pages remain vulnerable.",
+                                "curl -sI " + ctx.targetUrl() + " && curl -sI " + reproUrl,
+                                "Apply " + hdr + " uniformly via server-level configuration"
+                                        + " (e.g., vercel.json headers, nuxt.config.ts routeRules,"
+                                        + " nginx location blocks)"));
+                    }
+                }
+            }
+
+            log.accept("[+] HEADERS: multi-page check done -- " + pageHeaders.size() + " pages scanned");
+        }
+
         return findings;
     }
 

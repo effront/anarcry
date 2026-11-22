@@ -48,6 +48,11 @@ import gg.effront.anarcry.scanner.web.race.RaceConditionModule;
 import gg.effront.anarcry.scanner.web.secrets.SecretsModule;
 import gg.effront.anarcry.scanner.web.cloud.CloudMisconfigModule;
 import gg.effront.anarcry.scanner.web.sqli.SqlInjectionModule;
+import gg.effront.anarcry.scanner.web.backendliveness.BackendLivenessModule;
+import gg.effront.anarcry.scanner.web.clickjacking.ClickjackingModule;
+import gg.effront.anarcry.scanner.web.domsink.DomSinkModule;
+import gg.effront.anarcry.scanner.web.frameworkconfig.FrameworkConfigModule;
+import gg.effront.anarcry.scanner.web.jsanalyzer.JsAnalyzerModule;
 import gg.effront.anarcry.scanner.web.subtakeover.SubdomainTakeoverModule;
 import gg.effront.anarcry.scanner.web.upload.FileUploadModule;
 import gg.effront.anarcry.scanner.web.websocket.WebSocketModule;
@@ -298,6 +303,21 @@ public class ScanRunner {
         }
         if (ctx.has("CloudMisconfig")) {
             modules.add(new CloudMisconfigModule());
+        }
+        if (ctx.has("FrameworkConfig")) {
+            modules.add(new FrameworkConfigModule());
+        }
+        if (ctx.has("JsAnalyzer")) {
+            modules.add(new JsAnalyzerModule());
+        }
+        if (ctx.has("DomSinks")) {
+            modules.add(new DomSinkModule());
+        }
+        if (ctx.has("BackendLiveness")) {
+            modules.add(new BackendLivenessModule());
+        }
+        if (ctx.has("Clickjacking")) {
+            modules.add(new ClickjackingModule());
         }
         modules.addAll(customModules);
 
@@ -560,7 +580,8 @@ public class ScanRunner {
                     safeLog.accept("[+] Phase 1.5: challenge resolvido -- cookies extraidos e salvos no cache");
                 } else if (!challengeSolved && csResult != null && csResult.challengeType() != null
                         && csResult.challengeType().contains("Vercel")) {
-                    // ChallengeSolver identified Vercel checkpoint -- reclassify
+                    // ChallengeSolver identified Vercel checkpoint -- reclassify and try
+                    // interactive
                     ctx.wafState().markWafDetected("Vercel");
                     ctx.wafState().markBlockType(WafState.WafBlockType.VERCEL_CHALLENGE);
                     ctx.wafState().markJsChallenge("Vercel Security Checkpoint");

@@ -2,6 +2,7 @@ package gg.effront.anarcry.gui.components;
 
 import gg.effront.anarcry.gui.PrivacyFilter;
 import gg.effront.anarcry.model.AuthType;
+import gg.effront.anarcry.scanner.util.TargetUtil;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -79,9 +80,46 @@ public class GuiModulesPanel extends JPanel {
         checksPanel.setLayout(new BoxLayout(checksPanel, BoxLayout.Y_AXIS));
         checksPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 6, 10));
 
+        JLabel selectLabel = new JLabel("Select modules:");
+        selectLabel.setFont(selectLabel.getFont().deriveFont(Font.BOLD, 11f));
+        selectLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        selectLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 4, 0));
+        checksPanel.add(selectLabel);
+
+        JPanel togglePanel = new JPanel();
+        togglePanel.setLayout(new BoxLayout(togglePanel, BoxLayout.X_AXIS));
+        togglePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        togglePanel.setOpaque(false);
+        JButton allBtn = smallToggle("all");
+        allBtn.addActionListener(e -> moduleChecks.values().forEach(cb -> cb.setSelected(true)));
+        JButton noneBtn = smallToggle("none");
+        noneBtn.addActionListener(e -> moduleChecks.values().forEach(cb -> cb.setSelected(false)));
+        JButton passiveBtn = smallToggle("passive");
+        passiveBtn.addActionListener(e -> {
+            Set<String> passive = Set.of("Crawler", "TLS", "Headers", "HSTS", "CORS");
+            moduleChecks.forEach((id, cb) -> cb.setSelected(passive.contains(id)));
+        });
+        JButton reconBtn = smallToggle("recon");
+        reconBtn.addActionListener(e -> {
+            Set<String> recon = Set.of("Crawler", "TLS", "Headers", "HSTS", "CORS", "Secrets", "FrameworkConfig",
+                    "JsAnalyzer", "DomSinks", "BackendLiveness", "Clickjacking", "SubTakeover");
+            moduleChecks.forEach((id, cb) -> cb.setSelected(recon.contains(id)));
+        });
+        togglePanel.add(allBtn);
+        togglePanel.add(smallSep());
+        togglePanel.add(noneBtn);
+        togglePanel.add(smallSep());
+        togglePanel.add(passiveBtn);
+        togglePanel.add(smallSep());
+        togglePanel.add(reconBtn);
+        checksPanel.add(togglePanel);
+        checksPanel.add(Box.createVerticalStrut(8));
+
         addSection(checksPanel, "RECON", COLOR_RECON);
         checksPanel.add(moduleCheck("Crawler", true));
         checksPanel.add(moduleCheck("Infra", false, "Port scan -- slow and noisy, enable manually"));
+        checksPanel.add(moduleCheck("BackendLiveness", false, "Detects dangling/dead backend URLs"));
+        checksPanel.add(moduleCheck("Clickjacking", false, "Checks frame protection headers across pages"));
 
         checksPanel.add(Box.createVerticalStrut(12));
 
@@ -89,41 +127,45 @@ public class GuiModulesPanel extends JPanel {
         checksPanel.add(moduleCheck("TLS", true));
         checksPanel.add(moduleCheck("Headers", true));
         checksPanel.add(moduleCheck("HSTS", true));
-        checksPanel.add(moduleCheck("JWT", true));
-        checksPanel.add(moduleCheck("PQC", true));
+        checksPanel.add(moduleCheck("JWT", false));
+        checksPanel.add(moduleCheck("PQC", false));
 
         checksPanel.add(Box.createVerticalStrut(12));
 
         addSection(checksPanel, "WEB", COLOR_WEB);
         checksPanel.add(moduleCheck("CORS", true));
-        checksPanel.add(moduleCheck("OAuth", true));
-        checksPanel.add(moduleCheck("OpenRedirect", true));
-        checksPanel.add(moduleCheck("SSRF", true));
-        checksPanel.add(moduleCheck("GraphQL", true));
-        checksPanel.add(moduleCheck("CRLF", true));
-        checksPanel.add(moduleCheck("XXE", true));
-        checksPanel.add(moduleCheck("SSTI", true));
-        checksPanel.add(moduleCheck("HostHeader", true));
-        checksPanel.add(moduleCheck("Actuator", true));
-        checksPanel.add(moduleCheck("MassAssign", true));
-        checksPanel.add(moduleCheck("CachePoisoning", true));
-        checksPanel.add(moduleCheck("ReqSmuggling", true));
-        checksPanel.add(moduleCheck("SQLi", true));
-        checksPanel.add(moduleCheck("XSS", true));
-        checksPanel.add(moduleCheck("LFI", true));
-        checksPanel.add(moduleCheck("CmdInjection", true));
-        checksPanel.add(moduleCheck("CSRF", true));
-        checksPanel.add(moduleCheck("Secrets", true));
+        checksPanel.add(moduleCheck("OAuth", false));
+        checksPanel.add(moduleCheck("OpenRedirect", false));
+        checksPanel.add(moduleCheck("SSRF", false));
+        checksPanel.add(moduleCheck("GraphQL", false));
+        checksPanel.add(moduleCheck("CRLF", false));
+        checksPanel.add(moduleCheck("XXE", false));
+        checksPanel.add(moduleCheck("SSTI", false));
+        checksPanel.add(moduleCheck("HostHeader", false));
+        checksPanel.add(moduleCheck("Actuator", false));
+        checksPanel.add(moduleCheck("MassAssign", false));
+        checksPanel.add(moduleCheck("CachePoisoning", false));
+        checksPanel.add(moduleCheck("ReqSmuggling", false));
+        checksPanel.add(moduleCheck("SQLi", false));
+        checksPanel.add(moduleCheck("XSS", false));
+        checksPanel.add(moduleCheck("LFI", false));
+        checksPanel.add(moduleCheck("CmdInjection", false));
+        checksPanel.add(moduleCheck("CSRF", false));
+        checksPanel.add(moduleCheck("Secrets", false));
         checksPanel.add(moduleCheck("RaceCondition", false,
                 "Sends concurrent requests that may alter target state (payments, coupons)"));
-        checksPanel.add(moduleCheck("NoSQLi", true));
-        checksPanel.add(moduleCheck("Deserialization", true));
+        checksPanel.add(moduleCheck("NoSQLi", false));
+        checksPanel.add(moduleCheck("Deserialization", false));
         checksPanel
                 .add(moduleCheck("FileUpload", false, "Uploads test files to the target -- potentially destructive"));
-        checksPanel.add(moduleCheck("SubTakeover", true));
-        checksPanel.add(moduleCheck("WebSocket", true));
-        checksPanel.add(moduleCheck("ProtoPollution", true));
-        checksPanel.add(moduleCheck("CloudMisconfig", true));
+        checksPanel.add(moduleCheck("SubTakeover", false));
+        checksPanel.add(moduleCheck("WebSocket", false));
+        checksPanel.add(moduleCheck("ProtoPollution", false));
+        checksPanel.add(moduleCheck("CloudMisconfig", false));
+        checksPanel.add(moduleCheck("FrameworkConfig", false, "Extracts framework config (Nuxt/Next) from JS bundles"));
+        checksPanel.add(moduleCheck("JsAnalyzer", false, "Extracts API endpoints from JS fetch/axios calls"));
+        checksPanel
+                .add(moduleCheck("DomSinks", false, "Detects dangerous DOM sinks (innerHTML, eval, document.write)"));
         checksPanel.add(moduleCheck("IDOR", false, "Requires two auth tokens (JWT Token 2) for cross-user testing"));
         moduleChecks.get("IDOR").addActionListener(e -> updateCredentialFields());
 
@@ -232,7 +274,7 @@ public class GuiModulesPanel extends JPanel {
         if (!PrivacyFilter.isEnabled()) {
             rawTarget = targetField.getText();
         }
-        return rawTarget.trim();
+        return TargetUtil.sanitizeTarget(rawTarget);
     }
 
     public String getJwt() {
@@ -435,6 +477,23 @@ public class GuiModulesPanel extends JPanel {
         sep.setForeground(sectionLine());
         sep.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
         sep.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return sep;
+    }
+
+    private static JButton smallToggle(String text) {
+        JButton btn = new JButton(text);
+        btn.setFont(btn.getFont().deriveFont(Font.PLAIN, 10f));
+        btn.setMargin(new java.awt.Insets(1, 4, 1, 4));
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
+
+    private static JLabel smallSep() {
+        JLabel sep = new JLabel("|");
+        sep.setForeground(new Color(0x66, 0x66, 0x66));
+        sep.setFont(sep.getFont().deriveFont(9f));
+        sep.setBorder(BorderFactory.createEmptyBorder(0, 2, 0, 2));
         return sep;
     }
 }

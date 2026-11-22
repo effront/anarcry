@@ -154,6 +154,22 @@ public class ScriptEngine {
             }
             """;
 
+    private static final String REQUIRE_SHIM_JS = """
+            var require = function(module) {
+                if (module === 'uuid') {
+                    return {
+                        v4: function() {
+                            return __uuidHelper.v4();
+                        },
+                        v1: function() {
+                            return __uuidHelper.v4();
+                        }
+                    };
+                }
+                throw new Error('Module not found: ' + module);
+            };
+            """;
+
     private static final String RES_BRIDGE_WRAPPER_JS = """
             (function() {
                 var __jres = res;
@@ -246,6 +262,7 @@ public class ScriptEngine {
 
             ConsoleCapture console = new ConsoleCapture(consoleLog);
             bindings.putMember("__console", console);
+            bindings.putMember("__uuidHelper", new UuidHelper());
 
             context.eval(Source.newBuilder("js",
                     "var console = { log: function() { __console.log(Array.prototype.join.call(arguments, ' ')); }, "
@@ -254,6 +271,7 @@ public class ScriptEngine {
                             + "info: function() { __console.info(Array.prototype.join.call(arguments, ' ')); } };",
                     "console-setup").build());
 
+            context.eval(Source.newBuilder("js", REQUIRE_SHIM_JS, "require-shim").build());
             context.eval(Source.newBuilder("js", RES_BRIDGE_WRAPPER_JS, "res-wrapper").build());
 
             if (includeTestFramework) {
@@ -286,6 +304,14 @@ public class ScriptEngine {
             return new ScriptResult(consoleLog, List.of(), msg);
         } catch (Exception e) {
             return new ScriptResult(consoleLog, List.of(), e.getMessage());
+        }
+    }
+
+    public static class UuidHelper {
+
+        @HostAccess.Export
+        public String v4() {
+            return java.util.UUID.randomUUID().toString();
         }
     }
 

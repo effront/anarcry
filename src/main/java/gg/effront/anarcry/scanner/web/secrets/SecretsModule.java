@@ -6,6 +6,7 @@ import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
+import gg.effront.anarcry.scanner.util.JsBundleDiscovery;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -51,9 +52,24 @@ public class SecretsModule implements Scanner {
     private static final Pattern SENDGRID_KEY = Pattern.compile("SG\\.[A-Za-z0-9\\-_]{22,}\\.[A-Za-z0-9\\-_]{22,}");
     private static final Pattern MAILGUN_KEY = Pattern.compile("key-[0-9a-zA-Z]{32}");
 
-    // Pattern to extract script src attributes from HTML
-    private static final Pattern SCRIPT_SRC = Pattern.compile("<script[^>]+src=[\"']([^\"']+)[\"']",
-            Pattern.CASE_INSENSITIVE);
+    // -- Crypto / fintech-specific patterns --
+
+    // Catches Meld-style key:secret pairs in minified JS variable assignments.
+    // Both sides of the colon must be 16+ chars of [A-Za-z0-9_-].
+    private static final Pattern KEY_SECRET_PAIR_JS = Pattern
+            .compile("[A-Za-z_$]\\w{0,30}=[\"']([A-Za-z0-9_-]{16,}:[A-Za-z0-9_-]{16,})[\"']");
+    private static final Pattern ALCHEMY_API_KEY = Pattern.compile("alch_[A-Za-z0-9_-]{32,}");
+    private static final Pattern INFURA_PROJECT_ID = Pattern.compile("(?i)infura[^\"'{]*[\"']([a-f0-9]{32})[\"']");
+    private static final Pattern DIGITALOCEAN_API_TOKEN = Pattern.compile("dop_v1_[a-f0-9]{64}");
+    private static final Pattern FIREBASE_API_KEY = Pattern.compile("AIzaSy[A-Za-z0-9_-]{33}");
+    private static final Pattern SUPABASE_SERVICE_KEY = Pattern
+            .compile("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\\.[A-Za-z0-9_-]{50,}");
+    private static final Pattern CLOUDFLARE_API_TOKEN = Pattern
+            .compile("(?i)cloudflare[^\"']*[\"']([A-Za-z0-9_-]{40})[\"']");
+    private static final Pattern MOONPAY_API_KEY = Pattern
+            .compile("(?i)moonpay[^\"']*(?:key|publishable)[^\"']*[\"']([a-z]{2}_[a-z]+_[A-Za-z0-9]+)[\"']");
+    private static final Pattern TRANSAK_API_KEY = Pattern
+            .compile("(?i)transak[^\"']*(?:key|api)[^\"']*[\"']([a-f0-9-]{36})[\"']");
 
     // Pattern to detect source map URLs in JS bundles
     private static final Pattern SOURCE_MAP_URL = Pattern.compile("//[#@]\\s*sourceMappingURL=([^\\s]+)");
@@ -85,7 +101,16 @@ public class SecretsModule implements Scanner {
             new SecretPattern("Generic Password", GENERIC_PASSWORD, Severity.HIGH),
             new SecretPattern("Twilio API Key", TWILIO_KEY, Severity.HIGH),
             new SecretPattern("SendGrid API Key", SENDGRID_KEY, Severity.HIGH),
-            new SecretPattern("Mailgun API Key", MAILGUN_KEY, Severity.MEDIUM));
+            new SecretPattern("Mailgun API Key", MAILGUN_KEY, Severity.MEDIUM),
+            new SecretPattern("API Key:Secret Pair", KEY_SECRET_PAIR_JS, Severity.HIGH),
+            new SecretPattern("Alchemy API Key", ALCHEMY_API_KEY, Severity.HIGH),
+            new SecretPattern("Infura Project ID", INFURA_PROJECT_ID, Severity.MEDIUM),
+            new SecretPattern("DigitalOcean API Token", DIGITALOCEAN_API_TOKEN, Severity.CRITICAL),
+            new SecretPattern("Firebase API Key", FIREBASE_API_KEY, Severity.MEDIUM),
+            new SecretPattern("Supabase Service Key", SUPABASE_SERVICE_KEY, Severity.HIGH),
+            new SecretPattern("Cloudflare API Token", CLOUDFLARE_API_TOKEN, Severity.HIGH),
+            new SecretPattern("MoonPay API Key", MOONPAY_API_KEY, Severity.MEDIUM),
+            new SecretPattern("Transak API Key", TRANSAK_API_KEY, Severity.MEDIUM));
 
     @Override
     public String id() {
@@ -119,16 +144,14 @@ public class SecretsModule implements Scanner {
                 continue;
             }
             scanContent(body, url, findings, seenSecrets, log);
-            // Extract JS file references from HTML
-            extractScriptUrls(body, base, url, jsUrls);
         }
 
-        // Phase 2: JavaScript bundle scan
-        log.accept("[~] " + id() + ": scanning JavaScript bundles");
-        // Add well-known bundle paths
+        // Phase 2: JavaScript bundle scan (with chunk discovery)
+        jsUrls.addAll(JsBundleDiscovery.discover(ctx, hc, base, log));
         for (String bundlePath : JS_BUNDLE_PATHS) {
             jsUrls.add(base + bundlePath);
         }
+        log.accept("[~] " + id() + ": scanning " + jsUrls.size() + " JavaScript bundles");
         Set<String> sourceMapUrls = new LinkedHashSet<>();
         for (String jsUrl : jsUrls) {
             if (!scannedUrls.add(jsUrl)) {
@@ -195,7 +218,7 @@ public class SecretsModule implements Scanner {
                 if (seenSecrets.add(matched)) {
                     String masked = maskSecret(matched);
                     log.accept("[!!] " + id() + ": " + sp.type + " found in " + url);
-                    findings.add(buildFinding(sp.type, url, masked, sp.severity));
+                    findings.add(buildFinding(sp.type, url, masked, matched, sp.severity));
                 }
             }
         }
@@ -208,41 +231,34 @@ public class SecretsModule implements Scanner {
                 if (seenSecrets.add(herokuKey)) {
                     String masked = maskSecret(matched);
                     log.accept("[!!] " + id() + ": Heroku API Key found in " + url);
-                    findings.add(buildFinding("Heroku API Key", url, masked, Severity.HIGH));
+                    findings.add(buildFinding("Heroku API Key", url, masked, matched, Severity.HIGH));
                 }
             }
         }
     }
 
-    private Finding buildFinding(String secretType, String url, String maskedValue, Severity severity) {
+    private Finding buildFinding(String secretType, String url, String maskedValue, String rawValue,
+            Severity severity) {
+        String grepPrefix = rawValue.length() > 20 ? rawValue.substring(0, 20) : rawValue;
+        String jsGrepPrefix = grepPrefix.replace("\\", "\\\\").replace("\"", "\\\"");
+        grepPrefix = grepPrefix.replace("'", "'\\''").replace("[", "\\[").replace("]", "\\]").replace("(", "\\(")
+                .replace(")", "\\)").replace("{", "\\{").replace("}", "\\}").replace(".", "\\.").replace("*", "\\*")
+                .replace("+", "\\+").replace("?", "\\?").replace("|", "\\|").replace("^", "\\^").replace("$", "\\$");
+        String urlPath = url.replaceFirst("^https?://[^/]+", "");
         return Finding.of(id(), url, "Exposed " + secretType, severity,
                 "[" + secretType + "] Found in " + url + ": " + maskedValue,
                 "Exposed credentials allow unauthorized access to external services, "
                         + "APIs, or infrastructure. Depending on the key type, this can lead "
                         + "to data theft, account takeover, or resource abuse.",
-                "curl -s '" + url + "' | grep -oE '" + maskedValue + "'",
+                "# Option 1 - Browser Console (open target site first, then F12):\n" + "fetch('" + urlPath
+                        + "').then(r=>r.text()).then(t=>console.log(t.match(/" + jsGrepPrefix + "[^\"]*/))" + ")\n\n"
+                        + "# Option 2 - curl (if no WAF, or with cookies from browser):\n" + "curl -s '" + url
+                        + "' | grep -oP '" + grepPrefix + "[^\"]*'\n\n"
+                        + "# Option 3 - curl with WAF bypass (paste cookies from browser console: document.cookie):\n"
+                        + "curl -b 'PASTE_COOKIES' -s '" + url + "' | grep -oP '" + grepPrefix + "[^\"]*'",
                 "Remove all secrets from client-side code. Use environment variables "
                         + "loaded server-side only. Rotate the exposed credential immediately. "
                         + "Implement secret scanning in CI/CD pipelines.");
-    }
-
-    private void extractScriptUrls(String html, String base, String pageUrl, Set<String> jsUrls) {
-        Matcher matcher = SCRIPT_SRC.matcher(html);
-        while (matcher.find()) {
-            String src = matcher.group(1);
-            if (src.startsWith("//")) {
-                // Protocol-relative URL
-                jsUrls.add("https:" + src);
-            } else if (src.startsWith("http://") || src.startsWith("https://")) {
-                jsUrls.add(src);
-            } else if (src.startsWith("/")) {
-                jsUrls.add(base + src);
-            } else {
-                // Relative path
-                String parentPath = pageUrl.substring(0, pageUrl.lastIndexOf('/') + 1);
-                jsUrls.add(parentPath + src);
-            }
-        }
     }
 
     private static String resolveUrl(String base, String path) {

@@ -59,7 +59,45 @@ public class SubdomainTakeoverModule implements Scanner {
             new ServiceFingerprint(Pattern.compile(".*\\.wordpress\\.com$", Pattern.CASE_INSENSITIVE), "WordPress",
                     Pattern.compile("Do you want to register .* this", Pattern.CASE_INSENSITIVE)),
             new ServiceFingerprint(Pattern.compile(".*\\.surge\\.sh$", Pattern.CASE_INSENSITIVE), "Surge.sh",
-                    Pattern.compile("project not found|surge\\.sh", Pattern.CASE_INSENSITIVE)));
+                    Pattern.compile("project not found|surge\\.sh", Pattern.CASE_INSENSITIVE)),
+
+            // DigitalOcean App Platform
+            new ServiceFingerprint(Pattern.compile(".*\\.ondigitalocean\\.app$", Pattern.CASE_INSENSITIVE),
+                    "DigitalOcean App Platform",
+                    Pattern.compile("is not a registered DigitalOcean|app not found|404", Pattern.CASE_INSENSITIVE)),
+
+            // Vercel
+            new ServiceFingerprint(
+                    Pattern.compile(".*\\.vercel\\.app$|cname\\.vercel-dns\\.com$", Pattern.CASE_INSENSITIVE), "Vercel",
+                    Pattern.compile("DEPLOYMENT_NOT_FOUND|The deployment could not be found",
+                            Pattern.CASE_INSENSITIVE)),
+
+            // Netlify
+            new ServiceFingerprint(Pattern.compile(".*\\.netlify\\.app$|.*\\.netlify\\.com$", Pattern.CASE_INSENSITIVE),
+                    "Netlify",
+                    Pattern.compile("Not Found.*Request ID|Page not found.*Netlify", Pattern.CASE_INSENSITIVE)),
+
+            // Firebase Hosting
+            new ServiceFingerprint(Pattern.compile(".*\\.web\\.app$|.*\\.firebaseapp\\.com$", Pattern.CASE_INSENSITIVE),
+                    "Firebase Hosting",
+                    Pattern.compile("Site Not Found|Firebase Hosting Setup Complete", Pattern.CASE_INSENSITIVE)),
+
+            // Fly.io
+            new ServiceFingerprint(Pattern.compile(".*\\.fly\\.dev$", Pattern.CASE_INSENSITIVE), "Fly.io",
+                    Pattern.compile("fly\\.io.*not found|404 not found", Pattern.CASE_INSENSITIVE)),
+
+            // Railway
+            new ServiceFingerprint(
+                    Pattern.compile(".*\\.railway\\.app$|.*\\.up\\.railway\\.app$", Pattern.CASE_INSENSITIVE),
+                    "Railway", Pattern.compile("Application not found|railway.*404", Pattern.CASE_INSENSITIVE)),
+
+            // Render
+            new ServiceFingerprint(Pattern.compile(".*\\.onrender\\.com$", Pattern.CASE_INSENSITIVE), "Render",
+                    Pattern.compile("Not Found.*Render|render\\.com.*not found", Pattern.CASE_INSENSITIVE)),
+
+            // Cloudflare Pages
+            new ServiceFingerprint(Pattern.compile(".*\\.pages\\.dev$", Pattern.CASE_INSENSITIVE), "Cloudflare Pages",
+                    Pattern.compile("project not found|your connection is not private", Pattern.CASE_INSENSITIVE)));
 
     @Override
     public String id() {

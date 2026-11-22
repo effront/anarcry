@@ -123,7 +123,7 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-2.2.1.jar
+java -jar build/libs/anarcry-2.3.0.jar
 ```
 
 Or use the launcher (auto-builds if source changed):
@@ -141,7 +141,7 @@ With `.env.local` for pre-configured targets:
 Launch in GUI mode (Swing + FlatLaf):
 
 ```bash
-java -jar build/libs/anarcry-2.2.1.jar --gui
+java -jar build/libs/anarcry-2.3.0.jar --gui
 ```
 
 ---
@@ -530,6 +530,33 @@ Built-in API client inspired by [Bruno](https://www.usebruno.com/) for manual AP
 
 ## 11 - Changelog
 
+### v2.3.0
+
+**SiteMap split view, ChallengeSolver interactive/CDP modes, SecretsModule reproduction fix**
+
+SiteMap:
+- **Split view (TUI + GUI)**: horizontal split layout -- request tree on the left, response detail panel on the right showing method, URL, status, response headers, and body snippet
+- **RequestRecord enrichment**: `responseHeaders` and `responseBodySnippet` (truncated at 8192 chars) fields captured from HTTP responses via `Http.send()`
+- **Error filtering**: requests with status >= 400 excluded from tree display -- eliminates wordlist probe noise (`.env`, `backup.sql`, `wp-admin`, etc. returning 404)
+- **TUI SiteMapPanel**: `ActionListBox` (72 cols) + read-only `TextBox` (60 cols) with host-grouped tree, click-to-inspect detail
+- **GUI SiteMapView**: `JSplitPane` with `JTree` + `JTextArea`, `recordsByUrl` map for response data lookup
+
+ChallengeSolver:
+- **Interactive mode**: `solveInteractive()` launches Playwright in headed mode (`setHeadless(false)`), waits up to 180s for manual challenge resolution -- available as API for targets requiring human interaction
+- **CDP mode**: `connectCdp()` connects to existing Chrome via CDP (`pw.chromium().connectOverCDP()`) to extract cookies from an already-authenticated browser session
+
+SecretsModule:
+- **Reproduction fix**: `buildFinding()` now uses first 20 chars of raw (unmasked) match value as grep prefix with proper regex escaping -- previously used masked value containing `...` placeholder which produced invalid grep patterns
+- **3 reproduction options**: Browser Console `fetch().then()`, direct `curl | grep`, and `curl -b COOKIES | grep` for WAF-protected targets
+- **Crypto/fintech patterns**: KEY_SECRET_PAIR_JS, Alchemy, Infura, DigitalOcean, Firebase, Supabase, Cloudflare, MoonPay, Transak patterns added
+
+Other:
+- **Http.flattenHeaders()**: helper to flatten `Map<String, List<String>>` response headers into single-value map for RequestRecord storage
+- Version bump to 2.3.0
+
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
+
 ### v2.2.1
 
 **GUI + API Client bugfixes, Preferences persistence, light theme**
@@ -573,9 +600,6 @@ GUI fixes:
 Other:
 - **RequestExecutor**: auth variable interpolation in all auth config fields
 - Version bump to 2.2.1
-
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v2.2.0
 

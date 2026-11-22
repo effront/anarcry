@@ -34,6 +34,11 @@ YAML consumido pelo `ReportEngine`.
 | `csrf` | Cross-Site Request Forgery | `csrf` | HIGH | CWE-352 | `broken_authentication_and_session_management.csrf` |
 | `infrastructure_exposure` | Exposed Infrastructure Service | `infra` | CRITICAL | CWE-284 | `server_security_misconfiguration.exposed_admin_interface` |
 | `waf_evasion` | WAF Detection and Evasion | `waf` | INFO | CWE-693 | `server_security_misconfiguration.waf_bypass` |
+| `framework_config_exposure` | Framework Configuration Exposure | `frameworkconfig` | MEDIUM | CWE-200 | `sensitive_data_exposure.configuration_data` |
+| `js_endpoint_exposure` | JavaScript API Endpoint Exposure | `jsanalyzer` | MEDIUM | CWE-200 | `sensitive_data_exposure.api_endpoints` |
+| `dom_sink_detection` | Dangerous DOM Sinks in JavaScript | `domsinks` | MEDIUM | CWE-79 | `cross_site_scripting_xss.dom_based` |
+| `backend_liveness` | Dangling Backend Reference | `backendliveness` | HIGH | CWE-672 | `server_security_misconfiguration.dangling_dns` |
+| `clickjacking` | Clickjacking - Missing Frame Protection | `clickjacking` | HIGH | CWE-1021 | `clickjacking.non_sensitive_action` |
 
 ## Convenções
 

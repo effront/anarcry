@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
 
 public class BruImporter {
 
-    private static final Pattern KV_PATTERN = Pattern.compile("^\\s*(~?)\\s*([^:]+):\\s*(.*)$", Pattern.MULTILINE);
+    private static final Pattern KV_PATTERN = Pattern.compile("^\\s*(~?)\\s*([^:]+):[ \\t]*(.*)$", Pattern.MULTILINE);
 
     private record Block(String tag, String content) {
     }
@@ -40,7 +40,6 @@ public class BruImporter {
         int len = text.length();
         int i = 0;
         while (i < len) {
-            // Skip whitespace / blank lines between blocks
             while (i < len && Character.isWhitespace(text.charAt(i))) {
                 i++;
             }
@@ -48,9 +47,8 @@ public class BruImporter {
                 break;
             }
 
-            // Read the tag -- everything up to the opening '{'
             int tagStart = i;
-            while (i < len && text.charAt(i) != '{') {
+            while (i < len && text.charAt(i) != '{' && text.charAt(i) != '[') {
                 i++;
             }
             if (i >= len) {
@@ -62,17 +60,17 @@ public class BruImporter {
                 continue;
             }
 
-            // Skip the opening '{'
+            char open = text.charAt(i);
+            char close = open == '{' ? '}' : ']';
             i++;
             int depth = 1;
             int contentStart = i;
 
-            // Walk forward counting braces to find the matching '}'
             while (i < len && depth > 0) {
                 char c = text.charAt(i);
-                if (c == '{') {
+                if (c == open) {
                     depth++;
-                } else if (c == '}') {
+                } else if (c == close) {
                     depth--;
                 }
                 if (depth > 0) {
@@ -83,7 +81,6 @@ public class BruImporter {
             String content = text.substring(contentStart, i).trim();
             blocks.add(new Block(tag, content));
 
-            // Skip the closing '}'
             if (i < len) {
                 i++;
             }
@@ -302,8 +299,18 @@ public class BruImporter {
             String blockContent = block.content();
             if ("vars".equals(tag) || "vars:secret".equals(tag)) {
                 boolean secret = tag.contains("secret");
-                for (var kv : parseKv(blockContent)) {
-                    variables.add(new EnvVariable(kv.key(), kv.value(), secret, kv.enabled()));
+                List<KvEntry> kvEntries = parseKv(blockContent);
+                if (!kvEntries.isEmpty()) {
+                    for (var kv : kvEntries) {
+                        variables.add(new EnvVariable(kv.key(), kv.value(), secret, kv.enabled()));
+                    }
+                } else if (secret) {
+                    for (String entry : blockContent.split("[,\\n]")) {
+                        String trimmed = entry.trim();
+                        if (!trimmed.isEmpty()) {
+                            variables.add(new EnvVariable(trimmed, "", true, true));
+                        }
+                    }
                 }
             }
         }
