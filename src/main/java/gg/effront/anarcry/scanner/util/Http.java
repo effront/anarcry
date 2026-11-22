@@ -9,6 +9,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 public class Http {
@@ -203,8 +206,9 @@ public class Http {
         if (bodySize == 0 && !bodyStr.isEmpty()) {
             bodySize = bodyStr.length();
         }
+        Map<String, String> hdrs = flattenHeaders(resp.headers().map());
         ctx.requestLog().accept(new RequestRecord(req.method(), req.uri().toString(), status, bodySize,
-                System.currentTimeMillis(), moduleId));
+                System.currentTimeMillis(), moduleId, hdrs, bodyStr));
         return resp;
     }
 
@@ -242,8 +246,9 @@ public class Http {
         if (size == 0 && !body.isEmpty()) {
             size = body.length();
         }
+        Map<String, String> hdrs = flattenHeaders(resp.headers().map());
         ctx.requestLog().accept(new RequestRecord(req.method(), req.uri().toString(), resp.statusCode(), size,
-                System.currentTimeMillis(), moduleId));
+                System.currentTimeMillis(), moduleId, hdrs, body));
         return resp;
     }
 
@@ -368,5 +373,17 @@ public class Http {
     private static String escapeJsonStr(String s) {
         return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t",
                 "\\t");
+    }
+
+    static Map<String, String> flattenHeaders(Map<String, List<String>> headerMap) {
+        Map<String, String> flat = new LinkedHashMap<>();
+        for (var entry : headerMap.entrySet()) {
+            String name = entry.getKey();
+            if (name == null || name.startsWith(":")) {
+                continue;
+            }
+            flat.put(name, String.join(", ", entry.getValue()));
+        }
+        return flat;
     }
 }

@@ -26,7 +26,9 @@ import gg.effront.anarcry.tui.PasteableTextBox;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 
 import java.util.Optional;
 import java.util.Set;
@@ -74,7 +76,13 @@ public class ModulesPanel extends Panel {
     private final CheckBox webSocketCheck;
     private final CheckBox protoPollutionCheck;
     private final CheckBox cloudMisconfigCheck;
+    private final CheckBox frameworkConfigCheck;
+    private final CheckBox jsAnalyzerCheck;
+    private final CheckBox domSinksCheck;
+    private final CheckBox backendLivenessCheck;
+    private final CheckBox clickjackingCheck;
     private final CheckBox exploitationCheck;
+    private final List<CheckBox> allModuleChecks = new ArrayList<>();
     private final PasteableTextBox targetBox;
     private final PasteableTextBox jwtTokenBox;
     private final PasteableTextBox jwtToken2Box;
@@ -93,82 +101,88 @@ public class ModulesPanel extends Panel {
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
 
+        crawlerCheck = new CheckBox("Crawler");
+        crawlerCheck.setChecked(true);
+        infraCheck = new CheckBox(infraLabel());
+        infraCheck.setChecked(false);
+
         tlsCheck = new CheckBox("TLS");
         tlsCheck.setChecked(true);
         headersCheck = new CheckBox("Headers");
         headersCheck.setChecked(true);
+        hstsCheck = new CheckBox("HSTS");
+        hstsCheck.setChecked(true);
         jwtCheck = new CheckBox("JWT");
-        jwtCheck.setChecked(true);
         pqcCheck = new CheckBox("PQC");
-        pqcCheck.setChecked(true);
+
         corsCheck = new CheckBox("CORS");
         corsCheck.setChecked(true);
         oauthCheck = new CheckBox("OAuth");
-        oauthCheck.setChecked(true);
         openRedirectCheck = new CheckBox("OpenRedirect");
-        openRedirectCheck.setChecked(true);
         ssrfCheck = new CheckBox("SSRF");
-        ssrfCheck.setChecked(true);
         graphqlCheck = new CheckBox("GraphQL");
-        graphqlCheck.setChecked(true);
         crlfCheck = new CheckBox("CRLF");
-        crlfCheck.setChecked(true);
         xxeCheck = new CheckBox("XXE");
-        xxeCheck.setChecked(true);
         sstiCheck = new CheckBox("SSTI");
-        sstiCheck.setChecked(true);
         idorCheck = new CheckBox("IDOR (needs 2 tokens)");
-        idorCheck.setChecked(false);
         hostHeaderCheck = new CheckBox("HostHeader");
-        hostHeaderCheck.setChecked(true);
         actuatorCheck = new CheckBox("Actuator");
-        actuatorCheck.setChecked(true);
         massAssignCheck = new CheckBox("MassAssign");
-        massAssignCheck.setChecked(true);
-        crawlerCheck = new CheckBox("Crawler");
-        crawlerCheck.setChecked(true);
-        hstsCheck = new CheckBox("HSTS");
-        hstsCheck.setChecked(true);
         cachePoisoningCheck = new CheckBox("CachePoisoning");
-        cachePoisoningCheck.setChecked(true);
         reqSmugglingCheck = new CheckBox("ReqSmuggling");
-        reqSmugglingCheck.setChecked(true);
-        infraCheck = new CheckBox(infraLabel());
-        infraCheck.setChecked(false);
         sqliCheck = new CheckBox("SQLi");
-        sqliCheck.setChecked(true);
         xssCheck = new CheckBox("XSS");
-        xssCheck.setChecked(true);
         lfiCheck = new CheckBox("LFI");
-        lfiCheck.setChecked(true);
         cmdInjectionCheck = new CheckBox("CmdInjection");
-        cmdInjectionCheck.setChecked(true);
         csrfCheck = new CheckBox("CSRF");
-        csrfCheck.setChecked(true);
         secretsCheck = new CheckBox("Secrets");
-        secretsCheck.setChecked(true);
         raceConditionCheck = new CheckBox("RaceCondition (destructive)");
-        raceConditionCheck.setChecked(false);
         nosqliCheck = new CheckBox("NoSQLi");
-        nosqliCheck.setChecked(true);
         deserializationCheck = new CheckBox("Deserialization");
-        deserializationCheck.setChecked(true);
         fileUploadCheck = new CheckBox("FileUpload (destructive)");
-        fileUploadCheck.setChecked(false);
         subTakeoverCheck = new CheckBox("SubTakeover");
-        subTakeoverCheck.setChecked(true);
         webSocketCheck = new CheckBox("WebSocket");
-        webSocketCheck.setChecked(true);
         protoPollutionCheck = new CheckBox("ProtoPollution");
-        protoPollutionCheck.setChecked(true);
         cloudMisconfigCheck = new CheckBox("CloudMisconfig");
-        cloudMisconfigCheck.setChecked(true);
+        frameworkConfigCheck = new CheckBox("FrameworkConfig");
+        jsAnalyzerCheck = new CheckBox("JsAnalyzer");
+        domSinksCheck = new CheckBox("DomSinks");
+        backendLivenessCheck = new CheckBox("BackendLiveness");
+        clickjackingCheck = new CheckBox("Clickjacking");
 
+        allModuleChecks.addAll(List.of(crawlerCheck, infraCheck, tlsCheck, headersCheck, hstsCheck, jwtCheck, pqcCheck,
+                corsCheck, oauthCheck, openRedirectCheck, ssrfCheck, graphqlCheck, crlfCheck, xxeCheck, sstiCheck,
+                idorCheck, hostHeaderCheck, actuatorCheck, massAssignCheck, cachePoisoningCheck, reqSmugglingCheck,
+                sqliCheck, xssCheck, lfiCheck, cmdInjectionCheck, csrfCheck, secretsCheck, raceConditionCheck,
+                nosqliCheck, deserializationCheck, fileUploadCheck, subTakeoverCheck, webSocketCheck,
+                protoPollutionCheck, cloudMisconfigCheck, frameworkConfigCheck, jsAnalyzerCheck, domSinksCheck,
+                backendLivenessCheck, clickjackingCheck));
+
+        Label selectLabel = new Label("Select modules:");
+        selectLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.WHITE);
+        addComponent(selectLabel);
+        Panel togglePanel = new Panel(new LinearLayout(Direction.HORIZONTAL));
+        Button allBtn = new Button("all", () -> allModuleChecks.forEach(c -> c.setChecked(true)));
+        Button noneBtn = new Button("none", () -> allModuleChecks.forEach(c -> c.setChecked(false)));
+        Button passiveBtn = new Button("passive", this::selectPassiveOnly);
+        Button reconBtn = new Button("recon", this::selectRecon);
+        togglePanel.addComponent(allBtn);
+        togglePanel.addComponent(new Label("|"));
+        togglePanel.addComponent(noneBtn);
+        togglePanel.addComponent(new Label("|"));
+        togglePanel.addComponent(passiveBtn);
+        togglePanel.addComponent(new Label("|"));
+        togglePanel.addComponent(reconBtn);
+        addComponent(togglePanel);
+
+        addComponent(new EmptySpace(new TerminalSize(1, 1)));
         Label reconLabel = new Label("── RECON ───────────────");
         reconLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.CYAN);
         addComponent(reconLabel);
         addComponent(crawlerCheck);
         addComponent(infraCheck);
+        addComponent(backendLivenessCheck);
+        addComponent(clickjackingCheck);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
         Label cryptoLabel = new Label("── CRYPTO ──────────────");
@@ -211,6 +225,9 @@ public class ModulesPanel extends Panel {
         addComponent(webSocketCheck);
         addComponent(protoPollutionCheck);
         addComponent(cloudMisconfigCheck);
+        addComponent(frameworkConfigCheck);
+        addComponent(jsAnalyzerCheck);
+        addComponent(domSinksCheck);
         addComponent(idorCheck);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
@@ -371,12 +388,38 @@ public class ModulesPanel extends Panel {
         return false;
     }
 
+    private void selectPassiveOnly() {
+        Set<CheckBox> passive = Set.of(crawlerCheck, tlsCheck, headersCheck, hstsCheck, corsCheck);
+        allModuleChecks.forEach(c -> c.setChecked(passive.contains(c)));
+    }
+
+    private void selectRecon() {
+        Set<CheckBox> recon = Set.of(crawlerCheck, tlsCheck, headersCheck, hstsCheck, corsCheck, secretsCheck,
+                frameworkConfigCheck, jsAnalyzerCheck, domSinksCheck, backendLivenessCheck, clickjackingCheck,
+                subTakeoverCheck);
+        allModuleChecks.forEach(c -> c.setChecked(recon.contains(c)));
+    }
+
+    static String sanitizeTarget(String raw) {
+        String t = raw.trim();
+        // Fix double-pasted scheme: "https://https://example.com"
+        t = t.replaceFirst("^(https?://)\\1+", "$1");
+        // Strip trailing slashes
+        t = t.replaceAll("/+$", "");
+        // Ensure scheme
+        if (!t.startsWith("http://") && !t.startsWith("https://")) {
+            t = "https://" + t;
+        }
+        return t;
+    }
+
     private void onStart() {
-        String target = targetBox.getText().trim();
+        String target = sanitizeTarget(targetBox.getText());
         if (target.isBlank() || target.equals("https://")) {
-            logPanel.log("[!] Target não informado");
+            logPanel.log("[!] Target nao informado");
             return;
         }
+        targetBox.setText(target);
 
         Set<String> modules = new LinkedHashSet<>();
         if (tlsCheck.isChecked()) {
@@ -483,6 +526,21 @@ public class ModulesPanel extends Panel {
         }
         if (cloudMisconfigCheck.isChecked()) {
             modules.add("CloudMisconfig");
+        }
+        if (frameworkConfigCheck.isChecked()) {
+            modules.add("FrameworkConfig");
+        }
+        if (jsAnalyzerCheck.isChecked()) {
+            modules.add("JsAnalyzer");
+        }
+        if (domSinksCheck.isChecked()) {
+            modules.add("DomSinks");
+        }
+        if (backendLivenessCheck.isChecked()) {
+            modules.add("BackendLiveness");
+        }
+        if (clickjackingCheck.isChecked()) {
+            modules.add("Clickjacking");
         }
 
         if (modules.isEmpty()) {

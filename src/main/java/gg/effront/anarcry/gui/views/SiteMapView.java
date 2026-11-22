@@ -1,6 +1,7 @@
 package gg.effront.anarcry.gui.views;
 
 import gg.effront.anarcry.gui.PrivacyFilter;
+import gg.effront.anarcry.model.RequestRecord;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
@@ -10,12 +11,16 @@ import java.awt.datatransfer.StringSelection;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.JTextArea;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -24,16 +29,15 @@ import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
-/**
- * Hierarchical JTree view of crawled URLs. Thread-safe for {@link #addPath}.
- */
 public class SiteMapView extends JPanel {
 
     private final DefaultMutableTreeNode rootNode;
     private final DefaultTreeModel treeModel;
     private final JTree tree;
     private final JLabel pathLabel;
+    private final JTextArea detailArea;
     private String rootUrl = "";
+    private final Map<String, RequestRecord> recordsByUrl = new LinkedHashMap<>();
 
     public SiteMapView() {
         super(new BorderLayout());
@@ -43,7 +47,9 @@ public class SiteMapView extends JPanel {
         tree.setRootVisible(true);
         tree.setShowsRootHandles(true);
         tree.setCellRenderer(new SiteMapCellRenderer());
-        add(new JScrollPane(tree), BorderLayout.CENTER);
+
+        JPanel leftPanel = new JPanel(new BorderLayout());
+        leftPanel.add(new JScrollPane(tree), BorderLayout.CENTER);
 
         pathLabel = new JLabel("  Select a path");
         pathLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
@@ -62,15 +68,31 @@ public class SiteMapView extends JPanel {
                 }
             }
         });
-        add(pathLabel, BorderLayout.SOUTH);
+        leftPanel.add(pathLabel, BorderLayout.SOUTH);
+
+        detailArea = new JTextArea();
+        detailArea.setEditable(false);
+        detailArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        detailArea.setLineWrap(false);
+        detailArea.setText("Selecione um path na tree para ver headers e body.");
+        JScrollPane detailScroll = new JScrollPane(detailArea);
+        detailScroll.setBorder(BorderFactory.createTitledBorder("Response"));
+
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPanel, detailScroll);
+        split.setDividerLocation(400);
+        split.setResizeWeight(0.4);
+        add(split, BorderLayout.CENTER);
 
         tree.addTreeSelectionListener(e -> {
             TreePath sel = tree.getSelectionPath();
             if (sel == null) {
                 pathLabel.setText("  Select a path");
+                detailArea.setText("");
                 return;
             }
-            pathLabel.setText("  " + PrivacyFilter.apply(buildFullPath(sel)));
+            String fullPath = buildFullPath(sel);
+            pathLabel.setText("  " + PrivacyFilter.apply(fullPath));
+            showDetail(fullPath);
         });
 
         PrivacyFilter.addListener(() -> SwingUtilities.invokeLater(() -> {
@@ -83,7 +105,40 @@ public class SiteMapView extends JPanel {
         }));
     }
 
-    /** Set the root node label to the target URL. */
+    private void showDetail(String url) {
+        RequestRecord r = recordsByUrl.get(url);
+        if (r == null) {
+            detailArea.setText("[sem dados de response para " + url + "]");
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(r.method()).append(" ").append(r.url()).append("\n");
+        sb.append("Status: ").append(r.statusCode());
+        sb.append("  Size: ").append(humanSize(r.responseBodySize()));
+        sb.append("  Module: ").append(r.moduleId()).append("\n\n");
+
+        if (!r.responseHeaders().isEmpty()) {
+            sb.append("--- Response Headers ---\n");
+            for (var entry : r.responseHeaders().entrySet()) {
+                sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        if (r.hasBody()) {
+            sb.append("--- Response Body ---\n");
+            sb.append(r.responseBodySnippet());
+            if (r.responseBodySize() > r.responseBodySnippet().length()) {
+                sb.append("\n\n[truncated -- ").append(humanSize(r.responseBodySize())).append(" total]");
+            }
+        } else {
+            sb.append("[sem body capturado]");
+        }
+
+        detailArea.setText(sb.toString());
+        detailArea.setCaretPosition(0);
+    }
+
     public void setRootUrl(String url) {
         rootUrl = url != null ? url.replaceAll("/+$", "") : "";
         SwingUtilities.invokeLater(() -> {
@@ -92,10 +147,13 @@ public class SiteMapView extends JPanel {
         });
     }
 
-    /**
-     * Parse a full URL and insert its path segments into the tree hierarchy. Safe
-     * to call from any thread.
-     */
+    public void addRecord(RequestRecord r) {
+        recordsByUrl.put(r.url(), r);
+        if (r.statusCode() < 400) {
+            addPath(r.url());
+        }
+    }
+
     public void addPath(String fullUrl) {
         SwingUtilities.invokeLater(() -> {
             String path;
@@ -128,12 +186,13 @@ public class SiteMapView extends JPanel {
         });
     }
 
-    /** Reset the tree to just the root node. */
     public void clear() {
         SwingUtilities.invokeLater(() -> {
             rootNode.removeAllChildren();
             treeModel.reload();
             pathLabel.setText("  Select a path");
+            detailArea.setText("");
+            recordsByUrl.clear();
         });
     }
 
@@ -166,7 +225,6 @@ public class SiteMapView extends JPanel {
         return sb.toString();
     }
 
-    /** Return the underlying JTree for further customization. */
     public JTree getTree() {
         return tree;
     }
@@ -180,6 +238,16 @@ public class SiteMapView extends JPanel {
             }
         }
         return null;
+    }
+
+    private static String humanSize(long bytes) {
+        if (bytes <= 0) {
+            return "--";
+        }
+        if (bytes < 1024) {
+            return bytes + "B";
+        }
+        return (bytes / 1024) + "KB";
     }
 
     private static class SiteMapCellRenderer extends DefaultTreeCellRenderer {
