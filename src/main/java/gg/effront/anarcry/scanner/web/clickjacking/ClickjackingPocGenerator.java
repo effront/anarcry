@@ -111,13 +111,15 @@ public final class ClickjackingPocGenerator {
                                     CLICK HERE TO CLAIM REWARD<br>
                                     <span style="font-size:12px; opacity:0.7;">(attacker-controlled overlay)</span>
                                 </div>
-                                <iframe src="%IFRAME_SRC%" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+                                <iframe src="%IFRAME_SRC%"
+                                    sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
                             </div>
                         </div>
                         <div class="panel">
                             <div class="panel-title">Target View (plain iframe -- no overlay)</div>
                             <div class="plain-frame">
-                                <iframe src="%IFRAME_SRC%" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+                                <iframe src="%IFRAME_SRC%"
+                                    sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
                             </div>
                         </div>
                     </div>
@@ -138,8 +140,7 @@ public final class ClickjackingPocGenerator {
                     </div>
                 </body>
                 </html>
-                """
-                .replace("%DOMAIN%", escapeHtml(sanitized)).replace("%IFRAME_SRC%", escapeHtml(iframeSrc))
+                """.replace("%DOMAIN%", escapeHtml(sanitized)).replace("%IFRAME_SRC%", escapeHtml(iframeSrc))
                 .replace("%TARGET_URL%", escapeHtml(targetUrl))
                 .replace("%PAGE_COUNT%", String.valueOf(vulnerablePages.size()))
                 .replace("%PAGE_LIST%", pageList.toString());
