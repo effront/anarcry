@@ -2,6 +2,7 @@ package gg.effront.anarcry.gui.components;
 
 import gg.effront.anarcry.gui.PrivacyFilter;
 import gg.effront.anarcry.model.AuthType;
+import gg.effront.anarcry.scanner.util.TargetUtil;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -273,17 +274,7 @@ public class GuiModulesPanel extends JPanel {
         if (!PrivacyFilter.isEnabled()) {
             rawTarget = targetField.getText();
         }
-        return sanitizeTarget(rawTarget);
-    }
-
-    static String sanitizeTarget(String raw) {
-        String t = raw.trim();
-        t = t.replaceFirst("^(https?://)\\1+", "$1");
-        t = t.replaceAll("/+$", "");
-        if (!t.startsWith("http://") && !t.startsWith("https://")) {
-            t = "https://" + t;
-        }
-        return t;
+        return TargetUtil.sanitizeTarget(rawTarget);
     }
 
     public String getJwt() {

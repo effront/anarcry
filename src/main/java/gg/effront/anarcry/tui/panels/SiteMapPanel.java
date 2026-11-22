@@ -81,7 +81,7 @@ public class SiteMapPanel extends Panel {
             for (RequestRecord r : hostRecords) {
                 String path = extractPath(r.url());
                 String label = String.format("  %-5s %-36s %3d  %-6s  %s", r.method(), truncate(path, 36),
-                        r.statusCode(), humanSize(r.responseBodySize()), r.moduleId());
+                        r.statusCode(), RequestRecord.humanSize(r.responseBodySize()), r.moduleId());
                 listBox.addItem(label, () -> showDetail(r));
             }
         }
@@ -90,31 +90,7 @@ public class SiteMapPanel extends Panel {
     }
 
     private void showDetail(RequestRecord r) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(r.method()).append(" ").append(r.url()).append("\n");
-        sb.append("Status: ").append(r.statusCode()).append("  Size: ").append(humanSize(r.responseBodySize()));
-        sb.append("  Module: ").append(r.moduleId()).append("\n");
-        sb.append("\n");
-
-        if (!r.responseHeaders().isEmpty()) {
-            sb.append("--- Response Headers ---\n");
-            for (var entry : r.responseHeaders().entrySet()) {
-                sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
-            }
-            sb.append("\n");
-        }
-
-        if (r.hasBody()) {
-            sb.append("--- Response Body ---\n");
-            sb.append(r.responseBodySnippet());
-            if (r.responseBodySize() > r.responseBodySnippet().length()) {
-                sb.append("\n\n[truncated -- ").append(humanSize(r.responseBodySize())).append(" total]");
-            }
-        } else {
-            sb.append("[sem body capturado]");
-        }
-
-        detailBox.setText(sb.toString());
+        detailBox.setText(RequestRecord.formatDetail(r));
         detailBox.setCaretPosition(0, 0);
     }
 
@@ -144,13 +120,4 @@ public class SiteMapPanel extends Panel {
         return s.length() <= max ? s : s.substring(0, max - 1) + "~";
     }
 
-    private static String humanSize(long bytes) {
-        if (bytes <= 0) {
-            return "--";
-        }
-        if (bytes < 1024) {
-            return bytes + "B";
-        }
-        return (bytes / 1024) + "KB";
-    }
 }

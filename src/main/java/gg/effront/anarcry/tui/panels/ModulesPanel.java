@@ -16,6 +16,7 @@ import gg.effront.anarcry.scanner.ScanConfig;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.ScanRunner;
 import gg.effront.anarcry.scanner.SuppressionLoader;
+import gg.effront.anarcry.scanner.util.TargetUtil;
 import gg.effront.anarcry.scanner.auth.AuthException;
 import gg.effront.anarcry.scanner.auth.CredentialStore;
 import gg.effront.anarcry.scanner.auth.ProviderDetector;
@@ -400,21 +401,8 @@ public class ModulesPanel extends Panel {
         allModuleChecks.forEach(c -> c.setChecked(recon.contains(c)));
     }
 
-    static String sanitizeTarget(String raw) {
-        String t = raw.trim();
-        // Fix double-pasted scheme: "https://https://example.com"
-        t = t.replaceFirst("^(https?://)\\1+", "$1");
-        // Strip trailing slashes
-        t = t.replaceAll("/+$", "");
-        // Ensure scheme
-        if (!t.startsWith("http://") && !t.startsWith("https://")) {
-            t = "https://" + t;
-        }
-        return t;
-    }
-
     private void onStart() {
-        String target = sanitizeTarget(targetBox.getText());
+        String target = TargetUtil.sanitizeTarget(targetBox.getText());
         if (target.isBlank() || target.equals("https://")) {
             logPanel.log("[!] Target nao informado");
             return;

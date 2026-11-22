@@ -111,31 +111,7 @@ public class SiteMapView extends JPanel {
             detailArea.setText("[sem dados de response para " + url + "]");
             return;
         }
-        StringBuilder sb = new StringBuilder();
-        sb.append(r.method()).append(" ").append(r.url()).append("\n");
-        sb.append("Status: ").append(r.statusCode());
-        sb.append("  Size: ").append(humanSize(r.responseBodySize()));
-        sb.append("  Module: ").append(r.moduleId()).append("\n\n");
-
-        if (!r.responseHeaders().isEmpty()) {
-            sb.append("--- Response Headers ---\n");
-            for (var entry : r.responseHeaders().entrySet()) {
-                sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
-            }
-            sb.append("\n");
-        }
-
-        if (r.hasBody()) {
-            sb.append("--- Response Body ---\n");
-            sb.append(r.responseBodySnippet());
-            if (r.responseBodySize() > r.responseBodySnippet().length()) {
-                sb.append("\n\n[truncated -- ").append(humanSize(r.responseBodySize())).append(" total]");
-            }
-        } else {
-            sb.append("[sem body capturado]");
-        }
-
-        detailArea.setText(sb.toString());
+        detailArea.setText(RequestRecord.formatDetail(r));
         detailArea.setCaretPosition(0);
     }
 
@@ -238,16 +214,6 @@ public class SiteMapView extends JPanel {
             }
         }
         return null;
-    }
-
-    private static String humanSize(long bytes) {
-        if (bytes <= 0) {
-            return "--";
-        }
-        if (bytes < 1024) {
-            return bytes + "B";
-        }
-        return (bytes / 1024) + "KB";
     }
 
     private static class SiteMapCellRenderer extends DefaultTreeCellRenderer {

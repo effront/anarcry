@@ -27,4 +27,42 @@ public record RequestRecord(String method, String url, int statusCode, long resp
     public boolean hasBody() {
         return !responseBodySnippet.isEmpty();
     }
+
+    public static String humanSize(long bytes) {
+        if (bytes <= 0) {
+            return "--";
+        }
+        if (bytes < 1024) {
+            return bytes + "B";
+        }
+        return (bytes / 1024) + "KB";
+    }
+
+    public static String formatDetail(RequestRecord r) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(r.method()).append(" ").append(r.url()).append("\n");
+        sb.append("Status: ").append(r.statusCode());
+        sb.append("  Size: ").append(humanSize(r.responseBodySize()));
+        sb.append("  Module: ").append(r.moduleId()).append("\n\n");
+
+        if (!r.responseHeaders().isEmpty()) {
+            sb.append("--- Response Headers ---\n");
+            for (var entry : r.responseHeaders().entrySet()) {
+                sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        if (r.hasBody()) {
+            sb.append("--- Response Body ---\n");
+            sb.append(r.responseBodySnippet());
+            if (r.responseBodySize() > r.responseBodySnippet().length()) {
+                sb.append("\n\n[truncated -- ").append(humanSize(r.responseBodySize())).append(" total]");
+            }
+        } else {
+            sb.append("[sem body capturado]");
+        }
+
+        return sb.toString();
+    }
 }
