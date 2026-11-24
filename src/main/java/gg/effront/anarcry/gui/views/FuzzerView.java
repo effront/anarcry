@@ -1,36 +1,18 @@
 package gg.effront.anarcry.gui.views;
 
 import gg.effront.anarcry.fuzzer.AttackType;
-import gg.effront.anarcry.fuzzer.FilePayloadSource;
 import gg.effront.anarcry.fuzzer.FuzzEngine;
 import gg.effront.anarcry.fuzzer.FuzzResult;
 import gg.effront.anarcry.fuzzer.GrepMatcher;
-import gg.effront.anarcry.fuzzer.InlinePayloadSource;
 import gg.effront.anarcry.fuzzer.PayloadProcessor;
 import gg.effront.anarcry.fuzzer.PayloadProcessors;
 import gg.effront.anarcry.fuzzer.PayloadSource;
-import gg.effront.anarcry.fuzzer.RangePayloadSource;
 import gg.effront.anarcry.gui.theme.AnarCryLaf;
-import gg.effront.anarcry.util.HttpRequestUtil;
 
 import java.awt.BorderLayout;
-import java.awt.CardLayout;
-import java.awt.Color;
-import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
-import java.awt.Toolkit;
-import java.awt.datatransfer.StringSelection;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.io.FileWriter;
-import java.io.PrintWriter;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -40,29 +22,19 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
-import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import javax.swing.JMenuItem;
 import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
-import javax.swing.JTable;
 import javax.swing.JTextArea;
-import javax.swing.JTextField;
 import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
-import javax.swing.RowFilter;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
-import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableRowSorter;
 
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
@@ -70,8 +42,6 @@ import org.fife.ui.rsyntaxtextarea.Theme;
 import org.fife.ui.rtextarea.RTextScrollPane;
 
 public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
-
-    private static final int MAX_RESULTS_IN_MEMORY = 50_000;
 
     private final FuzzEngine engine = new FuzzEngine();
 
@@ -88,7 +58,7 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
 
     // -- Payload tabs --
     private JTabbedPane payloadTabs;
-    private final List<PayloadPanel> payloadPanels = new ArrayList<>();
+    private final List<FuzzerPayloadPanel> payloadPanels = new ArrayList<>();
 
     // -- Processor list --
     private DefaultListModel<String> processorListModel;
@@ -102,12 +72,7 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
     private JTextArea grepExtractArea;
 
     // -- Results --
-    private DefaultTableModel resultsModel;
-    private JTable resultsTable;
-    private TableRowSorter<DefaultTableModel> resultsSorter;
-    private JTextField statusFilterField;
-    private JTextField lengthFilterField;
-    private RSyntaxTextArea responseViewer;
+    private final FuzzerResultsPanel resultsPanel = new FuzzerResultsPanel();
 
     // -- Control --
     private JButton startButton;
@@ -118,9 +83,7 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
 
     // -- State --
     private long attackStartTime;
-    private int lastReportedCount;
     private final GrepMatcher grepMatcher = new GrepMatcher();
-    private final List<FuzzResult> allResults = new ArrayList<>();
 
     // -- Callback for "Send to Repeater" --
     private java.util.function.BiConsumer<String, String> sendToRepeaterCallback;
@@ -133,6 +96,16 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
 
     public void setSendToRepeaterCallback(java.util.function.BiConsumer<String, String> callback) {
         this.sendToRepeaterCallback = callback;
+        resultsPanel.setSendToRepeaterAction(() -> {
+            FuzzResult r = resultsPanel.getSelectedResult();
+            if (r != null && sendToRepeaterCallback != null) {
+                String template = templateEditor.getText();
+                var positions = gg.effront.anarcry.fuzzer.FuzzPosition.parse(template);
+                String injected = gg.effront.anarcry.fuzzer.FuzzPosition.inject(template, positions, r.payloads());
+                String[] parts = FuzzEngine.parseRawRequest(injected);
+                sendToRepeaterCallback.accept(parts[1], injected);
+            }
+        });
     }
 
     public void loadRequest(String method, String url, String headers, String body) {
@@ -154,7 +127,7 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
 
     private void buildUi() {
         JToolBar toolbar = buildToolbar();
-        JSplitPane mainSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, buildTopPanel(), buildBottomPanel());
+        JSplitPane mainSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, buildTopPanel(), resultsPanel);
         mainSplit.setResizeWeight(0.45);
         add(toolbar, BorderLayout.NORTH);
         add(mainSplit, BorderLayout.CENTER);
@@ -169,7 +142,7 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
         bar.add(new JLabel("Attack: "));
         attackTypeCombo = new JComboBox<>(AttackType.values());
         attackTypeCombo.setToolTipText("How payloads combine across positions");
-        attackTypeCombo.addActionListener(e -> onAttackTypeChanged());
+        attackTypeCombo.addActionListener(e -> updateEstimate());
         bar.add(attackTypeCombo);
         bar.addSeparator();
 
@@ -283,7 +256,6 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
 
         JTabbedPane configTabs = new JTabbedPane();
 
-        // Payloads tab
         JPanel payloadsPanel = new JPanel(new BorderLayout());
         payloadTabs = new JTabbedPane();
         addPayloadTab();
@@ -296,10 +268,7 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
         payloadsPanel.add(payloadTabs, BorderLayout.CENTER);
         configTabs.addTab("Payloads", payloadsPanel);
 
-        // Processors tab
         configTabs.addTab("Processing", buildProcessorPanel());
-
-        // Grep tab
         configTabs.addTab("Grep", buildGrepPanel());
 
         panel.add(configTabs, BorderLayout.CENTER);
@@ -307,7 +276,8 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
     }
 
     private void addPayloadTab() {
-        PayloadPanel pp = new PayloadPanel();
+        FuzzerPayloadPanel pp = new FuzzerPayloadPanel();
+        pp.setOnSourceChanged(this::updateEstimate);
         payloadPanels.add(pp);
         int idx = payloadPanels.size();
         payloadTabs.addTab("Position " + idx, pp);
@@ -426,93 +396,6 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
         return panel;
     }
 
-    private JPanel buildBottomPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-
-        // Filter bar
-        JPanel filterBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
-        filterBar.add(new JLabel("Status:"));
-        statusFilterField = new JTextField(8);
-        statusFilterField.setToolTipText("Filter: 200, 4xx, !200");
-        statusFilterField.addActionListener(e -> applyFilters());
-        filterBar.add(statusFilterField);
-
-        filterBar.add(new JLabel("Length:"));
-        lengthFilterField = new JTextField(10);
-        lengthFilterField.setToolTipText("Filter: min-max (e.g. 100-5000)");
-        lengthFilterField.addActionListener(e -> applyFilters());
-        filterBar.add(lengthFilterField);
-
-        JButton filterBtn = new JButton("Filter");
-        filterBtn.addActionListener(e -> applyFilters());
-        filterBar.add(filterBtn);
-
-        JButton clearFilterBtn = new JButton("Clear");
-        clearFilterBtn.addActionListener(e -> {
-            statusFilterField.setText("");
-            lengthFilterField.setText("");
-            resultsSorter.setRowFilter(null);
-        });
-        filterBar.add(clearFilterBtn);
-
-        JButton exportBtn = new JButton("Export CSV");
-        exportBtn.addActionListener(e -> exportResults());
-        filterBar.add(exportBtn);
-
-        JButton exportJsonBtn = new JButton("Export JSON");
-        exportJsonBtn.addActionListener(e -> exportResultsJson());
-        filterBar.add(exportJsonBtn);
-
-        panel.add(filterBar, BorderLayout.NORTH);
-
-        // Results table
-        resultsModel = new DefaultTableModel(new String[]{"#", "Payload", "Status", "Length", "Time(ms)", "Error"}, 0) {
-            @Override
-            public Class<?> getColumnClass(int col) {
-                return switch (col) {
-                    case 0, 2, 3, 4 -> Integer.class;
-                    default -> String.class;
-                };
-            }
-
-            @Override
-            public boolean isCellEditable(int row, int col) {
-                return false;
-            }
-        };
-        resultsTable = new JTable(resultsModel);
-        resultsTable.setAutoCreateRowSorter(false);
-        resultsSorter = new TableRowSorter<>(resultsModel);
-        resultsTable.setRowSorter(resultsSorter);
-        resultsTable.setDefaultRenderer(Object.class, new StatusCodeRenderer());
-        resultsTable.setDefaultRenderer(Integer.class, new StatusCodeRenderer());
-        resultsTable.setRowHeight(22);
-        resultsTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) {
-                showSelectedResponse();
-            }
-        });
-        addResultsContextMenu();
-
-        JScrollPane tableScroll = new JScrollPane(resultsTable);
-
-        // Response viewer
-        responseViewer = new RSyntaxTextArea(10, 60);
-        responseViewer.setEditable(false);
-        responseViewer.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_NONE);
-        responseViewer.setCodeFoldingEnabled(true);
-        responseViewer.setAntiAliasingEnabled(true);
-        responseViewer.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        applySyntaxTheme(responseViewer);
-        RTextScrollPane responseScroll = new RTextScrollPane(responseViewer);
-
-        JSplitPane resultsSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, tableScroll, responseScroll);
-        resultsSplit.setResizeWeight(0.6);
-        panel.add(resultsSplit, BorderLayout.CENTER);
-
-        return panel;
-    }
-
     private JPanel buildStatusBar() {
         JPanel bar = new JPanel(new BorderLayout());
         bar.setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
@@ -560,7 +443,6 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
             if (i == 0) {
-                // request line -- mark query param values
                 int qIdx = line.indexOf('?');
                 if (qIdx >= 0) {
                     int spaceIdx = line.indexOf(' ', qIdx);
@@ -586,18 +468,15 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
                 }
             } else if (line.trim().isEmpty()) {
                 result.append(line);
-                // mark body values in remaining lines
                 for (int j = i + 1; j < lines.length; j++) {
                     result.append("\n");
                     String bodyLine = lines[j];
                     if (bodyLine.trim().startsWith("{")) {
-                        // JSON: mark string values
                         bodyLine = bodyLine.replaceAll(":\\s*\"([^\"]+)\"", ": \"{{" + idx + "}}\"");
                         if (bodyLine.contains("{{" + idx + "}}")) {
                             idx++;
                         }
                     } else if (bodyLine.contains("=")) {
-                        // Form encoded
                         StringBuilder formResult = new StringBuilder();
                         for (String param : bodyLine.split("&")) {
                             if (formResult.length() > 0) {
@@ -644,10 +523,6 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
         estimateLabel.setText("  ~" + String.format("%,d", est) + " requests");
     }
 
-    private void onAttackTypeChanged() {
-        updateEstimate();
-    }
-
     // -------------------------------------------------------------------------
     // Attack control
     // -------------------------------------------------------------------------
@@ -681,13 +556,10 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
             }
         }
 
-        // Setup grep matcher
         setupGrepMatcher();
 
-        // Reset results
-        resultsModel.setRowCount(0);
-        allResults.clear();
-        rebuildResultColumns();
+        resultsPanel.clearResults();
+        resultsPanel.rebuildColumns(grepMatcher);
 
         List<List<PayloadProcessor>> pipelines = new ArrayList<>();
         pipelines.add(new ArrayList<>(processors));
@@ -700,7 +572,6 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
                 jitter, 30, grepMatcher, null, null, null, 0);
 
         attackStartTime = System.currentTimeMillis();
-        lastReportedCount = 0;
         startButton.setEnabled(false);
         pauseButton.setEnabled(true);
         stopButton.setEnabled(true);
@@ -725,7 +596,7 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
 
     private List<PayloadSource> collectSources() {
         List<PayloadSource> sources = new ArrayList<>();
-        for (PayloadPanel pp : payloadPanels) {
+        for (FuzzerPayloadPanel pp : payloadPanels) {
             PayloadSource src = pp.getSource();
             if (src != null) {
                 sources.add(src);
@@ -760,30 +631,13 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
         grepMatcher.setExtractRules(extractRules);
     }
 
-    private void rebuildResultColumns() {
-        List<String> cols = new ArrayList<>(List.of("#", "Payload", "Status", "Length", "Time(ms)", "Error"));
-        for (String label : grepMatcher.matchLabels()) {
-            cols.add("M:" + truncate(label, 15));
-        }
-        for (String label : grepMatcher.extractLabels()) {
-            cols.add("E:" + truncate(label, 15));
-        }
-        resultsModel.setColumnIdentifiers(cols.toArray());
-    }
-
     // -------------------------------------------------------------------------
     // FuzzListener callbacks
     // -------------------------------------------------------------------------
 
     @Override
     public void onResult(FuzzResult result) {
-        SwingUtilities.invokeLater(() -> {
-            if (allResults.size() < MAX_RESULTS_IN_MEMORY) {
-                allResults.add(result);
-            }
-            Object[] row = buildResultRow(result);
-            resultsModel.addRow(row);
-        });
+        SwingUtilities.invokeLater(() -> resultsPanel.addResult(result));
     }
 
     @Override
@@ -817,246 +671,6 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
     }
 
     // -------------------------------------------------------------------------
-    // Results table
-    // -------------------------------------------------------------------------
-
-    private Object[] buildResultRow(FuzzResult result) {
-        List<Object> row = new ArrayList<>();
-        row.add(result.requestNum());
-        row.add(result.payloadSummary());
-        row.add(result.statusCode());
-        row.add((int) result.length());
-        row.add((int) result.timeMs());
-        row.add(result.error() != null ? result.error() : "");
-
-        int[] matches = result.grepMatchCounts();
-        if (matches != null) {
-            for (int count : matches) {
-                row.add(count > 0 ? String.valueOf(count) : "");
-            }
-        }
-        String[] extracts = result.grepExtracts();
-        if (extracts != null) {
-            for (String val : extracts) {
-                row.add(val != null ? val : "");
-            }
-        }
-        return row.toArray();
-    }
-
-    private void showSelectedResponse() {
-        int viewRow = resultsTable.getSelectedRow();
-        if (viewRow < 0) {
-            return;
-        }
-        int modelRow = resultsTable.convertRowIndexToModel(viewRow);
-        if (modelRow < 0 || modelRow >= allResults.size()) {
-            return;
-        }
-        FuzzResult result = allResults.get(modelRow);
-        String body = result.responseBody();
-        responseViewer.setText(body != null ? body : "");
-        responseViewer.setCaretPosition(0);
-
-        if (body != null) {
-            String lower = body.trim().toLowerCase();
-            if (lower.startsWith("{") || lower.startsWith("[")) {
-                responseViewer.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JSON);
-            } else if (lower.startsWith("<!doctype") || lower.startsWith("<html")) {
-                responseViewer.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_HTML);
-            } else if (lower.startsWith("<?xml")) {
-                responseViewer.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_XML);
-            } else {
-                responseViewer.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_NONE);
-            }
-        }
-    }
-
-    private void addResultsContextMenu() {
-        JPopupMenu menu = new JPopupMenu();
-
-        JMenuItem copyPayload = new JMenuItem("Copy Payload");
-        copyPayload.addActionListener(e -> {
-            int row = resultsTable.getSelectedRow();
-            if (row >= 0) {
-                Object val = resultsTable.getValueAt(row, 1);
-                copyToClipboard(val != null ? val.toString() : "");
-            }
-        });
-        menu.add(copyPayload);
-
-        JMenuItem copyResponse = new JMenuItem("Copy Response");
-        copyResponse.addActionListener(e -> {
-            int viewRow = resultsTable.getSelectedRow();
-            if (viewRow >= 0) {
-                int modelRow = resultsTable.convertRowIndexToModel(viewRow);
-                if (modelRow < allResults.size()) {
-                    copyToClipboard(allResults.get(modelRow).responseBody());
-                }
-            }
-        });
-        menu.add(copyResponse);
-
-        JMenuItem sendToRepeater = new JMenuItem("Send to Repeater");
-        sendToRepeater.addActionListener(e -> {
-            int viewRow = resultsTable.getSelectedRow();
-            if (viewRow >= 0 && sendToRepeaterCallback != null) {
-                int modelRow = resultsTable.convertRowIndexToModel(viewRow);
-                if (modelRow < allResults.size()) {
-                    FuzzResult r = allResults.get(modelRow);
-                    String template = templateEditor.getText();
-                    var positions = gg.effront.anarcry.fuzzer.FuzzPosition.parse(template);
-                    String injected = gg.effront.anarcry.fuzzer.FuzzPosition.inject(template, positions, r.payloads());
-                    String[] parts = FuzzEngine.parseRawRequest(injected);
-                    sendToRepeaterCallback.accept(parts[1], injected);
-                }
-            }
-        });
-        menu.add(sendToRepeater);
-
-        resultsTable.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                showPopup(e);
-            }
-
-            @Override
-            public void mouseReleased(MouseEvent e) {
-                showPopup(e);
-            }
-
-            private void showPopup(MouseEvent e) {
-                if (!e.isPopupTrigger()) {
-                    return;
-                }
-                int row = resultsTable.rowAtPoint(e.getPoint());
-                if (row >= 0) {
-                    resultsTable.setRowSelectionInterval(row, row);
-                }
-                menu.show(resultsTable, e.getX(), e.getY());
-            }
-        });
-    }
-
-    // -------------------------------------------------------------------------
-    // Filters
-    // -------------------------------------------------------------------------
-
-    private void applyFilters() {
-        List<RowFilter<Object, Object>> filters = new ArrayList<>();
-        String statusText = statusFilterField.getText().trim();
-        if (!statusText.isEmpty()) {
-            filters.add(createStatusFilter(statusText));
-        }
-        String lengthText = lengthFilterField.getText().trim();
-        if (!lengthText.isEmpty()) {
-            filters.add(createLengthFilter(lengthText));
-        }
-        if (filters.isEmpty()) {
-            resultsSorter.setRowFilter(null);
-        } else {
-            resultsSorter.setRowFilter(RowFilter.andFilter(filters));
-        }
-    }
-
-    private RowFilter<Object, Object> createStatusFilter(String text) {
-        boolean negate = text.startsWith("!");
-        String val = negate ? text.substring(1) : text;
-        return new RowFilter<>() {
-            @Override
-            public boolean include(Entry<?, ?> entry) {
-                Object statusObj = entry.getValue(2);
-                if (statusObj == null) {
-                    return false;
-                }
-                int status = (Integer) statusObj;
-                boolean match;
-                if (val.endsWith("xx")) {
-                    int prefix = Integer.parseInt(val.substring(0, 1));
-                    match = status / 100 == prefix;
-                } else {
-                    match = status == Integer.parseInt(val);
-                }
-                return negate != match;
-            }
-        };
-    }
-
-    private RowFilter<Object, Object> createLengthFilter(String text) {
-        String[] parts = text.split("-");
-        long min = parts.length > 0 ? Long.parseLong(parts[0].trim()) : 0;
-        long max = parts.length > 1 ? Long.parseLong(parts[1].trim()) : Long.MAX_VALUE;
-        return new RowFilter<>() {
-            @Override
-            public boolean include(Entry<?, ?> entry) {
-                Object lenObj = entry.getValue(3);
-                if (lenObj == null) {
-                    return false;
-                }
-                int len = (Integer) lenObj;
-                return len >= min && len <= max;
-            }
-        };
-    }
-
-    // -------------------------------------------------------------------------
-    // Export
-    // -------------------------------------------------------------------------
-
-    private void exportResults() {
-        JFileChooser fc = new JFileChooser();
-        fc.setSelectedFile(new java.io.File("fuzz-results-" + System.currentTimeMillis() + ".csv"));
-        fc.setFileFilter(new FileNameExtensionFilter("CSV files", "csv"));
-        if (fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
-            return;
-        }
-        try (PrintWriter pw = new PrintWriter(new FileWriter(fc.getSelectedFile()))) {
-            // header
-            StringBuilder hdr = new StringBuilder();
-            for (int i = 0; i < resultsModel.getColumnCount(); i++) {
-                if (i > 0) {
-                    hdr.append(",");
-                }
-                hdr.append(HttpRequestUtil.csvEscape(resultsModel.getColumnName(i)));
-            }
-            pw.println(hdr);
-            // rows (filtered)
-            for (int viewRow = 0; viewRow < resultsTable.getRowCount(); viewRow++) {
-                StringBuilder row = new StringBuilder();
-                for (int col = 0; col < resultsModel.getColumnCount(); col++) {
-                    if (col > 0) {
-                        row.append(",");
-                    }
-                    Object val = resultsTable.getValueAt(viewRow, col);
-                    row.append(HttpRequestUtil.csvEscape(val != null ? val.toString() : ""));
-                }
-                pw.println(row);
-            }
-            JOptionPane.showMessageDialog(this,
-                    "Exported " + resultsTable.getRowCount() + " rows to " + fc.getSelectedFile().getName());
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Export failed: " + ex.getMessage());
-        }
-    }
-
-    private void exportResultsJson() {
-        JFileChooser fc = new JFileChooser();
-        fc.setSelectedFile(new java.io.File("fuzz-results-" + System.currentTimeMillis() + ".json"));
-        fc.setFileFilter(new FileNameExtensionFilter("JSON files", "json"));
-        if (fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
-            return;
-        }
-        try (PrintWriter pw = new PrintWriter(new FileWriter(fc.getSelectedFile()))) {
-            com.google.gson.GsonBuilder gb = new com.google.gson.GsonBuilder().setPrettyPrinting();
-            pw.print(gb.create().toJson(allResults));
-            JOptionPane.showMessageDialog(this,
-                    "Exported " + allResults.size() + " results to " + fc.getSelectedFile().getName());
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Export failed: " + ex.getMessage());
-        }
-    }
-
-    // -------------------------------------------------------------------------
     // Keyboard shortcuts
     // -------------------------------------------------------------------------
 
@@ -1084,16 +698,6 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
     // Utilities
     // -------------------------------------------------------------------------
 
-    private static String truncate(String s, int max) {
-        return s.length() <= max ? s : s.substring(0, max - 2) + "..";
-    }
-
-    private static void copyToClipboard(String text) {
-        if (text != null) {
-            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
-        }
-    }
-
     private void applySyntaxTheme(RSyntaxTextArea area) {
         try {
             String themePath = AnarCryLaf.isDark()
@@ -1107,212 +711,5 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
 
     private void onThemeChanged() {
         applySyntaxTheme(templateEditor);
-        applySyntaxTheme(responseViewer);
-    }
-
-    // -------------------------------------------------------------------------
-    // Status code renderer
-    // -------------------------------------------------------------------------
-
-    private static class StatusCodeRenderer extends DefaultTableCellRenderer {
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus,
-                int row, int column) {
-            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-            if (!isSelected && column == 2 && value instanceof Integer status) {
-                if (status >= 500) {
-                    c.setForeground(new Color(0xDC, 0x38, 0x2D));
-                } else if (status >= 400) {
-                    c.setForeground(new Color(0xCC, 0x66, 0x00));
-                } else if (status >= 300) {
-                    c.setForeground(new Color(0x33, 0x87, 0xC5));
-                } else if (status >= 200) {
-                    c.setForeground(new Color(0x4D, 0xA5, 0x3C));
-                } else {
-                    c.setForeground(table.getForeground());
-                }
-            } else if (!isSelected) {
-                c.setForeground(table.getForeground());
-            }
-            // alternating rows
-            if (!isSelected) {
-                c.setBackground(row % 2 == 0 ? table.getBackground() : stripeColor(table));
-            }
-            return c;
-        }
-
-        private static Color stripeColor(JTable table) {
-            Color bg = table.getBackground();
-            int r = bg.getRed();
-            int g = bg.getGreen();
-            int b = bg.getBlue();
-            boolean dark = (r + g + b) / 3 < 128;
-            int delta = dark ? 12 : -12;
-            return new Color(clamp(r + delta), clamp(g + delta), clamp(b + delta));
-        }
-
-        private static int clamp(int v) {
-            return Math.max(0, Math.min(255, v));
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Payload panel (inner component)
-    // -------------------------------------------------------------------------
-
-    private class PayloadPanel extends JPanel {
-
-        private final JComboBox<String> sourceTypeCombo;
-        private final CardLayout cardLayout;
-        private final JPanel cardPanel;
-
-        // File source
-        private JTextField filePathField;
-        private JLabel fileInfoLabel;
-        private JTextArea filePreview;
-        private Path selectedFilePath;
-
-        // Inline source
-        private JTextArea inlineArea;
-
-        // Range source
-        private JSpinner rangeFrom;
-        private JSpinner rangeTo;
-        private JSpinner rangeStep;
-        private JSpinner rangePadding;
-
-        PayloadPanel() {
-            super(new BorderLayout(4, 4));
-            setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
-
-            sourceTypeCombo = new JComboBox<>(new String[]{"File", "Inline", "Range"});
-            sourceTypeCombo.addActionListener(e -> showSourceCard());
-            add(sourceTypeCombo, BorderLayout.NORTH);
-
-            cardLayout = new CardLayout();
-            cardPanel = new JPanel(cardLayout);
-            cardPanel.add(buildFileCard(), "File");
-            cardPanel.add(buildInlineCard(), "Inline");
-            cardPanel.add(buildRangeCard(), "Range");
-            add(cardPanel, BorderLayout.CENTER);
-        }
-
-        private JPanel buildFileCard() {
-            JPanel panel = new JPanel(new BorderLayout(4, 4));
-
-            JPanel pathBar = new JPanel(new BorderLayout(4, 0));
-            filePathField = new JTextField();
-            filePathField.setEditable(false);
-            JButton browseBtn = new JButton("Browse");
-            browseBtn.addActionListener(e -> browseFile());
-            pathBar.add(filePathField, BorderLayout.CENTER);
-            pathBar.add(browseBtn, BorderLayout.EAST);
-            panel.add(pathBar, BorderLayout.NORTH);
-
-            fileInfoLabel = new JLabel("No file selected");
-            filePreview = new JTextArea(8, 30);
-            filePreview.setEditable(false);
-            filePreview.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
-
-            JPanel infoPanel = new JPanel(new BorderLayout());
-            infoPanel.add(fileInfoLabel, BorderLayout.NORTH);
-            infoPanel.add(new JScrollPane(filePreview), BorderLayout.CENTER);
-            panel.add(infoPanel, BorderLayout.CENTER);
-
-            return panel;
-        }
-
-        private JPanel buildInlineCard() {
-            JPanel panel = new JPanel(new BorderLayout(4, 4));
-            panel.add(new JLabel("One payload per line:"), BorderLayout.NORTH);
-            inlineArea = new JTextArea(10, 30);
-            inlineArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-            panel.add(new JScrollPane(inlineArea), BorderLayout.CENTER);
-            return panel;
-        }
-
-        private JPanel buildRangeCard() {
-            JPanel panel = new JPanel(new GridBagLayout());
-            GridBagConstraints gbc = new GridBagConstraints();
-            gbc.insets = new Insets(4, 4, 4, 4);
-            gbc.anchor = GridBagConstraints.WEST;
-
-            gbc.gridx = 0;
-            gbc.gridy = 0;
-            panel.add(new JLabel("From:"), gbc);
-            gbc.gridx = 1;
-            rangeFrom = new JSpinner(new SpinnerNumberModel(0L, 0L, (long) Integer.MAX_VALUE, 1L));
-            panel.add(rangeFrom, gbc);
-
-            gbc.gridx = 0;
-            gbc.gridy = 1;
-            panel.add(new JLabel("To:"), gbc);
-            gbc.gridx = 1;
-            rangeTo = new JSpinner(new SpinnerNumberModel(100L, 0L, (long) Integer.MAX_VALUE, 1L));
-            panel.add(rangeTo, gbc);
-
-            gbc.gridx = 0;
-            gbc.gridy = 2;
-            panel.add(new JLabel("Step:"), gbc);
-            gbc.gridx = 1;
-            rangeStep = new JSpinner(new SpinnerNumberModel(1L, 1L, (long) Integer.MAX_VALUE, 1L));
-            panel.add(rangeStep, gbc);
-
-            gbc.gridx = 0;
-            gbc.gridy = 3;
-            panel.add(new JLabel("Padding:"), gbc);
-            gbc.gridx = 1;
-            rangePadding = new JSpinner(new SpinnerNumberModel(0, 0, 20, 1));
-            panel.add(rangePadding, gbc);
-
-            return panel;
-        }
-
-        private void showSourceCard() {
-            String selected = (String) sourceTypeCombo.getSelectedItem();
-            if (selected != null) {
-                cardLayout.show(cardPanel, selected);
-            }
-            updateEstimate();
-        }
-
-        private void browseFile() {
-            JFileChooser fc = new JFileChooser();
-            Path wordlistDir = Path.of(System.getProperty("user.home"), "wordlists");
-            if (Files.isDirectory(wordlistDir)) {
-                fc.setCurrentDirectory(wordlistDir.toFile());
-            }
-            fc.setFileFilter(new FileNameExtensionFilter("Text files", "txt", "lst", "csv"));
-            if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                selectedFilePath = fc.getSelectedFile().toPath();
-                filePathField.setText(selectedFilePath.toString());
-
-                Thread.ofVirtual().name("payload-file-load").start(() -> {
-                    FilePayloadSource src = new FilePayloadSource(selectedFilePath);
-                    long count = src.size();
-                    List<String> preview = src.preview(10);
-                    SwingUtilities.invokeLater(() -> {
-                        fileInfoLabel.setText(
-                                selectedFilePath.getFileName() + " (" + String.format("%,d", count) + " lines)");
-                        filePreview.setText(String.join("\n", preview));
-                        updateEstimate();
-                    });
-                });
-            }
-        }
-
-        PayloadSource getSource() {
-            String type = (String) sourceTypeCombo.getSelectedItem();
-            return switch (type) {
-                case "File" -> selectedFilePath != null ? new FilePayloadSource(selectedFilePath) : null;
-                case "Inline" -> {
-                    String text = inlineArea.getText();
-                    yield text != null && !text.isBlank() ? new InlinePayloadSource(text) : null;
-                }
-                case "Range" -> new RangePayloadSource((long) rangeFrom.getValue(), (long) rangeTo.getValue(),
-                        (long) rangeStep.getValue(), (int) rangePadding.getValue());
-                default -> null;
-            };
-        }
     }
 }

@@ -26,6 +26,84 @@ import org.junit.jupiter.api.Test;
 @Tag("unit")
 class FuzzEngineTest {
 
+    private static String makeTemplate(int port) {
+        return makeTemplate(port, "/{{1}}");
+    }
+
+    private static String makeTemplate(int port, String path) {
+        return "GET http://127.0.0.1:" + port + path + " HTTP/1.1\n" + "Host: 127.0.0.1:" + port + "\n\n";
+    }
+
+    private static FuzzEngine.FuzzConfig defaultConfig(String template, AttackType type, List<PayloadSource> sources) {
+        return new FuzzEngine.FuzzConfig(template, type, sources, List.of(), 1, 0, 0, 10, null, null, null, null, 0);
+    }
+
+    private static FuzzEngine.FuzzConfig defaultConfig(String template, AttackType type, List<PayloadSource> sources,
+            List<List<PayloadProcessor>> pipelines) {
+        return new FuzzEngine.FuzzConfig(template, type, sources, pipelines, 1, 0, 0, 10, null, null, null, null, 0);
+    }
+
+    private static FuzzEngine.FuzzConfig configWithDelay(String template, AttackType type, List<PayloadSource> sources,
+            int threads, int delayMs) {
+        return new FuzzEngine.FuzzConfig(template, type, sources, List.of(), threads, delayMs, 0, 10, null, null, null,
+                null, 0);
+    }
+
+    private static FuzzEngine.FuzzListener listenerWith(List<FuzzResult> results, CountDownLatch latch) {
+        return new FuzzEngine.FuzzListener() {
+            @Override
+            public void onResult(FuzzResult result) {
+                results.add(result);
+            }
+
+            @Override
+            public void onProgress(int completed, long total) {
+            }
+
+            @Override
+            public void onComplete(int totalCompleted, long elapsedMs) {
+                latch.countDown();
+            }
+
+            @Override
+            public void onError(String message) {
+            }
+        };
+    }
+
+    private static FuzzEngine.FuzzListener latchListener(CountDownLatch latch) {
+        return new FuzzEngine.FuzzListener() {
+            @Override
+            public void onResult(FuzzResult result) {
+            }
+
+            @Override
+            public void onProgress(int completed, long total) {
+            }
+
+            @Override
+            public void onComplete(int totalCompleted, long elapsedMs) {
+                latch.countDown();
+            }
+
+            @Override
+            public void onError(String message) {
+            }
+        };
+    }
+
+    private static HttpServer startOkServer() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            byte[] body = "OK".getBytes();
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+        return server;
+    }
+
     // ---------------------------------------------------------------------------
     // FuzzPosition -- parsing and injection
     // ---------------------------------------------------------------------------
@@ -763,20 +841,10 @@ class FuzzEngineTest {
         private HttpServer server;
         private int port;
         private FuzzEngine engine;
-        private final AtomicInteger serverRequestCount = new AtomicInteger(0);
 
         @BeforeEach
         void setUp() throws IOException {
-            serverRequestCount.set(0);
-            server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-            server.createContext("/", exchange -> {
-                serverRequestCount.incrementAndGet();
-                byte[] body = "OK".getBytes();
-                exchange.sendResponseHeaders(200, body.length);
-                exchange.getResponseBody().write(body);
-                exchange.getResponseBody().close();
-            });
-            server.start();
+            server = startOkServer();
             port = server.getAddress().getPort();
             engine = new FuzzEngine();
         }
@@ -787,24 +855,16 @@ class FuzzEngineTest {
             server.stop(0);
         }
 
-        private String makeTemplate(String method, String path) {
-            return method + " http://127.0.0.1:" + port + path + " HTTP/1.1\n" + "Host: 127.0.0.1:" + port + "\n\n";
-        }
-
         @Test
         void sniperAttackSinglePosition() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/api/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port
-                    + "\n\n";
+            String template = makeTemplate(port, "/api/{{1}}");
             List<FuzzResult> results = new CopyOnWriteArrayList<>();
             CountDownLatch latch = new CountDownLatch(1);
             AtomicLong totalReported = new AtomicLong(0);
 
             PayloadSource src = new InlinePayloadSource(List.of("admin", "root", "guest"));
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER, List.of(src),
-                    List.of(), 1, 0, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, new FuzzEngine.FuzzListener() {
+            engine.start(defaultConfig(template, AttackType.SNIPER, List.of(src)), new FuzzEngine.FuzzListener() {
                 @Override
                 public void onResult(FuzzResult result) {
                     results.add(result);
@@ -837,17 +897,13 @@ class FuzzEngineTest {
 
         @Test
         void sniperAttackTwoPositions() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/api/{{1}}/{{2}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port
-                    + "\n\n";
+            String template = makeTemplate(port, "/api/{{1}}/{{2}}");
             List<FuzzResult> results = new CopyOnWriteArrayList<>();
             CountDownLatch latch = new CountDownLatch(1);
 
             PayloadSource src = new InlinePayloadSource(List.of("a", "b"));
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER, List.of(src),
-                    List.of(), 1, 0, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, listenerWith(results, latch));
+            engine.start(defaultConfig(template, AttackType.SNIPER, List.of(src)), listenerWith(results, latch));
             assertTrue(latch.await(15, TimeUnit.SECONDS));
             // Sniper: 2 positions * 2 payloads = 4 requests
             assertEquals(4, results.size());
@@ -855,17 +911,13 @@ class FuzzEngineTest {
 
         @Test
         void batteringRamAllPositionsSamePayload() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/{{1}}/{{2}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port
-                    + "\n\n";
+            String template = makeTemplate(port, "/{{1}}/{{2}}");
             List<FuzzResult> results = new CopyOnWriteArrayList<>();
             CountDownLatch latch = new CountDownLatch(1);
 
             PayloadSource src = new InlinePayloadSource(List.of("test1", "test2", "test3"));
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.BATTERING_RAM, List.of(src),
-                    List.of(), 1, 0, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, listenerWith(results, latch));
+            engine.start(defaultConfig(template, AttackType.BATTERING_RAM, List.of(src)), listenerWith(results, latch));
             assertTrue(latch.await(15, TimeUnit.SECONDS));
             // Battering ram: 3 payloads (all positions get the same value)
             assertEquals(3, results.size());
@@ -880,18 +932,15 @@ class FuzzEngineTest {
 
         @Test
         void pitchforkStepsInParallel() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/{{1}}/{{2}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port
-                    + "\n\n";
+            String template = makeTemplate(port, "/{{1}}/{{2}}");
             List<FuzzResult> results = new CopyOnWriteArrayList<>();
             CountDownLatch latch = new CountDownLatch(1);
 
             PayloadSource src1 = new InlinePayloadSource(List.of("user1", "user2", "user3"));
             PayloadSource src2 = new InlinePayloadSource(List.of("pass1", "pass2"));
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.PITCHFORK,
-                    List.of(src1, src2), List.of(), 1, 0, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, listenerWith(results, latch));
+            engine.start(defaultConfig(template, AttackType.PITCHFORK, List.of(src1, src2)),
+                    listenerWith(results, latch));
             assertTrue(latch.await(15, TimeUnit.SECONDS));
             // Pitchfork: min(3, 2) = 2 requests
             assertEquals(2, results.size());
@@ -899,18 +948,15 @@ class FuzzEngineTest {
 
         @Test
         void clusterBombCartesianProduct() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/{{1}}/{{2}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port
-                    + "\n\n";
+            String template = makeTemplate(port, "/{{1}}/{{2}}");
             List<FuzzResult> results = new CopyOnWriteArrayList<>();
             CountDownLatch latch = new CountDownLatch(1);
 
             PayloadSource src1 = new InlinePayloadSource(List.of("a", "b"));
             PayloadSource src2 = new InlinePayloadSource(List.of("1", "2", "3"));
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.CLUSTER_BOMB,
-                    List.of(src1, src2), List.of(), 1, 0, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, listenerWith(results, latch));
+            engine.start(defaultConfig(template, AttackType.CLUSTER_BOMB, List.of(src1, src2)),
+                    listenerWith(results, latch));
             assertTrue(latch.await(15, TimeUnit.SECONDS));
             // Cluster bomb: 2 * 3 = 6 requests
             assertEquals(6, results.size());
@@ -929,7 +975,7 @@ class FuzzEngineTest {
             server.start();
             port = server.getAddress().getPort();
 
-            String template = "GET http://127.0.0.1:" + port + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port + "\n\n";
+            String template = makeTemplate(port);
             List<FuzzResult> results = new CopyOnWriteArrayList<>();
             CountDownLatch latch = new CountDownLatch(1);
 
@@ -956,36 +1002,33 @@ class FuzzEngineTest {
 
         @Test
         void noPositionsReportsError() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/static HTTP/1.1\n" + "Host: 127.0.0.1:" + port
-                    + "\n\n";
+            String template = makeTemplate(port, "/static");
             AtomicBoolean gotError = new AtomicBoolean(false);
             CountDownLatch latch = new CountDownLatch(1);
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER,
-                    List.of(new InlinePayloadSource(List.of("a"))), List.of(), 1, 0, 0, 10, null, null, null, null, 0);
+            engine.start(defaultConfig(template, AttackType.SNIPER, List.of(new InlinePayloadSource(List.of("a")))),
+                    new FuzzEngine.FuzzListener() {
+                        @Override
+                        public void onResult(FuzzResult result) {
+                        }
 
-            engine.start(config, new FuzzEngine.FuzzListener() {
-                @Override
-                public void onResult(FuzzResult result) {
-                }
+                        @Override
+                        public void onProgress(int completed, long total) {
+                        }
 
-                @Override
-                public void onProgress(int completed, long total) {
-                }
+                        @Override
+                        public void onComplete(int totalCompleted, long elapsedMs) {
+                            latch.countDown();
+                        }
 
-                @Override
-                public void onComplete(int totalCompleted, long elapsedMs) {
-                    latch.countDown();
-                }
-
-                @Override
-                public void onError(String message) {
-                    if (message.contains("No positions")) {
-                        gotError.set(true);
-                    }
-                    latch.countDown();
-                }
-            });
+                        @Override
+                        public void onError(String message) {
+                            if (message.contains("No positions")) {
+                                gotError.set(true);
+                            }
+                            latch.countDown();
+                        }
+                    });
 
             assertTrue(latch.await(10, TimeUnit.SECONDS));
             assertTrue(gotError.get(), "Must report error when no {{N}} markers found");
@@ -993,14 +1036,11 @@ class FuzzEngineTest {
 
         @Test
         void noSourcesReportsError() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port + "\n\n";
+            String template = makeTemplate(port);
             AtomicBoolean gotError = new AtomicBoolean(false);
             CountDownLatch latch = new CountDownLatch(1);
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER, List.of(), List.of(),
-                    1, 0, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, new FuzzEngine.FuzzListener() {
+            engine.start(defaultConfig(template, AttackType.SNIPER, List.of()), new FuzzEngine.FuzzListener() {
                 @Override
                 public void onResult(FuzzResult result) {
                 }
@@ -1043,8 +1083,7 @@ class FuzzEngineTest {
             server.start();
             port = server.getAddress().getPort();
 
-            String template = "GET http://127.0.0.1:" + port + "/api/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port
-                    + "\n\n";
+            String template = makeTemplate(port, "/api/{{1}}");
             List<FuzzResult> results = new CopyOnWriteArrayList<>();
             CountDownLatch latch = new CountDownLatch(1);
 
@@ -1052,10 +1091,8 @@ class FuzzEngineTest {
             List<PayloadProcessor> pipeline = List.of(PayloadProcessors.prefix("PRE_"),
                     PayloadProcessors.suffix("_SUF"));
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER, List.of(src),
-                    List.of(pipeline), 1, 0, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, listenerWith(results, latch));
+            engine.start(defaultConfig(template, AttackType.SNIPER, List.of(src), List.of(pipeline)),
+                    listenerWith(results, latch));
             assertTrue(latch.await(15, TimeUnit.SECONDS));
             assertEquals(1, results.size());
             // Verify the payload in the result was transformed
@@ -1064,7 +1101,7 @@ class FuzzEngineTest {
 
         @Test
         void concurrentThreadsWork() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port + "\n\n";
+            String template = makeTemplate(port);
             List<FuzzResult> results = new CopyOnWriteArrayList<>();
             CountDownLatch latch = new CountDownLatch(1);
 
@@ -1074,10 +1111,8 @@ class FuzzEngineTest {
             }
             PayloadSource src = new InlinePayloadSource(payloads);
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER, List.of(src),
-                    List.of(), 5, 0, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, listenerWith(results, latch));
+            engine.start(configWithDelay(template, AttackType.SNIPER, List.of(src), 5, 0),
+                    listenerWith(results, latch));
             assertTrue(latch.await(30, TimeUnit.SECONDS));
             assertEquals(20, results.size(), "All 20 requests must complete");
         }
@@ -1096,14 +1131,12 @@ class FuzzEngineTest {
             server.start();
             port = server.getAddress().getPort();
 
-            String template = "GET http://127.0.0.1:" + port + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port + "\n\n";
+            String template = makeTemplate(port);
             List<FuzzResult> results = new CopyOnWriteArrayList<>();
             CountDownLatch latch = new CountDownLatch(1);
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER,
-                    List.of(new InlinePayloadSource(List.of("x"))), List.of(), 1, 0, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, listenerWith(results, latch));
+            engine.start(defaultConfig(template, AttackType.SNIPER, List.of(new InlinePayloadSource(List.of("x")))),
+                    listenerWith(results, latch));
             assertTrue(latch.await(15, TimeUnit.SECONDS));
             assertEquals(1, results.size());
 
@@ -1121,8 +1154,7 @@ class FuzzEngineTest {
             server.stop(0);
             int closedPort = port;
 
-            String template = "GET http://127.0.0.1:" + closedPort + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:"
-                    + closedPort + "\n\n";
+            String template = makeTemplate(closedPort);
             List<FuzzResult> results = new CopyOnWriteArrayList<>();
             CountDownLatch latch = new CountDownLatch(1);
 
@@ -1139,24 +1171,20 @@ class FuzzEngineTest {
 
         @Test
         void rangePayloadSourceWithFuzzer() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/id/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port
-                    + "\n\n";
+            String template = makeTemplate(port, "/id/{{1}}");
             List<FuzzResult> results = new CopyOnWriteArrayList<>();
             CountDownLatch latch = new CountDownLatch(1);
 
             RangePayloadSource range = new RangePayloadSource(1, 5, 1, 0);
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER, List.of(range),
-                    List.of(), 1, 0, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, listenerWith(results, latch));
+            engine.start(defaultConfig(template, AttackType.SNIPER, List.of(range)), listenerWith(results, latch));
             assertTrue(latch.await(15, TimeUnit.SECONDS));
             assertEquals(5, results.size(), "Range 1-5 step 1 should produce 5 requests");
         }
 
         @Test
         void doubleStartReportsError() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port + "\n\n";
+            String template = makeTemplate(port);
             List<String> payloads = new ArrayList<>();
             for (int i = 0; i < 100; i++) {
                 payloads.add("p" + i);
@@ -1164,8 +1192,8 @@ class FuzzEngineTest {
             CountDownLatch firstDone = new CountDownLatch(1);
             AtomicBoolean secondGotError = new AtomicBoolean(false);
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER,
-                    List.of(new InlinePayloadSource(payloads)), List.of(), 1, 10, 0, 10, null, null, null, null, 0);
+            FuzzEngine.FuzzConfig config = configWithDelay(template, AttackType.SNIPER,
+                    List.of(new InlinePayloadSource(payloads)), 1, 10);
 
             engine.start(config, new FuzzEngine.FuzzListener() {
                 @Override
@@ -1215,17 +1243,14 @@ class FuzzEngineTest {
 
         @Test
         void progressCallbackFires() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port + "\n\n";
+            String template = makeTemplate(port);
             AtomicInteger maxProgress = new AtomicInteger(0);
             AtomicLong totalReported = new AtomicLong(0);
             CountDownLatch latch = new CountDownLatch(1);
 
             PayloadSource src = new InlinePayloadSource(List.of("a", "b", "c"));
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER, List.of(src),
-                    List.of(), 1, 0, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, new FuzzEngine.FuzzListener() {
+            engine.start(defaultConfig(template, AttackType.SNIPER, List.of(src)), new FuzzEngine.FuzzListener() {
                 @Override
                 public void onResult(FuzzResult result) {
                 }
@@ -1254,62 +1279,114 @@ class FuzzEngineTest {
 
         @Test
         void onCompleteReportsElapsedTime() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port + "\n\n";
+            String template = makeTemplate(port);
             AtomicLong elapsed = new AtomicLong(-1);
             AtomicInteger completed = new AtomicInteger(-1);
             CountDownLatch latch = new CountDownLatch(1);
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER,
-                    List.of(new InlinePayloadSource(List.of("a"))), List.of(), 1, 0, 0, 10, null, null, null, null, 0);
+            engine.start(defaultConfig(template, AttackType.SNIPER, List.of(new InlinePayloadSource(List.of("a")))),
+                    new FuzzEngine.FuzzListener() {
+                        @Override
+                        public void onResult(FuzzResult result) {
+                        }
 
-            engine.start(config, new FuzzEngine.FuzzListener() {
-                @Override
-                public void onResult(FuzzResult result) {
-                }
+                        @Override
+                        public void onProgress(int c, long t) {
+                        }
 
-                @Override
-                public void onProgress(int c, long t) {
-                }
+                        @Override
+                        public void onComplete(int totalCompleted, long elapsedMs) {
+                            completed.set(totalCompleted);
+                            elapsed.set(elapsedMs);
+                            latch.countDown();
+                        }
 
-                @Override
-                public void onComplete(int totalCompleted, long elapsedMs) {
-                    completed.set(totalCompleted);
-                    elapsed.set(elapsedMs);
-                    latch.countDown();
-                }
-
-                @Override
-                public void onError(String message) {
-                    fail("Unexpected error: " + message);
-                }
-            });
+                        @Override
+                        public void onError(String message) {
+                            fail("Unexpected error: " + message);
+                        }
+                    });
 
             assertTrue(latch.await(15, TimeUnit.SECONDS));
             assertEquals(1, completed.get());
             assertTrue(elapsed.get() >= 0, "Elapsed time must be non-negative");
         }
 
-        private FuzzEngine.FuzzListener listenerWith(List<FuzzResult> results, CountDownLatch latch) {
-            return new FuzzEngine.FuzzListener() {
-                @Override
-                public void onResult(FuzzResult result) {
-                    results.add(result);
-                }
+        @Test
+        void differentStatusCodesRecorded() throws Exception {
+            HttpServer statusServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            AtomicInteger callCount = new AtomicInteger(0);
+            statusServer.createContext("/", exchange -> {
+                int n = callCount.incrementAndGet();
+                int status = n % 2 == 0 ? 200 : 403;
+                byte[] body = ("resp-" + n).getBytes();
+                exchange.sendResponseHeaders(status, body.length);
+                exchange.getResponseBody().write(body);
+                exchange.getResponseBody().close();
+            });
+            statusServer.start();
+            int statusPort = statusServer.getAddress().getPort();
 
-                @Override
-                public void onProgress(int completed, long total) {
-                }
+            try {
+                String template = makeTemplate(statusPort);
+                List<FuzzResult> results = new CopyOnWriteArrayList<>();
+                CountDownLatch latch = new CountDownLatch(1);
 
-                @Override
-                public void onComplete(int totalCompleted, long elapsedMs) {
-                    latch.countDown();
-                }
+                engine.start(
+                        defaultConfig(template, AttackType.SNIPER,
+                                List.of(new InlinePayloadSource(List.of("a", "b", "c", "d")))),
+                        listenerWith(results, latch));
 
-                @Override
-                public void onError(String message) {
-                    // Allow engine errors (like "already running") to be tested separately
-                }
-            };
+                assertTrue(latch.await(15, TimeUnit.SECONDS));
+                assertEquals(4, results.size());
+                // At least one 200 and one 403 should appear
+                assertTrue(results.stream().anyMatch(r -> r.statusCode() == 200), "Must capture 200 status");
+                assertTrue(results.stream().anyMatch(r -> r.statusCode() == 403), "Must capture 403 status");
+            } finally {
+                statusServer.stop(0);
+            }
+        }
+
+        @Test
+        void filePayloadSourceWithFuzzer() throws Exception {
+            Path tempFile = Files.createTempFile("fuzz-file-int-", ".txt");
+            Files.writeString(tempFile, "alpha\nbeta\ngamma\n");
+
+            HttpServer fileServer = startOkServer();
+            int filePort = fileServer.getAddress().getPort();
+
+            try {
+                String template = makeTemplate(filePort);
+                List<FuzzResult> results = new CopyOnWriteArrayList<>();
+                CountDownLatch latch = new CountDownLatch(1);
+
+                engine.start(defaultConfig(template, AttackType.SNIPER, List.of(new FilePayloadSource(tempFile))),
+                        listenerWith(results, latch));
+
+                assertTrue(latch.await(15, TimeUnit.SECONDS));
+                assertEquals(3, results.size(), "File with 3 lines should produce 3 requests");
+            } finally {
+                fileServer.stop(0);
+                Files.deleteIfExists(tempFile);
+            }
+        }
+
+        @Test
+        void skipProcessorReducesRequestCount() throws Exception {
+            String template = makeTemplate(port);
+            List<FuzzResult> results = new CopyOnWriteArrayList<>();
+            CountDownLatch latch = new CountDownLatch(1);
+
+            PayloadSource src = new InlinePayloadSource(List.of("admin", "# comment", "root", "# skip-this"));
+            // Skip payloads starting with #
+            List<PayloadProcessor> pipeline = List.of(PayloadProcessors.skipIfMatches("^#"));
+
+            engine.start(defaultConfig(template, AttackType.SNIPER, List.of(src), List.of(pipeline)),
+                    listenerWith(results, latch));
+
+            assertTrue(latch.await(15, TimeUnit.SECONDS));
+            // 4 payloads, 2 skipped by processor -> 2 actual requests
+            assertEquals(2, results.size(), "Skip processor must prevent requests for matching payloads");
         }
     }
 
@@ -1326,14 +1403,7 @@ class FuzzEngineTest {
 
         @BeforeEach
         void setUp() throws IOException {
-            server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-            server.createContext("/", exchange -> {
-                byte[] body = "OK".getBytes();
-                exchange.sendResponseHeaders(200, body.length);
-                exchange.getResponseBody().write(body);
-                exchange.getResponseBody().close();
-            });
-            server.start();
+            server = startOkServer();
             port = server.getAddress().getPort();
             engine = new FuzzEngine();
         }
@@ -1346,7 +1416,7 @@ class FuzzEngineTest {
 
         @Test
         void stopCancelsBeforeAllComplete() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port + "\n\n";
+            String template = makeTemplate(port);
             List<String> payloads = new ArrayList<>();
             for (int i = 0; i < 1000; i++) {
                 payloads.add("payload-" + i);
@@ -1354,28 +1424,8 @@ class FuzzEngineTest {
             List<FuzzResult> results = new CopyOnWriteArrayList<>();
             CountDownLatch latch = new CountDownLatch(1);
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER,
-                    List.of(new InlinePayloadSource(payloads)), List.of(), 1, 5, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, new FuzzEngine.FuzzListener() {
-                @Override
-                public void onResult(FuzzResult result) {
-                    results.add(result);
-                }
-
-                @Override
-                public void onProgress(int completed, long total) {
-                }
-
-                @Override
-                public void onComplete(int totalCompleted, long elapsedMs) {
-                    latch.countDown();
-                }
-
-                @Override
-                public void onError(String message) {
-                }
-            });
+            engine.start(configWithDelay(template, AttackType.SNIPER, List.of(new InlinePayloadSource(payloads)), 1, 5),
+                    listenerWith(results, latch));
 
             // Let a few requests go through, then stop
             Thread.sleep(100);
@@ -1389,7 +1439,7 @@ class FuzzEngineTest {
 
         @Test
         void pauseAndResume() throws Exception {
-            String template = "GET http://127.0.0.1:" + port + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port + "\n\n";
+            String template = makeTemplate(port);
             List<String> payloads = new ArrayList<>();
             for (int i = 0; i < 50; i++) {
                 payloads.add("p" + i);
@@ -1397,28 +1447,8 @@ class FuzzEngineTest {
             List<FuzzResult> results = new CopyOnWriteArrayList<>();
             CountDownLatch latch = new CountDownLatch(1);
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER,
-                    List.of(new InlinePayloadSource(payloads)), List.of(), 1, 5, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, new FuzzEngine.FuzzListener() {
-                @Override
-                public void onResult(FuzzResult result) {
-                    results.add(result);
-                }
-
-                @Override
-                public void onProgress(int completed, long total) {
-                }
-
-                @Override
-                public void onComplete(int totalCompleted, long elapsedMs) {
-                    latch.countDown();
-                }
-
-                @Override
-                public void onError(String message) {
-                }
-            });
+            engine.start(configWithDelay(template, AttackType.SNIPER, List.of(new InlinePayloadSource(payloads)), 1, 5),
+                    listenerWith(results, latch));
 
             // Pause after some requests
             Thread.sleep(50);
@@ -1443,34 +1473,15 @@ class FuzzEngineTest {
         void isRunningReflectsState() throws Exception {
             assertFalse(engine.isRunning(), "Engine must not be running before start");
 
-            String template = "GET http://127.0.0.1:" + port + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port + "\n\n";
+            String template = makeTemplate(port);
             CountDownLatch latch = new CountDownLatch(1);
             List<String> payloads = new ArrayList<>();
             for (int i = 0; i < 50; i++) {
                 payloads.add("p" + i);
             }
 
-            FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER,
-                    List.of(new InlinePayloadSource(payloads)), List.of(), 1, 5, 0, 10, null, null, null, null, 0);
-
-            engine.start(config, new FuzzEngine.FuzzListener() {
-                @Override
-                public void onResult(FuzzResult result) {
-                }
-
-                @Override
-                public void onProgress(int completed, long total) {
-                }
-
-                @Override
-                public void onComplete(int totalCompleted, long elapsedMs) {
-                    latch.countDown();
-                }
-
-                @Override
-                public void onError(String message) {
-                }
-            });
+            engine.start(configWithDelay(template, AttackType.SNIPER, List.of(new InlinePayloadSource(payloads)), 1, 5),
+                    latchListener(latch));
 
             // Should be running shortly after start
             Thread.sleep(10);
@@ -1479,194 +1490,6 @@ class FuzzEngineTest {
             engine.stop();
             assertTrue(latch.await(15, TimeUnit.SECONDS));
             assertFalse(engine.isRunning(), "Engine must not be running after stop + complete");
-        }
-    }
-
-    // ---------------------------------------------------------------------------
-    // FuzzEngine -- status code variation for grep testing
-    // ---------------------------------------------------------------------------
-
-    @Nested
-    class StatusCodeVariationTests {
-
-        @Test
-        void differentStatusCodesRecorded() throws Exception {
-            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-            AtomicInteger callCount = new AtomicInteger(0);
-            server.createContext("/", exchange -> {
-                int n = callCount.incrementAndGet();
-                int status = n % 2 == 0 ? 200 : 403;
-                byte[] body = ("resp-" + n).getBytes();
-                exchange.sendResponseHeaders(status, body.length);
-                exchange.getResponseBody().write(body);
-                exchange.getResponseBody().close();
-            });
-            server.start();
-            int port = server.getAddress().getPort();
-
-            try {
-                FuzzEngine engine = new FuzzEngine();
-                String template = "GET http://127.0.0.1:" + port + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port
-                        + "\n\n";
-                List<FuzzResult> results = new CopyOnWriteArrayList<>();
-                CountDownLatch latch = new CountDownLatch(1);
-
-                FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER,
-                        List.of(new InlinePayloadSource(List.of("a", "b", "c", "d"))), List.of(), 1, 0, 0, 10, null,
-                        null, null, null, 0);
-
-                engine.start(config, new FuzzEngine.FuzzListener() {
-                    @Override
-                    public void onResult(FuzzResult result) {
-                        results.add(result);
-                    }
-
-                    @Override
-                    public void onProgress(int completed, long total) {
-                    }
-
-                    @Override
-                    public void onComplete(int totalCompleted, long elapsedMs) {
-                        latch.countDown();
-                    }
-
-                    @Override
-                    public void onError(String message) {
-                    }
-                });
-
-                assertTrue(latch.await(15, TimeUnit.SECONDS));
-                assertEquals(4, results.size());
-                // At least one 200 and one 403 should appear
-                assertTrue(results.stream().anyMatch(r -> r.statusCode() == 200), "Must capture 200 status");
-                assertTrue(results.stream().anyMatch(r -> r.statusCode() == 403), "Must capture 403 status");
-            } finally {
-                server.stop(0);
-            }
-        }
-    }
-
-    // ---------------------------------------------------------------------------
-    // FilePayloadSource integration with FuzzEngine
-    // ---------------------------------------------------------------------------
-
-    @Nested
-    class FilePayloadIntegrationTests {
-
-        @Test
-        void filePayloadSourceWithFuzzer() throws Exception {
-            Path tempFile = Files.createTempFile("fuzz-file-int-", ".txt");
-            Files.writeString(tempFile, "alpha\nbeta\ngamma\n");
-
-            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-            server.createContext("/", exchange -> {
-                byte[] body = "OK".getBytes();
-                exchange.sendResponseHeaders(200, body.length);
-                exchange.getResponseBody().write(body);
-                exchange.getResponseBody().close();
-            });
-            server.start();
-            int port = server.getAddress().getPort();
-
-            try {
-                FuzzEngine engine = new FuzzEngine();
-                String template = "GET http://127.0.0.1:" + port + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port
-                        + "\n\n";
-                List<FuzzResult> results = new CopyOnWriteArrayList<>();
-                CountDownLatch latch = new CountDownLatch(1);
-
-                FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER,
-                        List.of(new FilePayloadSource(tempFile)), List.of(), 1, 0, 0, 10, null, null, null, null, 0);
-
-                engine.start(config, new FuzzEngine.FuzzListener() {
-                    @Override
-                    public void onResult(FuzzResult result) {
-                        results.add(result);
-                    }
-
-                    @Override
-                    public void onProgress(int completed, long total) {
-                    }
-
-                    @Override
-                    public void onComplete(int totalCompleted, long elapsedMs) {
-                        latch.countDown();
-                    }
-
-                    @Override
-                    public void onError(String message) {
-                        fail("Unexpected error: " + message);
-                    }
-                });
-
-                assertTrue(latch.await(15, TimeUnit.SECONDS));
-                assertEquals(3, results.size(), "File with 3 lines should produce 3 requests");
-            } finally {
-                server.stop(0);
-                Files.deleteIfExists(tempFile);
-            }
-        }
-    }
-
-    // ---------------------------------------------------------------------------
-    // Processor pipeline skip integration
-    // ---------------------------------------------------------------------------
-
-    @Nested
-    class ProcessorSkipIntegrationTests {
-
-        @Test
-        void skipProcessorReducesRequestCount() throws Exception {
-            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-            server.createContext("/", exchange -> {
-                byte[] body = "OK".getBytes();
-                exchange.sendResponseHeaders(200, body.length);
-                exchange.getResponseBody().write(body);
-                exchange.getResponseBody().close();
-            });
-            server.start();
-            int port = server.getAddress().getPort();
-
-            try {
-                FuzzEngine engine = new FuzzEngine();
-                String template = "GET http://127.0.0.1:" + port + "/{{1}} HTTP/1.1\n" + "Host: 127.0.0.1:" + port
-                        + "\n\n";
-                List<FuzzResult> results = new CopyOnWriteArrayList<>();
-                CountDownLatch latch = new CountDownLatch(1);
-
-                PayloadSource src = new InlinePayloadSource(List.of("admin", "# comment", "root", "# skip-this"));
-                // Skip payloads starting with #
-                List<PayloadProcessor> pipeline = List.of(PayloadProcessors.skipIfMatches("^#"));
-
-                FuzzEngine.FuzzConfig config = new FuzzEngine.FuzzConfig(template, AttackType.SNIPER, List.of(src),
-                        List.of(pipeline), 1, 0, 0, 10, null, null, null, null, 0);
-
-                engine.start(config, new FuzzEngine.FuzzListener() {
-                    @Override
-                    public void onResult(FuzzResult result) {
-                        results.add(result);
-                    }
-
-                    @Override
-                    public void onProgress(int completed, long total) {
-                    }
-
-                    @Override
-                    public void onComplete(int totalCompleted, long elapsedMs) {
-                        latch.countDown();
-                    }
-
-                    @Override
-                    public void onError(String message) {
-                    }
-                });
-
-                assertTrue(latch.await(15, TimeUnit.SECONDS));
-                // 4 payloads, 2 skipped by processor -> 2 actual requests
-                assertEquals(2, results.size(), "Skip processor must prevent requests for matching payloads");
-            } finally {
-                server.stop(0);
-            }
         }
     }
 }
