@@ -562,12 +562,12 @@ public class AnarCryGui {
     private void onTabChanged() {
         int idx = tabs.getSelectedIndex();
         if (SCAN_TAB_INDICES.contains(idx)) {
-            if (mainSplit.getLeftComponent() != modulesPanel) {
+            if (!modulesPanel.equals(mainSplit.getLeftComponent())) {
                 mainSplit.setLeftComponent(modulesPanel);
                 mainSplit.setDividerLocation(MODULES_PANEL_WIDTH);
             }
         } else {
-            if (mainSplit.getLeftComponent() != emptyPanel) {
+            if (!emptyPanel.equals(mainSplit.getLeftComponent())) {
                 mainSplit.setLeftComponent(emptyPanel);
                 mainSplit.setDividerLocation(0);
             }
