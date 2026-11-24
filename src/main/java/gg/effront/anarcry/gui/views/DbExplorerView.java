@@ -2192,12 +2192,12 @@ public class DbExplorerView extends JPanel {
         Thread.ofVirtual().name("export-results").start(() -> {
             Consumer<String> log = this::logMessage;
             try {
-                if (selected == sqlFilter || ext.endsWith(".sql")) {
+                if (sqlFilter.equals(selected) || ext.endsWith(".sql")) {
                     String tableName = "exported_data";
                     DataExporter.exportSqlInsert(cols, rows, outputFile, tableName, log);
-                } else if (selected == mdFilter || ext.endsWith(".md")) {
+                } else if (mdFilter.equals(selected) || ext.endsWith(".md")) {
                     DataExporter.exportMarkdown(cols, rows, outputFile, log);
-                } else if (selected == jsonFilter || ext.endsWith(".json")) {
+                } else if (jsonFilter.equals(selected) || ext.endsWith(".json")) {
                     DataExporter.exportJson(cols, rows, outputFile, log);
                 } else {
                     DataExporter.exportCsv(cols, rows, outputFile, log);

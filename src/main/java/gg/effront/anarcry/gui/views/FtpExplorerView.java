@@ -107,7 +107,7 @@ public class FtpExplorerView extends JPanel {
         String host;
         int port;
         String username;
-        String password = ""; // transient -- cleared on disconnect
+        String password;
         String keyPath = "";
         boolean passive = true;
         boolean discovered;
@@ -462,7 +462,7 @@ public class FtpExplorerView extends JPanel {
         gbc.gridwidth = 3;
         gbc.weightx = 1.0;
         JPasswordField passwordField = new JPasswordField(20);
-        if (existing != null && !existing.password.isEmpty()) {
+        if (existing != null && existing.password != null && !existing.password.isEmpty()) {
             passwordField.setText(existing.password);
         }
         form.add(passwordField, gbc);

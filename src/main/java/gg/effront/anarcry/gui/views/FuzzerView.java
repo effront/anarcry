@@ -11,6 +11,7 @@ import gg.effront.anarcry.fuzzer.PayloadProcessors;
 import gg.effront.anarcry.fuzzer.PayloadSource;
 import gg.effront.anarcry.fuzzer.RangePayloadSource;
 import gg.effront.anarcry.gui.theme.AnarCryLaf;
+import gg.effront.anarcry.util.HttpRequestUtil;
 
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
@@ -1016,7 +1017,7 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
                 if (i > 0) {
                     hdr.append(",");
                 }
-                hdr.append(csvEscape(resultsModel.getColumnName(i)));
+                hdr.append(HttpRequestUtil.csvEscape(resultsModel.getColumnName(i)));
             }
             pw.println(hdr);
             // rows (filtered)
@@ -1027,7 +1028,7 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
                         row.append(",");
                     }
                     Object val = resultsTable.getValueAt(viewRow, col);
-                    row.append(csvEscape(val != null ? val.toString() : ""));
+                    row.append(HttpRequestUtil.csvEscape(val != null ? val.toString() : ""));
                 }
                 pw.println(row);
             }
@@ -1085,13 +1086,6 @@ public class FuzzerView extends JPanel implements FuzzEngine.FuzzListener {
 
     private static String truncate(String s, int max) {
         return s.length() <= max ? s : s.substring(0, max - 2) + "..";
-    }
-
-    private static String csvEscape(String s) {
-        if (s.contains(",") || s.contains("\"") || s.contains("\n")) {
-            return "\"" + s.replace("\"", "\"\"") + "\"";
-        }
-        return s;
     }
 
     private static void copyToClipboard(String text) {

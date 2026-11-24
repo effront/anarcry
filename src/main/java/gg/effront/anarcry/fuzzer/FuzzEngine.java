@@ -2,6 +2,7 @@ package gg.effront.anarcry.fuzzer;
 
 import java.net.URI;
 import java.net.http.HttpClient;
+import gg.effront.anarcry.util.HttpRequestUtil;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
@@ -203,7 +204,7 @@ public final class FuzzEngine {
                 builder.header(config.sessionTokenHeader(), token);
             }
 
-            applyMethod(builder, method, body);
+            HttpRequestUtil.applyMethod(builder, method, body);
 
             long start = System.nanoTime();
             HttpResponse<String> resp = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
@@ -226,21 +227,6 @@ public final class FuzzEngine {
         } catch (Exception e) {
             String errMsg = e.getClass().getSimpleName() + ": " + e.getMessage();
             return new FuzzResult(num, payloads, 0, 0, 0, "", "", errMsg, new int[0], new String[0]);
-        }
-    }
-
-    private static void applyMethod(HttpRequest.Builder builder, String method, String body) {
-        boolean hasBody = body != null && !body.isBlank();
-        switch (method.toUpperCase()) {
-            case "GET" -> builder.GET();
-            case "DELETE" -> builder.DELETE();
-            case "HEAD" -> builder.method("HEAD", HttpRequest.BodyPublishers.noBody());
-            case "OPTIONS" -> builder.method("OPTIONS", HttpRequest.BodyPublishers.noBody());
-            case "POST" -> builder.POST(HttpRequest.BodyPublishers.ofString(hasBody ? body : ""));
-            case "PUT" -> builder.PUT(HttpRequest.BodyPublishers.ofString(hasBody ? body : ""));
-            case "PATCH" -> builder.method("PATCH", HttpRequest.BodyPublishers.ofString(hasBody ? body : ""));
-            default -> builder.method(method,
-                    hasBody ? HttpRequest.BodyPublishers.ofString(body) : HttpRequest.BodyPublishers.noBody());
         }
     }
 

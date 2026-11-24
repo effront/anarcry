@@ -10,6 +10,7 @@ import java.awt.event.KeyEvent;
 
 import java.net.URI;
 import java.net.http.HttpClient;
+import gg.effront.anarcry.util.HttpRequestUtil;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
@@ -193,8 +194,8 @@ public class RepeaterView extends JPanel {
                 HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(url))
                         .timeout(Duration.ofSeconds(REQUEST_TIMEOUT_SECONDS));
 
-                applyHeaders(builder, rawHeaders);
-                applyMethod(builder, method, body);
+                HttpRequestUtil.applyHeaders(builder, rawHeaders);
+                HttpRequestUtil.applyMethod(builder, method, body);
 
                 long start = System.nanoTime();
                 HttpResponse<String> resp = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
@@ -262,35 +263,6 @@ public class RepeaterView extends JPanel {
             return SyntaxConstants.SYNTAX_STYLE_CSS;
         }
         return SyntaxConstants.SYNTAX_STYLE_NONE;
-    }
-
-    private static void applyHeaders(HttpRequest.Builder builder, String rawHeaders) {
-        for (String line : rawHeaders.split("\n")) {
-            String trimmed = line.trim();
-            if (trimmed.isBlank()) {
-                continue;
-            }
-            int sep = trimmed.indexOf(':');
-            if (sep > 0) {
-                String key = trimmed.substring(0, sep).trim();
-                String val = trimmed.substring(sep + 1).trim();
-                builder.header(key, val);
-            }
-        }
-    }
-
-    private static void applyMethod(HttpRequest.Builder builder, String method, String body) {
-        boolean hasBody = body != null && !body.isBlank();
-        switch (method) {
-            case "GET" -> builder.GET();
-            case "DELETE" -> builder.DELETE();
-            case "HEAD" -> builder.method("HEAD", HttpRequest.BodyPublishers.noBody());
-            case "OPTIONS" -> builder.method("OPTIONS", HttpRequest.BodyPublishers.noBody());
-            case "POST" -> builder.POST(HttpRequest.BodyPublishers.ofString(hasBody ? body : ""));
-            case "PUT" -> builder.PUT(HttpRequest.BodyPublishers.ofString(hasBody ? body : ""));
-            case "PATCH" -> builder.method("PATCH", HttpRequest.BodyPublishers.ofString(hasBody ? body : ""));
-            default -> builder.GET();
-        }
     }
 
     private RSyntaxTextArea createSyntaxArea(boolean readOnly) {

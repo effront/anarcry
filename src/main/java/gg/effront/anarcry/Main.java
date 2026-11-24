@@ -10,6 +10,7 @@ import gg.effront.anarcry.fuzzer.PayloadProcessor;
 import gg.effront.anarcry.fuzzer.PayloadSource;
 import gg.effront.anarcry.fuzzer.RangePayloadSource;
 import gg.effront.anarcry.gui.AnarCryGui;
+import gg.effront.anarcry.util.HttpRequestUtil;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.report.ReportEngine;
 import gg.effront.anarcry.scanner.ScanContext;
@@ -183,8 +184,9 @@ public class Main {
                 try (PrintWriter pw = new PrintWriter(new FileWriter(output))) {
                     pw.println("#,Payload,Status,Length,Time(ms),Error");
                     for (FuzzResult r : results) {
-                        pw.printf("%d,%s,%d,%d,%d,%s%n", r.requestNum(), csvEscape(r.payloadSummary()), r.statusCode(),
-                                r.length(), r.timeMs(), csvEscape(r.error() != null ? r.error() : ""));
+                        pw.printf("%d,%s,%d,%d,%d,%s%n", r.requestNum(), HttpRequestUtil.csvEscape(r.payloadSummary()),
+                                r.statusCode(), r.length(), r.timeMs(),
+                                HttpRequestUtil.csvEscape(r.error() != null ? r.error() : ""));
                     }
                 }
             }
@@ -192,16 +194,6 @@ public class Main {
         }
 
         System.exit(0);
-    }
-
-    private static String csvEscape(String s) {
-        if (s == null) {
-            return "";
-        }
-        if (s.contains(",") || s.contains("\"") || s.contains("\n")) {
-            return "\"" + s.replace("\"", "\"\"") + "\"";
-        }
-        return s;
     }
 
     private static void runHeadless(EnvLoader env, String targetArg, int timeoutMinutes, String format)
