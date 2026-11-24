@@ -51,6 +51,17 @@ public class RepeaterView extends JPanel {
 
     private final HttpClient httpClient;
 
+    @FunctionalInterface
+    public interface SendToFuzzerCallback {
+        void send(String method, String url, String headers, String body);
+    }
+
+    private SendToFuzzerCallback sendToFuzzerCallback;
+
+    public void setSendToFuzzerCallback(SendToFuzzerCallback callback) {
+        this.sendToFuzzerCallback = callback;
+    }
+
     public RepeaterView() {
         super(new BorderLayout());
         httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL)
@@ -84,9 +95,21 @@ public class RepeaterView extends JPanel {
         sendButton = new JButton("Send (Ctrl+Enter)");
         sendButton.addActionListener(e -> sendRequest());
 
+        JButton sendToFuzzerBtn = new JButton("Send to Fuzzer");
+        sendToFuzzerBtn.addActionListener(e -> {
+            if (sendToFuzzerCallback != null) {
+                String m = (String) methodCombo.getSelectedItem();
+                sendToFuzzerCallback.send(m, urlField.getText(), headersArea.getText(), requestBody.getText());
+            }
+        });
+
+        JPanel buttonPanel = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 4, 0));
+        buttonPanel.add(sendButton);
+        buttonPanel.add(sendToFuzzerBtn);
+
         topBar.add(methodCombo, BorderLayout.WEST);
         topBar.add(urlField, BorderLayout.CENTER);
-        topBar.add(sendButton, BorderLayout.EAST);
+        topBar.add(buttonPanel, BorderLayout.EAST);
         panel.add(topBar, BorderLayout.NORTH);
 
         JPanel centerPanel = new JPanel(new BorderLayout());
@@ -193,10 +216,10 @@ public class RepeaterView extends JPanel {
         long contentLength = resp.body().length();
         statusLabel.setText(String.format("  %d - %dms - %d bytes", code, elapsedMs, contentLength));
 
-        String respBodyText = resp.body();
-        responseBody.setText(respBodyText);
+        String syntax = detectSyntax(resp);
+        responseBody.setText(autoPrettify(resp.body(), syntax));
         responseBody.setCaretPosition(0);
-        responseBody.setSyntaxEditingStyle(detectSyntax(resp));
+        responseBody.setSyntaxEditingStyle(syntax);
 
         StringBuilder hdr = new StringBuilder();
         resp.headers().map().forEach((k, values) -> {
@@ -207,6 +230,18 @@ public class RepeaterView extends JPanel {
         responseHeaders.setText(hdr.toString());
 
         sendButton.setEnabled(true);
+    }
+
+    private static String autoPrettify(String body, String syntax) {
+        if (syntax.contains("json")) {
+            try {
+                com.google.gson.JsonElement el = com.google.gson.JsonParser.parseString(body);
+                return new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(el);
+            } catch (Exception ignored) {
+                return body;
+            }
+        }
+        return body;
     }
 
     private static String detectSyntax(HttpResponse<String> resp) {

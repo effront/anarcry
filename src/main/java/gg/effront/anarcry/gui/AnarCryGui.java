@@ -16,6 +16,9 @@ import gg.effront.anarcry.gui.views.GlobalSearchDialog;
 import gg.effront.anarcry.gui.views.PreferencesDialog;
 import gg.effront.anarcry.gui.views.AssistantView;
 import gg.effront.anarcry.gui.views.ApiClientView;
+import gg.effront.anarcry.gui.views.DbExplorerView;
+import gg.effront.anarcry.gui.views.FtpExplorerView;
+import gg.effront.anarcry.gui.views.FuzzerView;
 import gg.effront.anarcry.gui.views.RepeaterView;
 import gg.effront.anarcry.gui.views.ReportView;
 import gg.effront.anarcry.gui.views.SiteMapView;
@@ -27,6 +30,7 @@ import gg.effront.anarcry.scanner.ScanEvent;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.KeyEventDispatcher;
 import java.awt.KeyboardFocusManager;
 import java.awt.event.InputEvent;
@@ -38,8 +42,10 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.swing.JFrame;
+import javax.swing.JPanel;
 import javax.swing.JMenu;
 import javax.swing.JTable;
 import javax.swing.JMenuBar;
@@ -74,9 +80,15 @@ public class AnarCryGui {
     private RepeaterView repeaterView;
     private ReportView reportView;
     private ApiClientView apiClientView;
+    private DbExplorerView dbExplorerView;
+    private FuzzerView fuzzerView;
+    private FtpExplorerView ftpExplorerView;
     private AssistantView assistantView;
 
     private JTabbedPane tabs;
+    private JSplitPane mainSplit;
+    private final JPanel emptyPanel = new JPanel();
+    private static final Set<Integer> SCAN_TAB_INDICES = Set.of(1, 2, 3);
     private GlobalSearchDialog globalSearchDialog;
 
     private final List<Finding> allFindings = Collections.synchronizedList(new ArrayList<>());
@@ -104,8 +116,11 @@ public class AnarCryGui {
         targetView = new TargetView();
         siteMapView = new SiteMapView();
         repeaterView = new RepeaterView();
+        fuzzerView = new FuzzerView();
         reportView = new ReportView();
         apiClientView = new ApiClientView();
+        dbExplorerView = new DbExplorerView();
+        ftpExplorerView = new FtpExplorerView();
         assistantView = new AssistantView();
 
         resetSeverityCounts();
@@ -135,6 +150,16 @@ public class AnarCryGui {
             prefillFromEnv(env);
         }
         assistantView.configure(env != null ? env.asMap() : java.util.Map.of());
+
+        repeaterView.setSendToFuzzerCallback((method, url, headers, body) -> {
+            fuzzerView.loadRequest(method, url, headers, body);
+            SwingUtilities.invokeLater(() -> tabs.setSelectedComponent(fuzzerView));
+        });
+
+        fuzzerView.setSendToRepeaterCallback((url, rawRequest) -> {
+            repeaterView.setTargetUrl(url);
+            SwingUtilities.invokeLater(() -> tabs.setSelectedComponent(repeaterView));
+        });
 
         SwingUtilities.invokeLater(() -> {
             buildAndShowFrame();
@@ -180,15 +205,17 @@ public class AnarCryGui {
 
         controller.setOnScanFinish(() -> {
             DiscoveredPaths dp = controller.getDiscoveredPaths();
+            List<Finding> snapshot = new ArrayList<>(allFindings);
             SwingUtilities.invokeLater(() -> {
                 statusBar.setScanning(false);
                 modulesPanel.setScanning(false);
-                reportView.update(new ArrayList<>(allFindings), modulesPanel.getTarget());
+                reportView.update(snapshot, modulesPanel.getTarget());
                 if (dp != null) {
                     for (String path : dp.paths()) {
                         siteMapView.addPath(path);
                     }
                 }
+                populateExplorersFromFindings(snapshot);
             });
         });
     }
@@ -246,9 +273,12 @@ public class AnarCryGui {
         tabs.addTab("Target", targetView);
         tabs.addTab("Findings", findingsView);
         tabs.addTab("Repeater", repeaterView);
+        tabs.addTab("Fuzzer", fuzzerView);
         tabs.addTab("Report", reportView);
         tabs.addTab("SiteMap", siteMapView);
         tabs.addTab("API Client", apiClientView);
+        tabs.addTab("DB Explorer", dbExplorerView);
+        tabs.addTab("FTP Explorer", ftpExplorerView);
         tabs.addTab("Assistant", assistantView);
         tabs.setSelectedIndex(1);
 
@@ -294,8 +324,11 @@ public class AnarCryGui {
 
         apiClientView.setProxyStatusCallback(on -> statusBar.setProxyEnabled(on));
 
-        JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, modulesPanel, tabs);
+        emptyPanel.setPreferredSize(new Dimension(0, 0));
+        mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, modulesPanel, tabs);
         mainSplit.setDividerLocation(MODULES_PANEL_WIDTH);
+
+        tabs.addChangeListener(e -> onTabChanged());
 
         frame.getContentPane().setLayout(new BorderLayout());
         frame.getContentPane().add(mainSplit, BorderLayout.CENTER);
@@ -524,6 +557,60 @@ public class AnarCryGui {
         menu.add(about);
 
         return menu;
+    }
+
+    private void onTabChanged() {
+        int idx = tabs.getSelectedIndex();
+        if (SCAN_TAB_INDICES.contains(idx)) {
+            if (mainSplit.getLeftComponent() != modulesPanel) {
+                mainSplit.setLeftComponent(modulesPanel);
+                mainSplit.setDividerLocation(MODULES_PANEL_WIDTH);
+            }
+        } else {
+            if (mainSplit.getLeftComponent() != emptyPanel) {
+                mainSplit.setLeftComponent(emptyPanel);
+                mainSplit.setDividerLocation(0);
+            }
+        }
+    }
+
+    private void populateExplorersFromFindings(List<Finding> findings) {
+        for (Finding f : findings) {
+            if (!"Infra".equals(f.module())) {
+                continue;
+            }
+            String endpoint = f.endpoint();
+            String title = f.title();
+            int colonIdx = endpoint.lastIndexOf(':');
+            if (colonIdx <= 0) {
+                continue;
+            }
+            String host = endpoint.substring(0, colonIdx);
+            int port;
+            try {
+                port = Integer.parseInt(endpoint.substring(colonIdx + 1));
+            } catch (NumberFormatException e) {
+                continue;
+            }
+
+            if (title.contains("Redis")) {
+                dbExplorerView.addDiscoveredService(host, port, "Redis");
+            } else if (title.contains("MongoDB")) {
+                dbExplorerView.addDiscoveredService(host, port, "MongoDB");
+            } else if (title.contains("MySQL")) {
+                dbExplorerView.addDiscoveredService(host, port, "MySQL");
+            } else if (title.contains("PostgreSQL")) {
+                dbExplorerView.addDiscoveredService(host, port, "PostgreSQL");
+            } else if (title.contains("MSSQL")) {
+                dbExplorerView.addDiscoveredService(host, port, "MSSQL");
+            } else if (title.contains("Oracle")) {
+                dbExplorerView.addDiscoveredService(host, port, "Oracle");
+            } else if (title.contains("SSH")) {
+                ftpExplorerView.addDiscoveredService(host, port, "SFTP");
+            } else if (title.contains("FTP")) {
+                ftpExplorerView.addDiscoveredService(host, port, "FTP");
+            }
+        }
     }
 
     private void resetSeverityCounts() {

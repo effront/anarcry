@@ -36,6 +36,7 @@ import gg.effront.anarcry.tui.chrome.EventLogDrawer;
 import gg.effront.anarcry.tui.chrome.ModeBar;
 import gg.effront.anarcry.tui.chrome.StatusBar;
 import gg.effront.anarcry.tui.modes.Mode;
+import gg.effront.anarcry.tui.modes.FuzzerMode;
 import gg.effront.anarcry.tui.modes.RepeaterMode;
 import gg.effront.anarcry.tui.modes.TargetMode;
 import gg.effront.anarcry.tui.panels.ApiClientPanel;
@@ -94,6 +95,7 @@ public class AnarCryTui {
     private ModulesPanel modulesPanel;
     private ApiClientPanel apiClientPanel;
     private AssistantPanel assistantPanel;
+    private FuzzerMode fuzzerMode;
     private Consumer<RequestRecord> requestCb;
     private BasicWindow window;
     private ModeBar modeBar;
@@ -232,6 +234,9 @@ public class AnarCryTui {
                 char ch = keyStroke.getCharacter();
                 if (ch == 'q' || ch == 'Q') {
                     scanRunner.shutdown();
+                    if (fuzzerMode != null) {
+                        fuzzerMode.shutdown();
+                    }
                     window.close();
                     deliverEvent.set(false);
                 } else if (ch == 'e' || ch == 'E') {
@@ -279,18 +284,21 @@ public class AnarCryTui {
                     switchMode(Mode.REPEATER);
                     hasBeenHandled.set(true);
                 } else if (kt == KeyType.F6) {
-                    switchMode(Mode.REPORT);
+                    switchMode(Mode.FUZZER);
                     hasBeenHandled.set(true);
                 } else if (kt == KeyType.F7) {
-                    switchMode(Mode.SITEMAP);
+                    switchMode(Mode.REPORT);
                     hasBeenHandled.set(true);
                 } else if (kt == KeyType.F8) {
-                    switchMode(Mode.API_CLIENT);
+                    switchMode(Mode.SITEMAP);
                     hasBeenHandled.set(true);
                 } else if (kt == KeyType.F9) {
-                    switchMode(Mode.ASSISTANT);
+                    switchMode(Mode.API_CLIENT);
                     hasBeenHandled.set(true);
                 } else if (kt == KeyType.F10) {
+                    switchMode(Mode.ASSISTANT);
+                    hasBeenHandled.set(true);
+                } else if (kt == KeyType.F11) {
                     EventLogDrawer.show(gui, logHistory);
                     hasBeenHandled.set(true);
                 } else if (keyStroke instanceof MouseAction ma && ma.getActionType() == MouseActionType.CLICK_RELEASE
@@ -341,6 +349,9 @@ public class AnarCryTui {
 
         gui.addWindowAndWait(window);
         scanRunner.shutdown();
+        if (fuzzerMode != null) {
+            fuzzerMode.shutdown();
+        }
         screen.stopScreen();
     }
 
@@ -406,6 +417,7 @@ public class AnarCryTui {
             case TARGET -> TargetMode.build(modulesPanel, () -> switchMode(Mode.SCAN));
             case FINDINGS -> buildFindingsContent();
             case REPEATER -> RepeaterMode.build(modulesPanel.getTarget(), modulesPanel.getJwt());
+            case FUZZER -> buildFuzzerContent();
             case REPORT -> buildReportContent();
             case SITEMAP -> buildSiteMapContent();
             case API_CLIENT -> buildApiClientContent();
@@ -424,6 +436,13 @@ public class AnarCryTui {
         return scanPanel;
     }
 
+    private Component buildFuzzerContent() {
+        if (fuzzerMode == null) {
+            fuzzerMode = new FuzzerMode();
+        }
+        return fuzzerMode.build(gui);
+    }
+
     private Component buildFindingsContent() {
         var p = new Panel(new BorderLayout());
         p.addComponent(findingsPanel.withBorder(Borders.singleLine("FINDINGS -- Enter: detalhe  F2: voltar ao scan")),
@@ -433,7 +452,7 @@ public class AnarCryTui {
 
     private Component buildSiteMapContent() {
         var p = new Panel(new BorderLayout());
-        p.addComponent(siteMapPanel.withBorder(Borders.singleLine("SITE MAP -- F7  requisições HTTP interceptadas")),
+        p.addComponent(siteMapPanel.withBorder(Borders.singleLine("SITE MAP -- F8  requisições HTTP interceptadas")),
                 BorderLayout.Location.CENTER);
         return p;
     }
