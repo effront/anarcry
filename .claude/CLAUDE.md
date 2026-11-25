@@ -270,4 +270,4 @@ AnarCry is designed for **authorized security testing** only:
 
 ---
 
-**Last Updated**: 2026-11-24
+**Last Updated**: 2026-11-25
