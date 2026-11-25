@@ -93,7 +93,7 @@
 |  [x] FrameworkConfig-- exposed config endpoints per framework             |
 |  [x] DomSinks      -- dangerous JS sinks (innerHTML, eval, document.write)|
 |  [x] JsAnalyzer    -- API keys, endpoints, secrets in JS bundles          |
-|  [x] EmailSec      -- SPF/DKIM/DMARC policy validation                   |
+|  [x] EmailSec      -- SPF/DKIM/DMARC policy validation                    |
 |  [x] Clerk         -- Clerk auth misconfiguration                         |
 |  [x] BackendLiveness-- backend health/liveness probe                      |
 |                                                                           |
@@ -170,7 +170,7 @@ java -jar build/libs/anarcry-2.5.0.jar --gui
 |  JSON                |  Gson 2.11.0                                       |
 |  CVSS                |  CvssCalculator.java (FIRST formula, zero deps)    |
 |  Knowledge Base      |  knowledge_base.json (47 entries, CWE+CVSS+VRT)    |
-|                      |  knowledge-base/*.md (47 enriched entries,          |
+|                      |  knowledge-base/*.md (47 enriched entries,         |
 |                      |  2329 payloads, 282 CVEs)                          |
 |  AI Assistant        |  Multi-provider (Claude, OpenAI, Gemini, Ollama)   |
 |  GUI                 |  Swing + FlatLaf (dark/light) + RSyntaxTextArea    |
