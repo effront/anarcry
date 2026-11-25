@@ -8,7 +8,7 @@ plugins {
 }
 
 group = 'gg.effront'
-version = '2.4.0'
+version = '2.5.0'
 
 java {
     toolchain {
@@ -58,7 +58,166 @@ dependencies {
     spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.13.0'
 }
 
+// ============================================================
+// generateKnowledgeBase -- syncs knowledge-base/*.md -> knowledge_base.json
+// MDs are the source of truth; the JSON is generated at build time.
+// ============================================================
+tasks.register('generateKnowledgeBase') {
+    description = 'Generate knowledge_base.json from knowledge-base/*.md files'
+    group = 'build'
+
+    def kbDir = file('knowledge-base')
+    def outputFile = file('src/main/resources/knowledge_base.json')
+
+    inputs.dir(kbDir)
+    outputs.file(outputFile)
+
+    doLast {
+        def parseFrontmatter = { String text ->
+            if (!text.startsWith('---')) return null
+            def end = text.indexOf('\n---', 3)
+            if (end < 0) return null
+            def fm = [:]
+            text.substring(3, end).trim().eachLine { line ->
+                def m = (line =~ /^(\w+):\s*"?(.*?)"?\s*$/)
+                if (m.matches()) fm[m.group(1)] = m.group(2)
+            }
+            fm._bodyStart = end + 4
+            return fm
+        }
+
+        def parseSections = { String body ->
+            def sections = [:]
+            def current = null
+            def buf = new StringBuilder()
+            body.eachLine { line ->
+                if (line.startsWith('## ')) {
+                    if (current != null) sections[current] = buf.toString().trim()
+                    current = line.substring(3).trim()
+                    buf = new StringBuilder()
+                } else if (current != null) {
+                    buf.append(line).append('\n')
+                }
+            }
+            if (current != null) sections[current] = buf.toString().trim()
+            return sections
+        }
+
+        def extractPayloads = { String sectionText ->
+            if (!sectionText) return []
+            def payloads = []
+            def inCodeBlock = false
+            sectionText.eachLine { line ->
+                if (line.startsWith('```')) {
+                    inCodeBlock = !inCodeBlock
+                    return
+                }
+                if (inCodeBlock && line.trim()) {
+                    payloads << line
+                }
+            }
+            return payloads
+        }
+
+        def extractCrawlerHints = { String sectionText ->
+            if (!sectionText) return null
+            def params = []
+            def paths = []
+            sectionText.eachLine { line ->
+                def lower = line.toLowerCase()
+                if (lower.contains('**par') || lower.contains('**parameters')) {
+                    (line =~ /`([^`]+)`/).each { params << it[1] }
+                } else if (lower.contains('**paths') || lower.contains('**path')) {
+                    (line =~ /`([^`]+)`/).each { paths << it[1] }
+                }
+            }
+            if (params.isEmpty() && paths.isEmpty()) return null
+            return [parameters: params, paths: paths]
+        }
+
+        def extractCves = { String sectionText ->
+            if (!sectionText) return null
+            def cves = []
+            def headerFound = false
+            sectionText.eachLine { line ->
+                if (!line.startsWith('|')) return
+                def cells = line.split('\\|').collect { it.trim() }.findAll { it }
+                if (cells.size() < 5) return
+                if (cells[0] ==~ /^-+$/ || cells[0] == 'CVE' || cells[0].toLowerCase() == 'cve') {
+                    headerFound = true
+                    return
+                }
+                if (!headerFound && cells[0] ==~ /^CVE-\d{4}-\d+$/) headerFound = true
+                if (!headerFound) return
+                def yearStr = cells[2].trim()
+                def year = yearStr.isInteger() ? yearStr.toInteger() : 0
+                cves << [
+                    cve: cells[0],
+                    product: cells[1],
+                    year: year,
+                    description: cells[3],
+                    type: cells[4]
+                ]
+            }
+            return cves.isEmpty() ? null : cves
+        }
+
+        def findSection = { Map sections, String... prefixes ->
+            for (def prefix : prefixes) {
+                def match = sections.find { k, v ->
+                    k.toLowerCase().startsWith(prefix.toLowerCase())
+                }
+                if (match) return match.value
+            }
+            return null
+        }
+
+        def entries = new TreeMap<String, Object>()
+
+        kbDir.listFiles()
+            .findAll { it.isFile() && it.name.endsWith('.md') && it.name != 'INDEX.md' }
+            .sort()
+            .each { mdFile ->
+                def content = mdFile.getText('UTF-8')
+                def fm = parseFrontmatter(content)
+                if (!fm || !fm.id || !fm.module) return
+
+                def body = content.substring(fm._bodyStart as int)
+                def sections = parseSections(body)
+
+                def payloadsSection = findSection(sections, 'Payloads')
+                def hintsSection = findSection(sections, 'Target Context')
+                def cvesSection = findSection(sections, 'Notable CVEs')
+                def recSection = findSection(sections, 'Recommendation', 'Remediation')
+
+                def entry = [
+                    title       : fm.title ?: '',
+                    module      : fm.module ?: '',
+                    severity    : fm.severity ?: '',
+                    cweId       : fm.cwe_id ?: '',
+                    cweTitle    : fm.cwe_title ?: '',
+                    cvssVector  : fm.cvss_vector ?: '',
+                    vrtId       : fm.vrt_id ?: '',
+                    summary     : sections['Summary'] ?: '',
+                    description : sections['Description'] ?: '',
+                    impact      : sections['Impact'] ?: '',
+                    payloads    : extractPayloads(payloadsSection),
+                    crawlerHints: extractCrawlerHints(hintsSection),
+                    recommendation: recSection ?: '',
+                    notableCves : extractCves(cvesSection)
+                ]
+
+                entries[fm.id] = entry
+            }
+
+        def json = groovy.json.JsonOutput.toJson(entries)
+        outputFile.text = groovy.json.JsonOutput.prettyPrint(json) + '\n'
+        logger.lifecycle("generateKnowledgeBase: ${entries.size()} entries from knowledge-base/*.md")
+    }
+}
+
 processResources {
+    dependsOn generateKnowledgeBase
     filesMatching('version.properties') {
         expand(version: project.version)
     }
