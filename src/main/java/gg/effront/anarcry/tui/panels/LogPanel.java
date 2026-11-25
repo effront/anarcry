@@ -12,7 +12,7 @@ import java.util.List;
 
 public class LogPanel extends Panel {
 
-    private static final int MAX_LINES = 500;
+    private static final int MAX_LINES = 50_000;
 
     private final int height;
     private final Panel linesPanel;

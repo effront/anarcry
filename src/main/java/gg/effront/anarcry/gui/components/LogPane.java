@@ -78,6 +78,7 @@ public class LogPane extends JPanel {
     private final JTextPane textPane;
     private final JToggleButton debugToggle;
     private final List<String> rawMessages = new ArrayList<>();
+    private final List<String> fullLog = new ArrayList<>();
 
     public LogPane() {
         super(null);
@@ -209,6 +210,7 @@ public class LogPane extends JPanel {
     public void log(String message) {
         SwingUtilities.invokeLater(() -> {
             boolean follow = isScrolledToBottom();
+            fullLog.add(message);
             rawMessages.add(message);
             while (rawMessages.size() > MAX_LINES) {
                 rawMessages.removeFirst();
@@ -233,13 +235,14 @@ public class LogPane extends JPanel {
 
     /** Returns a snapshot of all raw (unfiltered) log messages. */
     public List<String> getRawMessages() {
-        return List.copyOf(rawMessages);
+        return List.copyOf(fullLog);
     }
 
     /** Clear all log content. Safe to call from any thread. */
     public void clear() {
         SwingUtilities.invokeLater(() -> {
             rawMessages.clear();
+            fullLog.clear();
             try {
                 Document doc = textPane.getDocument();
                 doc.remove(0, doc.getLength());
@@ -263,7 +266,7 @@ public class LogPane extends JPanel {
         JPopupMenu menu = new JPopupMenu();
         JMenuItem copyAll = new JMenuItem("Copy All");
         copyAll.addActionListener(e -> {
-            String text = String.join("\n", rawMessages);
+            String text = String.join("\n", fullLog);
             Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
         });
         JMenuItem exportLog = new JMenuItem("Export Log");
@@ -290,7 +293,7 @@ public class LogPane extends JPanel {
     }
 
     private void exportToFile() {
-        if (rawMessages.isEmpty()) {
+        if (fullLog.isEmpty()) {
             return;
         }
         try {
@@ -298,7 +301,7 @@ public class LogPane extends JPanel {
             Files.createDirectories(reportsDir);
             String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
             Path outFile = reportsDir.resolve("scan-log-" + ts + ".txt");
-            Files.write(outFile, rawMessages);
+            Files.write(outFile, fullLog);
             JOptionPane.showMessageDialog(this, "Log exportado: " + outFile, "Export Log",
                     JOptionPane.INFORMATION_MESSAGE);
         } catch (IOException ex) {

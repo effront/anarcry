@@ -77,6 +77,20 @@ public class DeserializationModule implements Scanner {
             "Apache-Coyote|JBoss|WebLogic|WildFly|GlassFish|Jenkins|" + "Struts|Oracle.*Application Server",
             Pattern.CASE_INSENSITIVE);
 
+    // -- Framework-specific body indicators per endpoint --
+    // JBoss JMXInvokerServlet returns binary serialized data
+    private static final Pattern JBOSS_BODY = Pattern
+            .compile("application/x-java-serialized-object|JBoss|JMX|MBean|org\\.jboss", Pattern.CASE_INSENSITIVE);
+    // WebLogic WSAT/Async endpoints return WSDL XML
+    private static final Pattern WEBLOGIC_BODY = Pattern.compile(
+            "<wsdl:|<definitions|CoordinatorPortType|AsyncResponseService|WebLogic|Oracle", Pattern.CASE_INSENSITIVE);
+    // WebLogic console returns a login form
+    private static final Pattern WEBLOGIC_CONSOLE_BODY = Pattern
+            .compile("WebLogic|Oracle.*Console|AdminServer|wl_authParam", Pattern.CASE_INSENSITIVE);
+    // Jenkins returns its own UI
+    private static final Pattern JENKINS_BODY = Pattern
+            .compile("Jenkins|jenkins-ci|Groovy script|Script Console|Dashboard \\[Jenkins", Pattern.CASE_INSENSITIVE);
+
     // -- Malformed Java serialized payload (triggers error on deser endpoints) --
     // This is a truncated Java serialized stream header (magic + version only)
     private static final byte[] MALFORMED_JAVA_BYTES = new byte[]{(byte) 0xAC, (byte) 0xED, 0x00, 0x05, 0x73, 0x72,
@@ -146,14 +160,19 @@ public class DeserializationModule implements Scanner {
                     int status = resp.statusCode();
                     String body = resp.body() != null ? resp.body() : "";
 
-                    // A 200 or 500 (not 404) on these paths is significant
                     if (status != 404 && status != 0) {
                         String serverHdr = resp.headers().firstValue("Server").orElse("");
                         String contentType = resp.headers().firstValue("Content-Type").orElse("");
 
-                        if (status == 200 || status == 500
-                                || contentType.contains("application/x-java-serialized-object")
-                                || JAVA_DESER_ERROR.matcher(body).find()) {
+                        // Validate response actually belongs to the expected framework.
+                        // A generic catch-all page (Vercel, Netlify, Cloudflare Pages)
+                        // returns 200 for any path -- that is NOT a real framework endpoint.
+                        boolean confirmed = contentType.contains("application/x-java-serialized-object")
+                                || JAVA_DESER_ERROR.matcher(body).find()
+                                || VULN_FRAMEWORK_HEADER.matcher(serverHdr).find()
+                                || matchesFrameworkBody(endpoint, body);
+
+                        if (confirmed) {
                             log.accept("[!!] " + id() + ": endpoint de framework acessivel -- " + endpoint + " (HTTP "
                                     + status + ")");
                             local.add(Finding.of(id(), endpoint,
@@ -564,6 +583,27 @@ public class DeserializationModule implements Scanner {
     }
 
     // -- Utility methods --
+
+    // Check if the response body contains indicators specific to the framework
+    // expected at this endpoint. Prevents FPs from catch-all pages (Vercel, etc.)
+    private static boolean matchesFrameworkBody(String endpoint, String body) {
+        if (body == null || body.isEmpty()) {
+            return false;
+        }
+        if (endpoint.contains("JMXInvokerServlet")) {
+            return JBOSS_BODY.matcher(body).find();
+        }
+        if (endpoint.contains("CoordinatorPortType") || endpoint.contains("AsyncResponseService")) {
+            return WEBLOGIC_BODY.matcher(body).find();
+        }
+        if (endpoint.equals("/console/")) {
+            return WEBLOGIC_CONSOLE_BODY.matcher(body).find();
+        }
+        if (endpoint.contains("jenkins")) {
+            return JENKINS_BODY.matcher(body).find();
+        }
+        return false;
+    }
 
     // Merge hardcoded injection payloads with KB payloads. Tool commands and code
     // snippets from KB are filtered out -- only injectable strings are kept.
