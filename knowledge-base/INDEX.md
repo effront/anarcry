@@ -39,6 +39,11 @@ YAML consumido pelo `ReportEngine`.
 | `dom_sink_detection` | Dangerous DOM Sinks in JavaScript | `domsinks` | MEDIUM | CWE-79 | `cross_site_scripting_xss.dom_based` |
 | `backend_liveness` | Dangling Backend Reference | `backendliveness` | HIGH | CWE-672 | `server_security_misconfiguration.dangling_dns` |
 | `clickjacking` | Clickjacking - Missing Frame Protection | `clickjacking` | HIGH | CWE-1021 | `clickjacking.non_sensitive_action` |
+| `rate_limit_missing` | Missing Rate Limiting | `ratelimit` | HIGH | CWE-307 | `broken_authentication_and_session_management.brute_force_protection_missing` |
+| `email_security` | Email Security Misconfiguration | `emailsec` | MEDIUM | CWE-183 | `server_security_misconfiguration.mail_server_misconfiguration` |
+| `clerk_misconfiguration` | Clerk Authentication Misconfiguration | `clerk` | HIGH | CWE-200 | `sensitive_data_exposure.authentication_credentials` |
+| `error_disclosure` | Sensitive Error Disclosure | `errordisclosure` | MEDIUM | CWE-209 | `sensitive_data_exposure.internal_information_disclosure` |
+| `http_fuzzing` | HTTP Fuzzing / Intruder (reference) | `fuzzer` | -- | CWE-20 | -- |
 
 ## Convenções
 

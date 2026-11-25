@@ -3,8 +3,8 @@
 ## Project Overview
 
 **Type**: Java 27 security scanner / pentest toolkit
-**Purpose**: Automated vulnerability scanner with TUI, targeting web applications
-**Architecture**: Modular scanner engine with Lanterna TUI, report generation, and knowledge base
+**Purpose**: Automated vulnerability scanner with TUI/GUI, targeting web applications
+**Architecture**: Modular scanner engine with Lanterna TUI + Swing GUI, report generation, knowledge base, API client, and post-exploitation tools
 
 ## Tech Stack
 
@@ -12,8 +12,15 @@
 Java 27 (Zulu)
 Gradle (Shadow, Checkstyle, PMD, SpotBugs + FindSecBugs, Spotless)
 Lanterna 3.1.3 (TUI)
+FlatLaf + RSyntaxTextArea (Swing GUI)
+GraalVM Polyglot 24.1.1 (JS script engine for API client)
 BouncyCastle 1.80 (TLS, JWT crypto, PQC)
 Gson 2.11.0 (JSON serialization)
+Apache Commons Net 3.11.1 (FTP/FTPS)
+Apache MINA SSHD 2.14.0 (SFTP, SSH tunneling)
+JDBC drivers (MySQL, PostgreSQL, MSSQL, SQLite, Oracle)
+MongoDB Driver Sync 5.2.1
+Jedis 5.2.0 (Redis)
 JUnit 5.11.3 (testing)
 ```
 
@@ -21,8 +28,20 @@ JUnit 5.11.3 (testing)
 
 ```
 src/main/java/gg/effront/anarcry/
-├── Main.java                        # Entry point
+├── Main.java                        # Entry point (--fuzz for CLI batch fuzzing)
 ├── EnvLoader.java                   # .env.local loader
+├── fuzzer/
+│   ├── AttackType.java              # Enum: SNIPER, BATTERING_RAM, PITCHFORK, CLUSTER_BOMB
+│   ├── FuzzEngine.java              # Orchestrator: virtual threads + Semaphore, pause/stop
+│   ├── FuzzPosition.java            # {{N}} marker parsing and injection
+│   ├── FuzzResult.java              # Request result record
+│   ├── GrepMatcher.java             # Response pattern matching and extraction
+│   ├── PayloadSource.java           # Interface: lazy payload iteration
+│   ├── FilePayloadSource.java       # Lazy file reading (BufferedReader, never loads all)
+│   ├── InlinePayloadSource.java     # Payloads from text/list
+│   ├── RangePayloadSource.java      # Numeric range with step and padding
+│   ├── PayloadProcessor.java        # @FunctionalInterface: transform before injection
+│   └── PayloadProcessors.java       # Factory: 14 processors (encode, hash, regex, etc.)
 ├── model/
 │   ├── Finding.java                 # Scan result record (module, endpoint, severity, CWE, CVSS)
 │   ├── Severity.java                # CRITICAL / HIGH / MEDIUM / LOW / INFO
@@ -71,6 +90,32 @@ src/main/java/gg/effront/anarcry/
 │       ├── ssti/SstiModule
 │       ├── xss/XssModule
 │       └── xxe/XxeModule
+├── postexploit/
+│   ├── dbexplorer/                  # Database post-exploitation tools
+│   │   ├── ConnectionConfig.java    # Connection record (host, port, creds, timeouts, SSL)
+│   │   ├── ConnectionManager.java   # JDBC connection factory with per-DB timeout config
+│   │   ├── ConnectionStringParser.java  # Parse JDBC/shorthand URLs to ConnectionConfig
+│   │   ├── CredentialTester.java    # DB credential brute-force (virtual threads + semaphore)
+│   │   ├── DataExporter.java        # Export query results to CSV/JSON
+│   │   ├── DbType.java             # Enum: MYSQL, POSTGRESQL, MSSQL, SQLITE, ORACLE
+│   │   ├── MongoExplorer.java       # MongoDB client (list DBs, collections, find, aggregate)
+│   │   ├── RedisExplorer.java       # Redis client (SCAN, type-aware GET, sensitive key scan)
+│   │   ├── SchemaBrowser.java       # DB metadata navigator (schemas, tables, columns)
+│   │   ├── SqlDialect.java          # Enum: quoting, LIMIT, metadata queries per DB
+│   │   ├── SqlExecutor.java         # Execute SQL with timeout, multi-statement, BLOB handling
+│   │   └── SshTunnel.java          # SSH local port forwarding via MINA SSHD
+│   └── ftpexplorer/                 # FTP/SFTP post-exploitation tools
+│       ├── AnonDetector.java        # Anonymous FTP access detection
+│       ├── BannerFingerprinter.java # FTP software + CVE identification (7 signatures)
+│       ├── CredentialSprayer.java   # FTP credential brute-force with lockout detection
+│       ├── CustomCommandExecutor.java  # Raw FTP command execution
+│       ├── FtpClient.java          # FTP/FTPS wrapper (Commons Net)
+│       ├── GitDumper.java           # .git repo extraction (manual object parsing, no JGit)
+│       ├── PasvAnalyzer.java        # PASV/EPSV misconfiguration detection
+│       ├── ProxyConnector.java      # Pivoting via SOCKS4/5, HTTP CONNECT
+│       ├── SensitiveFileScanner.java  # Recursive sensitive file scan (7 categories)
+│       ├── SftpClient.java         # SFTP wrapper (MINA SSHD)
+│       └── TlsAuditor.java         # FTPS TLS + SFTP cipher/KEX audit
 ├── report/
 │   └── ReportEngine.java            # Markdown + JSON report generation
 └── tui/
@@ -79,12 +124,13 @@ src/main/java/gg/effront/anarcry/
     ├── chrome/                      # TUI chrome components
     │   ├── ActionPalette.java       # Command palette (Ctrl+P)
     │   ├── EventLogDrawer.java      # Scan event log drawer
-    │   ├── ModeBar.java             # Tab bar (Target, Repeater modes)
+    │   ├── ModeBar.java             # Tab bar (Scan, Target, Repeater, Fuzzer, etc.)
     │   └── StatusBar.java           # Bottom status bar
     ├── modes/                       # TUI operational modes
-    │   ├── Mode.java                # Interface
+    │   ├── Mode.java                # Enum: SCAN, TARGET, REPEATER, FUZZER, etc.
     │   ├── TargetMode.java          # Main scan mode
-    │   └── RepeaterMode.java        # HTTP repeater mode
+    │   ├── RepeaterMode.java        # HTTP repeater mode
+    │   └── FuzzerMode.java          # HTTP fuzzer mode (uses FuzzEngine)
     └── panels/                      # TUI panels
         ├── FindingsPanel.java       # Findings list with detail view
         ├── LogPanel.java            # Scan log output
@@ -122,7 +168,9 @@ Modules are registered in `ScanRunner.run()` via `ctx.has("ModuleName")` checks.
 
 ```bash
 ./gradlew shadowJar                  # Build fat JAR
-java -jar build/libs/anarcry-1.0.jar # Run TUI
+java -jar build/libs/anarcry-2.4.0.jar # Run (GUI)
+java -jar build/libs/anarcry-2.4.0.jar --tui  # Run (TUI)
+java -jar build/libs/anarcry-2.4.0.jar --fuzz config.json  # Fuzzer CLI batch mode
 
 ./gradlew test                       # Unit tests (excludes @Tag("integration"))
 ./gradlew spotlessApply              # Fix formatting (Google Java Format)
@@ -188,6 +236,19 @@ Helper methods: `usesBearer()`, `usesCookie()`, `requiresJwtParsing()`, `hasAuth
 ### Scope Control
 `ScanConfig.isInScope(host)` enforces target scope -- scan is cancelled if host is out of scope.
 
+### HTTP Fuzzer
+The `fuzzer/` package is Swing/TUI-independent so all three UIs (GUI, TUI, CLI) share one engine:
+
+- **Template**: raw HTTP request with `{{N}}` injection markers parsed by `FuzzPosition`
+- **Attack types**: `AttackType` enum -- SNIPER (one position at a time), BATTERING_RAM (same payload everywhere), PITCHFORK (parallel lists), CLUSTER_BOMB (cartesian product)
+- **Payload sources**: `PayloadSource` interface -- `FilePayloadSource` (lazy BufferedReader), `InlinePayloadSource`, `RangePayloadSource`
+- **Processing**: `PayloadProcessor` pipeline applied before injection (14 built-in processors in `PayloadProcessors`)
+- **Engine**: `FuzzEngine` dispatches via virtual threads + `Semaphore`, supports pause/stop via `AtomicBoolean`, throttling with delay + jitter
+- **Grep**: `GrepMatcher` counts pattern matches and extracts capture groups from responses
+- **GUI**: `FuzzerView` tab with RSyntaxTextArea template editor, payload config tabs, results JTable with sort/filter, response viewer
+- **TUI**: `FuzzerMode` in Lanterna with template editor, inline payloads, attack type selector, results list
+- **CLI**: `--fuzz config.json` in `Main.java` for headless batch mode with CSV/JSON output
+
 ## Ethical Use
 
 AnarCry is designed for **authorized security testing** only:
@@ -209,4 +270,4 @@ AnarCry is designed for **authorized security testing** only:
 
 ---
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-25

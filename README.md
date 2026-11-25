@@ -123,7 +123,7 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-2.3.0.jar
+java -jar build/libs/anarcry-2.4.0.jar
 ```
 
 Or use the launcher (auto-builds if source changed):
@@ -141,7 +141,7 @@ With `.env.local` for pre-configured targets:
 Launch in GUI mode (Swing + FlatLaf):
 
 ```bash
-java -jar build/libs/anarcry-2.3.0.jar --gui
+java -jar build/libs/anarcry-2.4.0.jar --gui
 ```
 
 ---
@@ -530,6 +530,33 @@ Built-in API client inspired by [Bruno](https://www.usebruno.com/) for manual AP
 
 ## 11 - Changelog
 
+### v2.4.0
+
+**HTTP Fuzzer/Intruder, Post-Exploitation Explorers (DB + FTP)**
+
+HTTP Fuzzer:
+- **4 attack types**: Sniper (one position at a time), Battering Ram (same payload everywhere), Pitchfork (parallel lists), Cluster Bomb (cartesian product)
+- **Payload sources**: file (lazy BufferedReader), inline text, numeric range with step/padding
+- **14 payload processors**: URL/HTML/Base64 encode/decode, MD5/SHA-256 hash, regex replace, prefix/suffix, skip-if-matches
+- **Grep match/extract**: pattern counting and regex capture group extraction on responses
+- **FuzzEngine**: virtual threads + Semaphore concurrency, pause/stop, delay + jitter throttling
+- **GUI (Fuzzer tab)**: RSyntaxTextArea template editor, auto-detect positions, payload config tabs per position, results JTable with sort/filter, response viewer, CSV/JSON export, context menu (copy, send to repeater)
+- **TUI (F6)**: template editor, inline payloads, attack type selector, start/pause/stop, results list
+- **CLI**: `--fuzz config.json` batch mode with progress on stderr, CSV/JSON output
+- **Integration**: "Send to Fuzzer" in Repeater, "Send to Repeater" in Fuzzer results
+- 108 unit tests
+
+Post-Exploitation:
+- **DB Explorer (GUI tab)**: JDBC connections (MySQL, PostgreSQL, MSSQL, SQLite, Oracle), MongoDB, Redis, schema browser, SQL executor with autocomplete, credential tester, SSH tunneling, data export (CSV/JSON/SQL/Markdown)
+- **FTP Explorer (GUI tab)**: FTP/FTPS/SFTP, anonymous access detection, banner fingerprinting + CVE identification, credential spraying, .git repo extraction, PASV analysis, sensitive file scanner, SOCKS/HTTP proxy pivoting, TLS audit
+
+Other:
+- **HttpRequestUtil**: shared utility for applyMethod, applyHeaders, csvEscape (dedup between FuzzEngine, RepeaterView, Main)
+- Version bump to 2.4.0
+
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
+
 ### v2.3.0
 
 **SiteMap split view, ChallengeSolver interactive/CDP modes, SecretsModule reproduction fix**
@@ -553,9 +580,6 @@ SecretsModule:
 Other:
 - **Http.flattenHeaders()**: helper to flatten `Map<String, List<String>>` response headers into single-value map for RequestRecord storage
 - Version bump to 2.3.0
-
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v2.2.1
 
