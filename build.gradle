@@ -8,7 +8,7 @@ plugins {
 }
 
 group = 'gg.effront'
-version = '2.3.0'
+version = '2.4.0'
 
 java {
     toolchain {
@@ -35,7 +35,21 @@ dependencies {
     implementation 'com.formdev:flatlaf:3.5.4'
     implementation 'com.formdev:flatlaf-intellij-themes:3.5.4'
     implementation 'com.fifesoft:rsyntaxtextarea:3.5.3'
+    implementation 'com.fifesoft:autocomplete:3.3.1'
     implementation 'org.jfree:jfreechart:1.5.5'
+
+    // Post-exploitation: DB Explorer
+    implementation 'com.mysql:mysql-connector-j:9.1.0'
+    implementation 'org.postgresql:postgresql:42.7.4'
+    implementation 'com.microsoft.sqlserver:mssql-jdbc:12.8.1.jre11'
+    implementation 'org.xerial:sqlite-jdbc:3.47.0.0'
+    implementation 'com.oracle.database.jdbc:ojdbc11:23.6.0.24.10'
+    implementation 'org.mongodb:mongodb-driver-sync:5.2.1'
+    implementation 'redis.clients:jedis:5.2.0'
+
+    // Post-exploitation: FTP/SFTP Explorer + SSH tunneling
+    implementation 'commons-net:commons-net:3.11.1'
+    implementation 'org.apache.sshd:sshd-sftp:2.14.0'
 
     testImplementation 'org.bouncycastle:bcpkix-jdk18on:1.80'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.3'
