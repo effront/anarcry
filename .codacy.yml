@@ -12,6 +12,7 @@ exclude_paths:
   - "docs/**"
   - "hooks/**"
   - "src/main/java/gg/effront/anarcry/scanner/**"
+  - "src/main/java/gg/effront/anarcry/postexploit/**"
   - "src/main/java/gg/effront/anarcry/exploit/**"
   - "src/main/java/gg/effront/anarcry/apiclient/auth/**"
   - "src/main/java/gg/effront/anarcry/EnvLoader.java"
