@@ -122,6 +122,18 @@ Sinais de que a misconfiguracao CORS detectada pelo scanner **nao e exploravel**
 - **Preflight bloqueado:** o servidor responde ao `OPTIONS` com `403` ou sem headers CORS para origens nao confiaveis, bloqueando requests com headers custom ou metodos nao simples.
 - **Ambiente de staging/dev:** a misconfiguracao existe apenas em ambientes nao produtivos sem dados reais e sem acesso de usuarios finais.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2024-24549 | Apache Tomcat | 2024 | CORS filter permite origem nula (null origin) -- bypass de restricao cross-origin em aplicacoes Java | Null Origin Bypass |
+| CVE-2022-37316 | Archer Platform | 2022 | CORS misconfiguration permite qualquer origem com credentials -- exfiltracao de dados de usuario autenticado | Reflected Origin with Credentials |
+| CVE-2021-21287 | MinIO | 2021 | CORS wildcard com credenciais em API de storage -- permite acesso cross-origin a buckets privados | Wildcard with Credentials |
+| CVE-2020-7796 | Zimbra Collaboration Suite | 2020 | CORS misconfiguration permite exfiltracao de emails via pagina maliciosa -- atacante le mailbox da vitima | Reflected Origin with Credentials |
+| CVE-2018-16797 | Node.js swagger-ui-express | 2018 | Swagger UI com CORS permissivo expoe definicao da API para origens arbitrarias -- facilita reconhecimento | Wildcard CORS |
+
+Fonte: cvelistV5 (MITRE CVE List v5 dataset)
+
 ## Recommendation
 1. Usar allowlist explícita de origens exatas (esquema + host + porta), nunca reflexão crua ou regex permissiva.
 2. Não combinar `Access-Control-Allow-Origin: *` com credenciais; para APIs públicas sem credenciais, `*` é aceitável.

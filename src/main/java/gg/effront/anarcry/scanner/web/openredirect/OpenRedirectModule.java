@@ -3,6 +3,7 @@ package gg.effront.anarcry.scanner.web.openredirect;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -17,6 +18,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -72,6 +74,31 @@ public class OpenRedirectModule implements Scanner {
         }
     }
 
+    private List<Payload> mergeKbPayloads() {
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        List<Payload> merged = new ArrayList<>(PAYLOADS);
+        for (Payload p : PAYLOADS) {
+            seen.add(p.value());
+        }
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String trimmed = kbp.strip();
+            // Only process ?param=value format payloads
+            if (!trimmed.startsWith("?") || !trimmed.contains("=")) {
+                continue;
+            }
+            String value = trimmed.substring(trimmed.indexOf('=') + 1);
+            if (value.isBlank()) {
+                continue;
+            }
+            // Replace generic evil.com with the probe host for detection
+            value = value.replace("evil.com", EVIL_HOST);
+            if (seen.add(value)) {
+                merged.add(new Payload(value, "kb"));
+            }
+        }
+        return List.copyOf(merged);
+    }
+
     @Override
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
         List<Finding> findings = new ArrayList<>();
@@ -86,7 +113,8 @@ public class OpenRedirectModule implements Scanner {
         String baseUrl = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
         HttpClient hc = HttpClientFactory.noRedirect();
-        log.accept("[~] OpenRedirect: iniciando probes em " + baseUrl);
+        List<Payload> payloads = mergeKbPayloads();
+        log.accept("[~] OpenRedirect: iniciando probes em " + baseUrl + " (" + payloads.size() + " payloads)");
 
         AtomicBoolean cancel = new AtomicBoolean(false);
         List<Callable<List<Finding>>> tasks = new ArrayList<>();
@@ -96,12 +124,12 @@ public class OpenRedirectModule implements Scanner {
             tasks.add(() -> {
                 List<Finding> local = new ArrayList<>();
                 log.accept("[~] OpenRedirect: [" + (pathIdx + 1) + "/" + PROBE_PATHS.size() + "] " + path + " -- "
-                        + REDIRECT_PARAMS.size() + " params x " + PAYLOADS.size() + " payloads");
+                        + REDIRECT_PARAMS.size() + " params x " + payloads.size() + " payloads");
                 for (String param : REDIRECT_PARAMS) {
                     if (cancel.get()) {
                         return local;
                     }
-                    for (Payload payload : PAYLOADS) {
+                    for (Payload payload : payloads) {
                         if (cancel.get()) {
                             return local;
                         }

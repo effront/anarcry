@@ -3,6 +3,7 @@ package gg.effront.anarcry.scanner.web.smuggling;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -21,6 +22,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Consumer;
 import javax.net.ssl.SSLContext;
@@ -33,6 +35,9 @@ public class RequestSmugglingModule implements Scanner {
     // Probe timeout -- if server takes longer than this, it's holding the
     // connection
     private static final int PROBE_TIMEOUT_MS = 3_000;
+
+    // TE.TE obfuscation variants to test for Transfer-Encoding parsing tolerance
+    private static final List<String> TETE_VARIANTS = List.of("xchunked", "chunked, chunked", "chunked\t");
 
     @Override
     public String id() {
@@ -619,7 +624,7 @@ public class RequestSmugglingModule implements Scanner {
     }
 
     private TeTeResult probeTeTeObfuscation(ScanContext ctx, String host, int port, Consumer<String> log) {
-        List<String> variants = List.of("xchunked", "chunked, chunked", "chunked\t");
+        List<String> variants = mergeKbTeTeVariants();
         for (String variant : variants) {
             String probe = "POST / HTTP/1.1\r\n" + "Host: " + host + "\r\n"
                     + "Content-Type: application/x-www-form-urlencoded\r\n" + "Content-Length: 8\r\n"
@@ -685,6 +690,18 @@ public class RequestSmugglingModule implements Scanner {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    // Merge hardcoded TE.TE obfuscation variants with KB payloads
+    private List<String> mergeKbTeTeVariants() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(TETE_VARIANTS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String trimmed = kbp.strip();
+            if (!trimmed.isEmpty()) {
+                merged.add(trimmed);
+            }
+        }
+        return List.copyOf(merged);
     }
 
     private String rawSend(ScanContext ctx, String host, int port, String request, int timeoutMs) throws Exception {

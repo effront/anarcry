@@ -113,6 +113,19 @@ Casos reais e mentalidade de ataque (RWBH): o padrão é usar SSRF ou scan diret
 - Servico acessivel apenas via IP interno e scan via SSRF -- o risco e real mas depende de outro vetor.
 - Honeypot: servico responde com dados falsos para detectar atacantes.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2023-22515 | Atlassian Confluence DC/Server | 2023 | Endpoint de setup acessivel em instancias ja configuradas permite criar admin sem autenticacao -- explorado por APTs (CVSS 10.0) | Exposed Admin Endpoint |
+| CVE-2024-21893 | Ivanti Connect Secure | 2024 | SSRF no componente SAML expoe endpoints administrativos internos para a internet | Internal Endpoint Exposure |
+| CVE-2022-26134 | Atlassian Confluence | 2022 | OGNL injection via URL em instancias Confluence expostas na internet -- RCE pre-auth | Exposed App to RCE |
+| CVE-2023-20198 | Cisco IOS XE Web UI | 2023 | Interface web de gerenciamento exposta permite criacao de usuario admin -- explorado massivamente in-the-wild (CVSS 10.0) | Exposed Management Interface |
+| CVE-2021-40438 | Apache HTTP Server mod_proxy | 2021 | SSRF em mod_proxy expoe servicos internos -- atacante acessa infra backend via reverse proxy misconfigured | Proxy Exposure |
+| CVE-2020-14882 | Oracle WebLogic Server | 2020 | Console de admin exposta na internet permite RCE sem autenticacao via path traversal | Exposed Admin Console to RCE |
+
+Fonte: cvelistV5 (MITRE CVE List v5 dataset)
+
 ## Recommendation
 1. Fechar portas de infraestrutura na internet; usar VPN, bastion host ou private link.
 2. Bind em `127.0.0.1`/rede interna e aplicar security groups/firewall com least privilege.

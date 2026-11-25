@@ -112,7 +112,6 @@ Transfer-Encoding: chunked
 SMUGGLED
 0
 
-
 ```
 
 ```http
@@ -130,7 +129,6 @@ Content-Length: 15
 
 x=1
 0
-
 
 ```
 
@@ -194,7 +192,6 @@ Z
 GET /admin HTTP/1.1
 Host: alvo.com
 
-
 ```
 
 ```http
@@ -243,7 +240,6 @@ X: ignored
 
 GET /admin HTTP/1.1
 Host: alvo.com
-
 
 ```
 
@@ -423,7 +419,6 @@ Monitorar headers `Age`, `X-Cache` (HIT/MISS), `Cache-Control`. Se uma requisiç
 - **Parâmetros comuns:** headers `Content-Length`, `Transfer-Encoding`, `Connection`, `Host`, `X-Forwarded-*`; body POST.
 - **Paths comuns:** qualquer endpoint atrás de proxy/CDN, especialmente `/`, `/login`, `/api/*`, `/graphql`, `/admin`.
 - **Sinais:** respostas 400/501 inconsistentes; `Age`/`X-Cache`; proxy/backend diferentes; conexões keep-alive reutilizadas; comportamento divergente com TE ofuscado.
-
 ## Escalation Techniques
 Request smuggling e uma primitiva de ataque poderosa -- o desync em si nao e o objetivo, mas sim o que ele permite:
 
@@ -463,6 +458,18 @@ Sinais de que o probe de smuggling do scanner **nao indica desync real**:
 - **Backend rejeita CL+TE simultaneo (RFC 7230 compliant):** se o backend retorna 400 para requisicoes com ambos os headers, o servidor esta implementando a RFC corretamente e nao e vulneravel.
 - **Edge strip de Transfer-Encoding:** se o CDN/proxy remove `Transfer-Encoding` antes de repassar ao backend, as variantes CL.TE e TE.CL nao se aplicam -- o backend recebe apenas `Content-Length`.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2025-32094 | Akamai | 2025 | Smuggling via metodo OPTIONS combinado com obsolete line folding nos headers HTTP | OPTIONS + obs-fold |
+| CVE-2024-53008 | HAProxy | 2024 | Interpretacao inconsistente de requests HTTP permite bypass de ACLs e acesso a paths restritos | HTTP Parser Discrepancy |
+| CVE-2023-25690 | Apache HTTP Server | 2023 | mod_proxy com RewriteRule permite request splitting via encoded newlines no path reescrito | URL Rewrite Smuggling |
+| CVE-2023-25725 | HAProxy | 2023 | Parser de headers nao rejeitava Transfer-Encoding malformado -- desync entre HAProxy e backend | TE Parser Confusion |
+| CVE-2023-40225 | HAProxy | 2023 | Header Content-Length vazio aceito pelo proxy -- backend interpreta diferente causando desync | Empty CL Desync |
+| CVE-2022-1388 | F5 BIG-IP | 2022 | Request smuggling via hop-by-hop header manipulation -- bypass de autenticacao no iControl REST (CVSS 9.8) | Connection Header Abuse |
+| CVE-2021-40346 | HAProxy | 2021 | Dois headers Content-Length com valores diferentes aceitos -- front-end e backend usam valores distintos | Duplicate CL Desync |
+| CVE-2019-18277 | HAProxy | 2019 | Transfer-Encoding com caracteres especiais antes de chunked nao reconhecido pelo proxy -- backend processa como chunked | TE Obfuscation |
 
 ## Recommendation
 1. Usar HTTP/2 de ponta a ponta e rejeitar downgrades ambíguos; se houver conversão H2→H1, normalizar headers.

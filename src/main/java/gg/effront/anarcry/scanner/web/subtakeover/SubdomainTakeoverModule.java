@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner.web.subtakeover;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -15,6 +16,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
@@ -107,7 +109,7 @@ public class SubdomainTakeoverModule implements Scanner {
     @Override
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
         List<Finding> findings = new ArrayList<>();
-        HttpClient hc = HttpClientFactory.noRedirect();
+        HttpClient hc = HttpClientFactory.http2();
 
         // Collect hosts to check: primary host + common subdomains
         String primaryHost = ctx.host();
@@ -116,7 +118,7 @@ public class SubdomainTakeoverModule implements Scanner {
 
         // Extract base domain for subdomain enumeration
         String baseDomain = extractBaseDomain(primaryHost);
-        for (String sub : COMMON_SUBDOMAINS) {
+        for (String sub : mergeKbSubdomains()) {
             String candidate = sub + "." + baseDomain;
             if (!candidate.equals(primaryHost)) {
                 hostsToCheck.add(candidate);
@@ -166,18 +168,16 @@ public class SubdomainTakeoverModule implements Scanner {
                     return;
                 }
 
-                // CNAME resolves -- check HTTP response for takeover fingerprint
-                String body = fetchBody(ctx, hc, host, log);
-                if (body != null && fp.bodyPattern().matcher(body).find()) {
+                // CNAME resolves -- probe for takeover fingerprint on host and CNAME target
+                String matchedEvidence = probeForFingerprint(ctx, hc, host, finalCname, fp, log);
+                if (matchedEvidence != null) {
                     log.accept("[!!] " + id() + ": takeover fingerprint matched for " + host + " (" + fp.serviceName()
                             + ")");
-                    String evidence = "CNAME chain: " + chainStr + " | HTTP body matched: "
-                            + fp.bodyPattern().pattern();
+                    String evidence = "CNAME chain: " + chainStr + " | " + matchedEvidence;
                     findings.add(buildFinding(host, chainStr, fp.serviceName(), evidence, Severity.HIGH));
                     return;
                 }
 
-                // CNAME matches a service pattern but no fingerprint -- suspicious
                 log.accept("[~] " + id() + ": " + host + " CNAME matches " + fp.serviceName()
                         + " but no takeover fingerprint in response");
                 return;
@@ -242,18 +242,43 @@ public class SubdomainTakeoverModule implements Scanner {
         }
     }
 
-    private String fetchBody(ScanContext ctx, HttpClient hc, String host, Consumer<String> log) {
-        try {
-            String scheme = ctx.isHttps() ? "https" : "http";
-            String url = scheme + "://" + host + "/";
-            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6)).GET()
-                    .build();
-            HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
-            return resp.body() != null ? resp.body() : "";
-        } catch (Exception e) {
-            log.accept("[~] " + id() + ": HTTP fetch failed for " + host + ": " + e.getMessage());
-            return null;
+    private String probeForFingerprint(ScanContext ctx, HttpClient hc, String host, String cnameTarget,
+            ServiceFingerprint fp, Consumer<String> log) {
+        String body = probeHost(ctx, hc, host, log);
+        if (body != null && fp.bodyPattern().matcher(body).find()) {
+            return "HTTP body on " + host + " matched: " + fp.bodyPattern().pattern();
         }
+
+        // PaaS routing is Host-header-based: deleted apps may only return the
+        // platform error page when addressed by the platform hostname, not
+        // the custom domain that CNAMEs to it.
+        if (!host.equalsIgnoreCase(cnameTarget)) {
+            body = probeHost(ctx, hc, cnameTarget, log);
+            if (body != null && fp.bodyPattern().matcher(body).find()) {
+                return "HTTP body on CNAME target " + cnameTarget + " matched: " + fp.bodyPattern().pattern();
+            }
+        }
+
+        return null;
+    }
+
+    private String probeHost(ScanContext ctx, HttpClient hc, String host, Consumer<String> log) {
+        for (String scheme : new String[]{"https", "http"}) {
+            try {
+                String url = scheme + "://" + host + "/";
+                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6)).GET()
+                        .build();
+                HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
+                String body = resp.body() != null ? resp.body() : "";
+                if (!body.isEmpty()) {
+                    return body;
+                }
+            } catch (Exception e) {
+                log.accept("[~] " + id() + ": " + scheme.toUpperCase() + " probe failed for " + host + ": "
+                        + e.getMessage());
+            }
+        }
+        return null;
     }
 
     private Finding buildFinding(String host, String cnameChain, String service, String evidence, Severity severity) {
@@ -265,6 +290,14 @@ public class SubdomainTakeoverModule implements Scanner {
                 "Remove the orphaned DNS record or reclaim the resource on " + service
                         + ". Audit all CNAME records regularly for dangling references. "
                         + "Use monitoring tools to detect subdomain takeover conditions.");
+    }
+
+    private List<String> mergeKbSubdomains() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(COMMON_SUBDOMAINS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            merged.add(kbp);
+        }
+        return List.copyOf(merged);
     }
 
     private static String extractBaseDomain(String host) {

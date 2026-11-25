@@ -3,10 +3,12 @@ package gg.effront.anarcry.scanner.web.infra;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.util.CircuitBreakerException;
+import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 
 import org.w3c.dom.Document;
@@ -31,8 +33,11 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -86,6 +91,17 @@ public class InfraModule implements Scanner {
     @Override
     public String id() {
         return "Infra";
+    }
+
+    private List<String> mergeKbProbePaths() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>();
+        for (PanelProbe probe : PANEL_PROBES) {
+            merged.add(probe.path());
+        }
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            merged.add(kbp);
+        }
+        return List.copyOf(merged);
     }
 
     @Override
@@ -277,6 +293,45 @@ public class InfraModule implements Scanner {
                     throw cbe;
                 } catch (Exception ignored) {
                 }
+            }
+        }
+
+        // KB-sourced infrastructure probes on main port
+        Set<String> panelProbePaths = new HashSet<>();
+        for (PanelProbe pp : PANEL_PROBES) {
+            panelProbePaths.add(pp.path());
+        }
+        String kbScheme = ctx.isHttps() ? "https" : "http";
+        int kbDefPort = ctx.isHttps() ? 443 : 80;
+        String kbBase = kbScheme + "://" + host + (ctx.port() != kbDefPort ? ":" + ctx.port() : "");
+        for (String kbPath : mergeKbProbePaths()) {
+            if (panelProbePaths.contains(kbPath)) {
+                continue;
+            }
+            String kbUrl = kbBase + kbPath;
+            try {
+                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(kbUrl)).timeout(Duration.ofSeconds(5)).GET()
+                        .build();
+                HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
+                if (resp.statusCode() == 200) {
+                    String body = resp.body() != null ? resp.body() : "";
+                    String ct = resp.headers().firstValue("content-type").orElse("");
+                    if (!body.isBlank() && ct.contains("application/json")) {
+                        log.accept("[!] Infra: KB-detected service endpoint at " + kbUrl);
+                        findings.add(Finding.of("Infra", kbUrl, "KB-detected service endpoint: " + kbPath,
+                                Severity.MEDIUM, "URL: " + kbUrl + " | HTTP 200 | Content-Type: " + ct,
+                                "Service endpoint detected via KB probe -- may expose internal infrastructure"
+                                        + " information or management interface",
+                                "curl -s '" + kbUrl + "'",
+                                "Verificar se o endpoint deve ser publicamente acessivel;"
+                                        + " restringir por IP ou VPN se necessario",
+                                _cweId, _cweTitle, _cveVector, _score));
+                    }
+                }
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
+            } catch (Exception ignored) {
+                // Expected for invalid or unreachable KB paths
             }
         }
 

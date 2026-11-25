@@ -108,6 +108,31 @@ Billion Laughs:
 
 Casos reais e mentalidade de ataque (RWBH): Yahoo (parsers XML em mail/upload) e Facebook (DOCX/XLSX) mostram que o vetor não é só SOAP; o atacante testa SVG, DOCX, SAML e OOB quando a resposta não reflete o arquivo.
 
+### Alvos WEB-INF para leitura via XXE em aplicacoes Java
+
+Arquivos dentro de `/WEB-INF/` nao sao acessiveis via browser, mas XXE com `file://` ou SSRF pode le-los diretamente. Sao alvos de alto valor para exfiltrar configuracoes, credenciais e rotas da aplicacao.
+
+```text
+# Deployment descriptors e configuracao
+/WEB-INF/web.xml                     -- descritor principal (servlets, filters, security constraints)
+/WEB-INF/struts-config.xml           -- rotas e actions do Struts
+/WEB-INF/config.xml                  -- configuracao generica
+/WEB-INF/faces-config.xml            -- configuracao JSF (dezenas de variantes por componente: Calendar, Editor, FileUpload, DataTable, etc.)
+
+# Oracle/SOAP
+/WEB-INF/soapdocs/webapps/soap/WEB-INF/config/soapConfig.xml
+/WEB-INF/servlet/Oracle.xml.xsql.XSQLServlet/soapdocs/webapps/soap/WEB-INF/config/soapConfig.xml
+
+# Classes compiladas e artefatos de deploy
+/WEB-INF/war/WEB-INF/classes/        -- bytecode compilado (pode revelar logica de negocio)
+/WEB-INF/war/WEB-INF/deploy/         -- artefatos de deploy
+
+# Traversal via JSF resource
+/WEB-INF/javax.faces.resource.../WEB-INF/web.xml.jsf
+```
+
+Estes paths tambem podem ser combinados com SSRF para buscar configuracoes de hosts internos (`http://internal:8080/WEB-INF/web.xml`). O `web.xml` e o alvo prioritario por conter mapeamento de servlets, credenciais de banco (DataSource), paths de keystores e configuracoes de seguranca.
+
 ## Notable CVEs
 
 | CVE | Produto | Ano | Descricao | Tipo |
@@ -181,3 +206,8 @@ dbf.setExpandEntityReferences(false);
 6. Em uploads, validar tipo real, desabilitar processamento de XML em SVG/DOCX e usar sandbox para conversão.
 7. Segregar o parser de XML em serviço isolado, sem acesso a filesystem/network, quando inevitável.
 8. Monitorar requisições com `DOCTYPE`, `SYSTEM`, `PUBLIC`, `file://` e chamadas OOB.
+
+## Sources
+- Payload file: `xml.txt` -- 77 paths WEB-INF para enumeracao em apps Java (RichFaces, Struts, JSF, Oracle SOAP)
+- OWASP XXE Prevention Cheat Sheet
+- PortSwigger Web Security Academy -- XXE

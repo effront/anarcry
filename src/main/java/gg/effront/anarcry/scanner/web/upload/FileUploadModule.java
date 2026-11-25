@@ -3,6 +3,7 @@ package gg.effront.anarcry.scanner.web.upload;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -139,6 +140,55 @@ public class FileUploadModule implements Scanner {
         return probes;
     }
 
+    // Merge hardcoded extension bypass probes with filenames from KB. Only KB
+    // payloads that look like filenames are included -- content-type descriptions,
+    // magic byte payloads, HTML, and tool commands are filtered out.
+    private List<UploadProbe> mergeKbExtensionProbes() {
+        List<UploadProbe> hardcoded = extensionBypassProbes();
+        Set<String> seen = new LinkedHashSet<>();
+        for (UploadProbe p : hardcoded) {
+            seen.add(p.filename().toLowerCase());
+        }
+        List<UploadProbe> merged = new ArrayList<>(hardcoded);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String fn = kbp.trim();
+            if (!isFilenameLike(fn) || seen.contains(fn.toLowerCase())) {
+                continue;
+            }
+            String ct = guessContentType(fn);
+            merged.add(new UploadProbe(fn, ct, SAFE_PAYLOAD, "KB: " + fn));
+            seen.add(fn.toLowerCase());
+        }
+        return List.copyOf(merged);
+    }
+
+    // A payload that looks like a filename: starts with a word character, has a
+    // dot,
+    // no spaces, no HTML/command prefixes
+    private static boolean isFilenameLike(String s) {
+        if (s.isEmpty() || s.length() > 60 || !s.contains(".")) {
+            return false;
+        }
+        // Reject strings with spaces, HTML, commands, or path traversal
+        return !s.contains(" ") && !s.startsWith("<") && !s.startsWith("#") && !s.startsWith("\\") && !s.startsWith("/")
+                && !s.startsWith(".") && !s.startsWith("Content-Type") && !s.startsWith("AddType")
+                && !s.startsWith("curl") && !s.startsWith("exiftool");
+    }
+
+    private static String guessContentType(String filename) {
+        String lower = filename.toLowerCase();
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (lower.endsWith(".png")) {
+            return "image/png";
+        }
+        if (lower.endsWith(".gif")) {
+            return "image/gif";
+        }
+        return "application/octet-stream";
+    }
+
     // -------------------------------------------------------------------------
     // Scanner contract
     // -------------------------------------------------------------------------
@@ -174,13 +224,20 @@ public class FileUploadModule implements Scanner {
 
         log.accept("[~] FileUpload: " + uploadEndpoints.size() + " endpoint(s) de upload encontrado(s)");
 
+        // Merge extension bypass probes with KB payloads (once, before endpoint loop)
+        List<UploadProbe> extProbes = mergeKbExtensionProbes();
+        int kbExtra = extProbes.size() - extensionBypassProbes().size();
+        if (kbExtra > 0) {
+            log.accept("[~] " + id() + ": " + kbExtra + " payloads adicionais do Knowledge Base");
+        }
+
         // Phase 2-4: Test each endpoint
         for (String endpoint : uploadEndpoints) {
             String uploadUrl = base + endpoint;
 
             // Phase 2: Extension bypass
             log.accept("[~] FileUpload: testando extension bypass em " + endpoint);
-            for (UploadProbe probe : extensionBypassProbes()) {
+            for (UploadProbe probe : extProbes) {
                 Finding f = testUpload(ctx, hc, base, uploadUrl, endpoint, probe, cweId, cweTitle, cvssVec, score, log);
                 if (f != null) {
                     findings.add(f);

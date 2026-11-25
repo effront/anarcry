@@ -119,6 +119,16 @@ Sinais de que o mass assignment detectado pelo scanner **nao e exploravel**:
 - **Campo alteravel e intencional:** alguns campos que parecem sensiveis (ex.: `locale`, `timezone`, `theme`) sao projetados para serem alterados pelo usuario -- mass assignment aqui e o comportamento esperado, nao uma vulnerabilidade.
 - **Teste feito com admin logado:** se o testador usou credenciais de admin, a alteracao de `role` pode ser funcionalidade normal do painel admin. Repetir o teste com conta de privilegio inferior para confirmar.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2025-2304 | Camaleon CMS | 2025 | Mass assignment no fluxo de troca de senha permite escalacao de privilegios para admin (CVSS 9.4) | Privilege Escalation |
+| CVE-2024-0404 | anything-llm | 2024 | Mass assignment no endpoint de invite permite criacao de contas com privilegios elevados sem autorizacao | Privilege Escalation |
+| CVE-2024-3283 | anything-llm | 2024 | Usuarios com role manager podem escalar para admin via mass assignment em endpoint de atualizacao de perfil | Privilege Escalation |
+| CVE-2021-21263 | Laravel (Eloquent) | 2021 | Bypass de guarded attributes em relacoes BelongsTo -- permite mass assignment em campos protegidos | Framework Mass Assignment |
+| CVE-2012-2661 | Ruby on Rails | 2012 | Mass assignment historico que levou a criacao do strong_parameters -- atacante altera role de usuario via POST | Classic Mass Assignment |
+
 ## Recommendation
 1. Usar DTOs específicos por operação (Create/Update) com allowlist explícita de campos; nunca vincular entidade de domínio diretamente ao body.
 2. Em Spring, usar `@JsonIgnoreProperties(ignoreUnknown = false)` ou `FAIL_ON_UNKNOWN_PROPERTIES` para rejeitar campos desconhecidos; evitar `@ModelAttribute` em entidades.

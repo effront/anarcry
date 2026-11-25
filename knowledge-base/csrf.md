@@ -126,6 +126,19 @@ Sinais de que a ausencia de token detectada pelo scanner **nao e CSRF exploravel
 - **Reautenticacao obrigatoria:** se o endpoint exige senha atual ou MFA antes de executar a acao, CSRF nao consegue fornecer essa informacao e a acao falha.
 - **Token presente em header/cookie nao visivel:** o scanner pode nao detectar tokens enviados via headers customizados ou cookies double-submit com assinatura HMAC.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2024-4835 | GitLab CE/EE | 2024 | CSRF no editor de wiki permite XSS via pagina maliciosa visitada por usuario autenticado -- account takeover | CSRF to Stored XSS |
+| CVE-2023-38646 | Metabase | 2023 | CSRF no setup endpoint permite RCE sem autenticacao via formulario malicioso que configura conexao JDBC | CSRF to RCE |
+| CVE-2022-36067 | vm2 (Node.js sandbox) | 2022 | CSRF em interface de gerenciamento permite escape de sandbox via codigo JS injetado cross-origin | CSRF to Sandbox Escape |
+| CVE-2021-21311 | Adminer | 2021 | CSRF via SSRF em login form -- atacante forca conexao a servidor malicioso e captura credenciais de banco | CSRF to SSRF |
+| CVE-2020-26870 | Cure53 DOMPurify | 2020 | Bypass de sanitizacao via mutation XSS permite CSRF token theft em paginas protegidas por DOMPurify | Mutation XSS to CSRF Bypass |
+| CVE-2019-11358 | jQuery (prototype pollution) | 2019 | Prototype pollution via $.extend permite override de protecoes CSRF em frameworks que usam jQuery para AJAX | Prototype Pollution to CSRF Bypass |
+
+Fonte: cvelistV5 (MITRE CVE List v5 dataset)
+
 ## Recommendation
 1. Exigir token anti-CSRF em todas as requisições state-changing (POST/PUT/PATCH/DELETE), vinculado à sessão e de uso único quando possível.
 2. Validar `Origin` e `Referer` contra allowlist, além do token; rejeitar requisições sem `Origin` em contextos sensíveis.

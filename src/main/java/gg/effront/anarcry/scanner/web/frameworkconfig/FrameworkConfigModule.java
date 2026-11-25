@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner.web.frameworkconfig;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -78,9 +79,19 @@ public class FrameworkConfigModule implements Scanner {
                     + "api_url|backend_url|server_url|api_base|base_url|BASE_URL)\\s*=\\s*"
                     + "[\"'](https?://[^\"'\\s]{4,200})[\"']");
 
+    private static final List<String> FALLBACK_SCAN_PATHS = List.of("/");
+
     @Override
     public String id() {
         return "FrameworkConfig";
+    }
+
+    private List<String> mergeKbScanPaths() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(FALLBACK_SCAN_PATHS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            merged.add(kbp);
+        }
+        return List.copyOf(merged);
     }
 
     @Override
@@ -99,7 +110,7 @@ public class FrameworkConfigModule implements Scanner {
         log.accept("[~] " + id() + ": scanning pages for framework configuration objects");
         Set<String> paths = ctx.discoveredPaths().paths();
         if (paths.isEmpty()) {
-            paths = Set.of("/");
+            paths = Set.copyOf(mergeKbScanPaths());
         }
 
         for (String path : paths) {
@@ -180,6 +191,9 @@ public class FrameworkConfigModule implements Scanner {
             Matcher credMatcher = CONFIG_SECRET_PATTERN.matcher(configBlock);
             while (credMatcher.find()) {
                 String credValue = credMatcher.group(1);
+                if (isLikelyUiLabel(credValue)) {
+                    continue;
+                }
                 if (seenCredentials.add(credValue)) {
                     String masked = maskValue(credValue);
                     log.accept("[!!] " + id() + ": credential found in " + fp.framework + " config at " + url);
@@ -287,6 +301,39 @@ public class FrameworkConfigModule implements Scanner {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private static final Pattern UI_LABEL_INDICATOR = Pattern
+            .compile("(?i)\\b(?:enter|type|your|please|minimum|minim|caractere|character|digit|"
+                    + "letter|confirm|new|old|current|forgot|reset|change|create|must be|"
+                    + "at least|no m[ií]nimo|senha|contrase[nñ]a|mot de passe|passwort|"
+                    + "placeholder|label|hint|campo|field|input|required)\\b");
+
+    private static boolean isLikelyUiLabel(String value) {
+        if (value.length() > 200) {
+            return false;
+        }
+        int spaceCount = 0;
+        boolean hasNonAscii = false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == ' ') {
+                spaceCount++;
+            }
+            if (c > 127) {
+                hasNonAscii = true;
+            }
+        }
+        if (spaceCount >= 3) {
+            return true;
+        }
+        if (hasNonAscii && spaceCount >= 1) {
+            return true;
+        }
+        if (UI_LABEL_INDICATOR.matcher(value).find()) {
+            return true;
+        }
+        return false;
     }
 
     private static String maskValue(String value) {

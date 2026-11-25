@@ -107,6 +107,40 @@ https://alvo.com/account/profile%2ecss
 https://alvo.com/account/profile.css?cb=1
 ```
 
+Web Cache Deception (WCD) - payloads adicionais:
+```text
+# Path confusion -- cache trata como estatico, app ignora sufixo
+https://alvo.com/account/settings/..%2Fstatic/style.css
+https://alvo.com/api/me/anything.js
+https://alvo.com/account%2F..%2Fstatic%2Flogo.png
+https://alvo.com/account/;.css
+https://alvo.com/account/.css
+
+# Delimiter confusion entre proxy e app
+https://alvo.com/account%3B.css
+https://alvo.com/account%23.css
+https://alvo.com/account%3F.css
+```
+
+CORS + cache poisoning:
+```http
+GET /api/config?cb=1337 HTTP/1.1
+Host: alvo.com
+Origin: https://evil.com
+
+# Se resposta inclui Access-Control-Allow-Origin: https://evil.com
+# E resposta e cacheada sem Origin na chave,
+# atacante envenena cache com CORS permissivo para todos
+```
+
+HTTP/2 request smuggling -> cache poisoning:
+```text
+# H2.CL desync: HTTP/2 frontend, HTTP/1.1 backend
+# Smuggle request que envenena cache do backend
+# Frontend cacheia resposta smuggled para path legitimo
+# Ref: Basecamp H1 #919175 (HTTP/2 smuggling -> cache poisoning)
+```
+
 Casos reais e mentalidade de ataque (RWBH): HackerOne e Shopify (`X-Forwarded-Host`) mostraram envenenamento de cache em páginas públicas; o atacante procura headers não-keyed, fat GET e parâmetros clandestinos.
 
 ## Target Context (Crawler Hints)
@@ -118,11 +152,13 @@ Casos reais e mentalidade de ataque (RWBH): HackerOne e Shopify (`X-Forwarded-Ho
 ## Escalation Techniques
 Cache poisoning raramente e o objetivo final -- e o vetor de distribuicao para ataques de maior impacto:
 
-- **XSS via cache:** header nao-keyed (ex: `X-Forwarded-Host: evil.com`) refletido em tag `<script src>` ou `<link>` e cacheado. Todas as vitimas que acessam o path recebem script malicioso -- equivalente a stored XSS em escala massiva.
+- **XSS via cache (stored XSS massivo):** header nao-keyed (ex: `X-Forwarded-Host: evil.com`) refletido em tag `<script src>` ou `<link>` e cacheado. Todas as vitimas que acessam o path recebem script malicioso -- equivalente a stored XSS em escala massiva. Ref: Glassdoor H1 #1424094 ($5,000, WCP->stored XSS na pagina principal, 133 upvotes).
 - **Redirect em massa para phishing:** `X-Forwarded-Host` envenenando redirect 301/302 na pagina de login. Vitimas sao redirecionadas para dominio do atacante que replica a pagina original e coleta credenciais.
-- **Cache deception para roubo de sessao:** induzir a vitima a acessar URL como `/account/profile.css`. Cache armazena resposta autenticada (com dados pessoais, tokens) sob extensao estatica. Atacante acessa a mesma URL e recebe os dados da vitima.
+- **Cache deception para account takeover (WCD->ATO):** induzir a vitima a acessar URL como `/account/profile.css`. Cache armazena resposta autenticada (com dados pessoais, tokens) sob extensao estatica. Atacante acessa a mesma URL e recebe os dados da vitima. Ref: Glassdoor H1 #1343086 (WCD expondo dados de usuario), Expedia H1 #1698316 ($3,000, WCD via path confusion, 159 upvotes), Shopify H1 #1271944 ($800, WCD em endpoint de conta).
+- **DoS via cache corruption ($9.7K PayPal):** envenenar respostas com conteudo invalido ou erro 500 e forcar cache a servir a pagina quebrada para todos os usuarios ate o TTL expirar ou o cache ser purgado. Ref: PayPal H1 #622122 ($9,700, cache DoS em paginas criticas, 851 upvotes -- maior bounty documentado para WCP).
 - **Encadeamento com XSS para account takeover:** cache poisoning que injeta XSS pode roubar cookies de sessao (se nao `HttpOnly`) ou tokens em `localStorage` de todos os usuarios que visitam a pagina envenenada.
-- **DoS via cache corruption:** envenenar respostas com conteudo invalido ou erro 500 e forcar cache a servir a pagina quebrada para todos os usuarios ate o TTL expirar ou o cache ser purgado.
+- **CORS + cache poisoning:** se a resposta inclui `Access-Control-Allow-Origin` dinamico baseado no header `Origin` e o cache nao inclui `Origin` na chave, atacante envenena cache com CORS permissivo -- qualquer dominio pode ler dados da API. Ref: WordPress H1 #591302 (405 upvotes, CORS misconfiguration amplificada por cache).
+- **HTTP/2 smuggling -> cache poisoning:** desync entre frontend HTTP/2 e backend HTTP/1.1 permite smuggle de request que envenena cache do backend. Frontend cacheia resposta smuggled para path legitimo. Ref: Basecamp H1 #919175 (H2.CL desync -> cache poisoning).
 - **Pivot para SSRF/Host Header Injection:** cache poisoning combinado com Host Header Injection pode redirecionar requisicoes internas e acessar servicos nao expostos.
 
 Conforme a metodologia geral do livro Bug Bounty Bootcamp (Cap. 1-5), ao encontrar um bug de severidade baixa ou media, tente encadea-lo com outros para maximizar o impacto -- neste caso, cache poisoning transforma reflexao simples em ataque massivo.
@@ -150,6 +186,33 @@ Sinais de que a deteccao de cache poisoning pelo scanner **nao e exploravel**:
 - **TTL muito curto:** cache com `max-age=0` ou `s-maxage=1` significa que a janela de envenenamento e minima ou inexistente na pratica.
 - **Cache buster obrigatorio:** se a reflexao so ocorre com parametro de cache buster (que faz parte da chave), a versao limpa da pagina nunca e envenenada.
 - **Resposta nao-2xx:** se o endpoint retorna 404 ou 500, o cache normalmente nao armazena a resposta (depende da config, mas e o padrao).
+- **Cache-Control: private ou no-store em endpoints sensiveis:** respostas com dados de usuario nao sao cacheadas -- WCD nao e viavel.
+- **CDN nao cacheia por extensao de path:** se o CDN usa Content-Type ou outro criterio (nao extensao) para decidir o que cachear, path confusion nao funciona.
+
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2024-23334 | aiohttp | 2024 | Path traversal em follow_symlinks permite cache poisoning via arquivos estaticos servidos fora do root -- atacante envenena cache de CDN com conteudo malicioso | Web Cache Poisoning |
+| CVE-2023-25690 | Apache HTTP Server 2.4.0-2.4.55 | 2023 | mod_proxy com RewriteRule permite request splitting via encoded CRLF -- leva a cache poisoning em proxies intermediarios | Request Splitting to Cache Poisoning |
+| CVE-2022-44877 | CWP (CentOS Web Panel) | 2022 | Parametros nao sanitizados no login page permitem injecao de headers -- cache poisoning + XSS via pagina cacheada | Header Injection to Cache Poisoning |
+| CVE-2021-21351 | XStream | 2021 | Desserializacao arbitraria permite manipular respostas cacheadas em aplicacoes que usam XStream com cache layer | Deserialization to Cache Poisoning |
+| CVE-2020-11984 | Apache HTTP Server mod_proxy_uwsgi | 2020 | Buffer overflow no mod_proxy_uwsgi permite manipulacao de respostas e envenenamento de cache reverso | Proxy Cache Poisoning |
+
+Fonte: cvelistV5 (MITRE CVE List v5 dataset)
+
+## Notable HackerOne Reports
+
+| Report | Programa | Upvotes | Bounty | Tecnica |
+|--------|----------|---------|--------|---------|
+| #622122 | PayPal | 851 | $9,700 | Cache DoS em paginas criticas (maior bounty documentado para WCP) |
+| #591302 | WordPress | 405 | $0 | CORS misconfiguration amplificada por cache |
+| #1698316 | Expedia | 159 | $3,000 | Web Cache Deception via path confusion |
+| #1424094 | Glassdoor | 133 | $5,000 | WCP -> stored XSS na pagina principal |
+| #1343086 | Glassdoor | 95 | $0 | WCD expondo dados de usuario |
+| #919175 | Basecamp | 80 | $0 | HTTP/2 smuggling -> cache poisoning |
+| #1271944 | Shopify | 60 | $800 | WCD em endpoint de conta |
+| #260697 | HackerOne | 158 | $0 | Cache poisoning via X-Forwarded-Host |
 
 ## Recommendation
 1. Incluir todos os headers que influenciam a resposta na chave de cache (`Vary: X-Forwarded-Host, X-Forwarded-Proto`) ou, melhor, não usá-los para gerar conteúdo.

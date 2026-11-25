@@ -43,6 +43,7 @@ YAML consumido pelo `ReportEngine`.
 | `email_security` | Email Security Misconfiguration | `emailsec` | MEDIUM | CWE-183 | `server_security_misconfiguration.mail_server_misconfiguration` |
 | `clerk_misconfiguration` | Clerk Authentication Misconfiguration | `clerk` | HIGH | CWE-200 | `sensitive_data_exposure.authentication_credentials` |
 | `error_disclosure` | Sensitive Error Disclosure | `errordisclosure` | MEDIUM | CWE-209 | `sensitive_data_exposure.internal_information_disclosure` |
+| `dns_pentesting` | DNS Pentesting and Misconfiguration | `infra` | HIGH | CWE-200 | `server_security_misconfiguration.dns_misconfiguration` |
 | `http_fuzzing` | HTTP Fuzzing / Intruder (reference) | `fuzzer` | -- | CWE-20 | -- |
 
 ## Convenções
@@ -56,11 +57,14 @@ YAML consumido pelo `ReportEngine`.
 
 Os três PDFs fornecidos foram convertidos para Markdown e salvos em `_sources/`:
 
-| Arquivo | Autor | Páginas |
+| Arquivo | Autor | Tipo |
 |---|---|---|
-| [`_sources/bug_bounty_bootcamp_vickie_li.md`](_sources/bug_bounty_bootcamp_vickie_li.md) | Vickie Li | 418 |
-| [`_sources/from_day_zero_to_zero_day_eugene_lim.md`](_sources/from_day_zero_to_zero_day_eugene_lim.md) | Eugene Lim | 321 |
-| [`_sources/hacking_com_kali_linux_broad_bindner.md`](_sources/hacking_com_kali_linux_broad_bindner.md) | James Broad & Andrew Bindner | 247 |
+| [`_sources/bug_bounty_bootcamp_vickie_li.md`](_sources/bug_bounty_bootcamp_vickie_li.md) | Vickie Li | PDF (418p) |
+| [`_sources/from_day_zero_to_zero_day_eugene_lim.md`](_sources/from_day_zero_to_zero_day_eugene_lim.md) | Eugene Lim | PDF (321p) |
+| [`_sources/hacking_com_kali_linux_broad_bindner.md`](_sources/hacking_com_kali_linux_broad_bindner.md) | James Broad & Andrew Bindner | PDF (247p) |
+| [`_sources/ssrf_ultimate_guide_lostsec.md`](_sources/ssrf_ultimate_guide_lostsec.md) | Lostsec | Artigo Medium |
+| [`_sources/dns_pentesting_guide_chauhan.md`](_sources/dns_pentesting_guide_chauhan.md) | Rahul Singh Chauhan | Artigo Medium |
+| [`_sources/payload_collection_local.md`](_sources/payload_collection_local.md) | Diversas fontes | Colecao de payloads |
 
 ## Nota de proveniência
 

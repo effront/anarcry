@@ -95,6 +95,18 @@ Casos reais e mentalidade de ataque (RWBH): a mentalidade é combinar ausência 
 - Dominio esta na preload list do browser -- HSTS e aplicado pelo browser antes mesmo do primeiro request, header na resposta e redundante.
 - Aplicacao nao tem endpoint HTTP (porta 80 fechada) -- sem vetor de downgrade.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2023-46218 | curl | 2023 | Mixed-case domain bypass em HSTS matching -- permite downgrade para HTTP em dominios com maiusculas | HSTS Bypass |
+| CVE-2022-30115 | curl | 2022 | HSTS bypass via STARTTLS em protocolos nao-HTTP (IMAP, POP3, SMTP) -- credenciais trafegam em texto claro | HSTS Bypass via Protocol Confusion |
+| CVE-2021-22897 | curl | 2021 | HSTS implementacao ignora porta -- atacante forca downgrade em porta alternativa do mesmo host | HSTS Port Bypass |
+| CVE-2024-2379 | curl (GnuTLS) | 2024 | Certificado HTTPS nao validado corretamente quando HSTS ativo -- MITM possivel mesmo com HSTS | TLS Validation Bypass |
+| CVE-2019-11730 | Firefox | 2019 | Same-origin bypass com file:// URI ignora HSTS -- permite leitura de arquivos locais sem protecao de transporte | HSTS Bypass via file:// |
+
+Fonte: cvelistV5 (MITRE CVE List v5 dataset)
+
 ## Recommendation
 1. Enviar em todas as respostas HTTPS:
 ```http

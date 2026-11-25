@@ -3,6 +3,7 @@ package gg.effront.anarcry.scanner.web.nosqli;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -18,10 +19,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class NoSqlInjectionModule implements Scanner {
@@ -71,9 +74,61 @@ public class NoSqlInjectionModule implements Scanner {
     private static final Pattern LOGIN_PATH = Pattern.compile("login|auth|signin|sign-in|authenticate",
             Pattern.CASE_INSENSITIVE);
 
+    // Pattern to extract operator suffixes like [$ne]=, [$regex]=.*, [$exists]=true
+    // from KB payloads
+    private static final Pattern KB_OP_SUFFIX = Pattern.compile("(\\[\\$\\w+]=[^&]*)");
+
     @Override
     public String id() {
         return "NoSQLi";
+    }
+
+    // Merge hardcoded JSON payloads with KB payloads that look like JSON bodies
+    // with NoSQL operators
+    private List<JsonPayload> mergeKbJsonPayloads() {
+        LinkedHashSet<String> seenBodies = new LinkedHashSet<>();
+        List<JsonPayload> merged = new ArrayList<>();
+        for (JsonPayload jp : JSON_PAYLOADS) {
+            if (seenBodies.add(jp.body())) {
+                merged.add(jp);
+            }
+        }
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String trimmed = kbp.strip();
+            if (trimmed.startsWith("{") && trimmed.endsWith("}") && trimmed.contains("$")) {
+                if (seenBodies.add(trimmed)) {
+                    merged.add(new JsonPayload(trimmed, "KB: " + trimmed.substring(0, Math.min(40, trimmed.length()))));
+                }
+            }
+        }
+        return List.copyOf(merged);
+    }
+
+    // Merge hardcoded operator payloads with unique operator suffixes extracted
+    // from KB
+    private List<OperatorPayload> mergeKbOperatorPayloads() {
+        LinkedHashSet<String> seenSuffixes = new LinkedHashSet<>();
+        List<OperatorPayload> merged = new ArrayList<>();
+        for (OperatorPayload op : OPERATOR_PAYLOADS) {
+            if (seenSuffixes.add(op.suffix())) {
+                merged.add(op);
+            }
+        }
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String trimmed = kbp.strip();
+            if (trimmed.startsWith("{")) {
+                continue; // JSON payloads handled by mergeKbJsonPayloads
+            }
+            Matcher m = KB_OP_SUFFIX.matcher(trimmed);
+            while (m.find()) {
+                String suffix = m.group(1);
+                if (seenSuffixes.add(suffix)) {
+                    String opName = suffix.replaceAll("[\\[\\]=.*]", "").replace("true", "");
+                    merged.add(new OperatorPayload(suffix, "KB " + opName + " operator"));
+                }
+            }
+        }
+        return List.copyOf(merged);
     }
 
     @Override
@@ -106,9 +161,17 @@ public class NoSqlInjectionModule implements Scanner {
             }
         }
 
+        List<OperatorPayload> operatorPayloads = mergeKbOperatorPayloads();
+        List<JsonPayload> jsonPayloads = mergeKbJsonPayloads();
+        int kbCount = (operatorPayloads.size() - OPERATOR_PAYLOADS.size())
+                + (jsonPayloads.size() - JSON_PAYLOADS.size());
+        if (kbCount > 0) {
+            log.accept("[~] " + id() + ": " + kbCount + " payloads adicionais do Knowledge Base");
+        }
+
         log.accept("[~] NoSQLi: iniciando em " + base + " (" + effectivePaths.size() + " paths, "
-                + effectiveParams.size() + " params, " + OPERATOR_PAYLOADS.size() + " operator payloads, "
-                + JSON_PAYLOADS.size() + " JSON payloads)");
+                + effectiveParams.size() + " params, " + operatorPayloads.size() + " operator payloads, "
+                + jsonPayloads.size() + " JSON payloads)");
 
         AtomicBoolean cancel = new AtomicBoolean(false);
         List<Callable<List<Finding>>> tasks = new ArrayList<>();
@@ -139,7 +202,7 @@ public class NoSqlInjectionModule implements Scanner {
                         continue;
                     }
 
-                    for (OperatorPayload op : OPERATOR_PAYLOADS) {
+                    for (OperatorPayload op : operatorPayloads) {
                         if (cancel.get()) {
                             return local;
                         }
@@ -226,7 +289,7 @@ public class NoSqlInjectionModule implements Scanner {
                     if (NOSQL_ERROR.matcher(baselineResp).find()) {
                         log.accept("[~] NoSQLi: JSON baseline ja contem erro NoSQL em " + path + " -- pulando");
                     } else {
-                        for (JsonPayload jp : JSON_PAYLOADS) {
+                        for (JsonPayload jp : jsonPayloads) {
                             if (cancel.get()) {
                                 return local;
                             }

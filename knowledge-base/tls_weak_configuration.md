@@ -64,7 +64,6 @@ Casos reais e mentalidade de ataque (RWBH): o TLS fraco é tratado como porta de
 - **Parâmetros comuns:** não se aplica (nível de transporte); observar `Host`, `SNI` e porta de destino.
 - **Paths comuns:** qualquer endpoint HTTPS, especialmente `/login`, `/oauth/token`, `/api/*`, `/payment`, `/admin`, `/graphql`.
 - **Ativos comuns:** portas 443, 8443, 9443, 993, 995, 465, 587, 636, 5061.
-
 ## Escalation Techniques
 TLS fraco nao e apenas um achado de compliance -- e o ponto de partida para interceptacao real de trafego:
 
@@ -94,6 +93,19 @@ Sinais de que o finding de TLS fraco **nao representa risco real no contexto**:
 - **Certificado intermediario parece ausente mas esta em cache:** browsers fazem cache de certificados intermediarios de conexoes anteriores. O scanner pode reportar "cadeia incompleta" enquanto browsers funcionam normalmente. E um finding valido mas de severidade menor -- clientes novos ou estritos falharao.
 - **Certificado self-signed em endpoint interno/nao-producao:** endpoints de desenvolvimento, staging ou health check podem usar certificados self-signed legitimamente. Confirmar que o endpoint e user-facing e lida com dados sensiveis antes de escalar.
 - **TLS 1.0 habilitado em porta sem dados sensiveis:** endpoint de monitoramento ou metricas em porta nao padrao que serve apenas dados publicos de health check tem risco menor que uma pagina de login. Contextualizar o finding baseado no tipo de dado que trafega pela conexao.
+
+
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2014-0160 | OpenSSL (Heartbleed) | 2014 | Leitura de ate 64KB de memoria do servidor via TLS heartbeat extension -- exposicao de chaves privadas e sessoes | Memory Disclosure |
+| CVE-2014-3566 | Protocolo SSLv3 (POODLE) | 2014 | Padding oracle em CBC mode do SSLv3 permite decifrar trafego byte a byte | Padding Oracle |
+| CVE-2016-0800 | OpenSSL (DROWN) | 2016 | SSLv2 habilitado permite decifrar sessoes TLS usando chave RSA compartilhada entre protocolos | Cross-Protocol Attack |
+| CVE-2015-4000 | Protocolo TLS (Logjam) | 2015 | Troca de chave DHE com parametros export-grade (512 bits) permite downgrade e MitM | DH Downgrade |
+| CVE-2016-2183 | Cifras 3DES (SWEET32) | 2016 | Birthday attack contra cifras de bloco 64-bit (3DES) permite recuperar plaintext apos ~32GB de trafego | Birthday Attack |
+| CVE-2015-0204 | OpenSSL (FREAK) | 2015 | Downgrade para cipher export RSA (512 bits) via manipulacao do handshake TLS | Export Cipher Downgrade |
+| CVE-2022-0778 | OpenSSL | 2022 | Loop infinito no parsing de certificados com parametros EC invalidos -- DoS via handshake TLS malicioso | DoS (Certificate Parsing) |
 
 ## Recommendation
 1. Desabilitar SSLv3, TLS 1.0 e TLS 1.1. Aceitar apenas TLS 1.2 e TLS 1.3.

@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner.web.websocket;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -15,6 +16,7 @@ import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -47,7 +49,7 @@ public class WebSocketModule implements Scanner {
 
         // Phase 1: Discover WS endpoints via HTTP upgrade probe
         List<String> discoveredPaths = new ArrayList<>();
-        for (String path : WS_PATHS) {
+        for (String path : mergeKbWsPaths()) {
             if (probeWsEndpoint(ctx, hc, baseUrl, path, log)) {
                 discoveredPaths.add(path);
                 log.accept("[+] " + id() + ": WebSocket endpoint found at " + path);
@@ -95,6 +97,14 @@ public class WebSocketModule implements Scanner {
             log.accept("[+] " + id() + ": nenhuma vulnerabilidade detectada");
         }
         return findings;
+    }
+
+    private List<String> mergeKbWsPaths() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(WS_PATHS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            merged.add(kbp);
+        }
+        return List.copyOf(merged);
     }
 
     private boolean probeWsEndpoint(ScanContext ctx, HttpClient hc, String baseUrl, String path, Consumer<String> log) {
