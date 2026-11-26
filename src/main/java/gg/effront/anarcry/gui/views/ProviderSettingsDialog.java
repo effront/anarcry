@@ -40,10 +40,12 @@ public final class ProviderSettingsDialog extends JDialog {
             new ProviderEntry("ollama_url", "Ollama (URL)", "http://localhost:11434"),};
 
     private final Map<String, JTextField> fields = new LinkedHashMap<>();
+    private final Map<String, String> envLocal;
     private boolean saved;
 
-    public ProviderSettingsDialog(Window owner) {
+    public ProviderSettingsDialog(Window owner, Map<String, String> envLocal) {
         super(owner, "AI Provider Settings", ModalityType.APPLICATION_MODAL);
+        this.envLocal = envLocal != null ? envLocal : Map.of();
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setResizable(true);
         buildUi();
@@ -97,8 +99,10 @@ public final class ProviderSettingsDialog extends JDialog {
             JTextField tf = new JTextField(30);
             tf.putClientProperty("JTextField.placeholderText", pe.placeholder());
 
-            // Prioritize: saved > auto-detected
-            String val = savedKeys.getOrDefault(pe.key(), autoDetected.getOrDefault(pe.key(), ""));
+            // Prioritize: saved > env.local > auto-detected
+            String envLocalVal = envLocal.getOrDefault(pe.key(), "");
+            String val = savedKeys.getOrDefault(pe.key(),
+                    !envLocalVal.isBlank() ? envLocalVal : autoDetected.getOrDefault(pe.key(), ""));
             if (!val.isBlank()) {
                 tf.setText(val);
             }
@@ -107,8 +111,15 @@ public final class ProviderSettingsDialog extends JDialog {
             grid.add(tf, fld);
 
             // Show detection source
-            if (autoDetected.containsKey(pe.key()) && !autoDetected.get(pe.key()).isBlank()) {
-                String source = pe.key().equals("notholy_api_key") ? "CLI" : "env";
+            String source = null;
+            if (savedKeys.containsKey(pe.key()) && !savedKeys.get(pe.key()).isBlank()) {
+                source = "saved";
+            } else if (!envLocalVal.isBlank()) {
+                source = ".env";
+            } else if (autoDetected.containsKey(pe.key()) && !autoDetected.get(pe.key()).isBlank()) {
+                source = pe.key().equals("notholy_api_key") ? "CLI" : "env";
+            }
+            if (source != null) {
                 JLabel sourceLabel = new JLabel(source);
                 sourceLabel.setFont(sourceLabel.getFont().deriveFont(Font.ITALIC, 10f));
                 sourceLabel.setForeground(new Color(100, 180, 100));
