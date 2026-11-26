@@ -272,9 +272,9 @@ public class AnarCryGui {
         tabs.addTab("Scan", scanSplit);
         tabs.addTab("Target", targetView);
         tabs.addTab("Findings", findingsView);
+        tabs.addTab("Report", reportView);
         tabs.addTab("Repeater", repeaterView);
         tabs.addTab("Fuzzer", fuzzerView);
-        tabs.addTab("Report", reportView);
         tabs.addTab("SiteMap", siteMapView);
         tabs.addTab("API Client", apiClientView);
         tabs.addTab("DB Explorer", dbExplorerView);

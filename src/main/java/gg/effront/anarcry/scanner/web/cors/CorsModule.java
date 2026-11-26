@@ -102,6 +102,10 @@ public class CorsModule implements Scanner {
                         String acac = resp.headers().firstValue("access-control-allow-credentials").orElse("").trim();
                         boolean credsAllowed = acac.equalsIgnoreCase("true");
 
+                        if (acao.equals("*") && !credsAllowed && withAuth) {
+                            continue;
+                        }
+
                         if (acao.isBlank()) {
                             continue;
                         }

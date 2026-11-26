@@ -237,10 +237,10 @@ Two interfaces: **TUI** (Lanterna, terminal-native) and **GUI** (Swing + FlatLaf
 
 ### TUI
 
-Nine modes: Dashboard, Scan, Target, Findings, Repeater, Report, SiteMap, API Client, Assistant. Tab bar at the top, status bar at the bottom with severity counters and progress.
+Ten modes: Dashboard, Scan, Target, Findings, Report, Repeater, Fuzzer, SiteMap, API Client, Assistant. Tab bar at the top, status bar at the bottom with severity counters and progress.
 
 ```
- [Dash] [Scan] [Target] [Findings] [Repeater] [Report] [SiteMap] [API] [Asst] [Ctrl+P]
+ [Dash] [Scan] [Target] [Findings] [Report] [Repeater] [Fuzzer] [SiteMap] [API] [Asst] [Ctrl+P]
 +---------------+-------------------------------------------------------+
 | MODULES       | LOG                                     scroll: Up/Dn |
 |               |                                                       |
@@ -293,13 +293,13 @@ Nine modes: Dashboard, Scan, Target, Findings, Repeater, Report, SiteMap, API Cl
 
 ### GUI
 
-Launch with `--gui` flag. Tabs: Dashboard, Scan, Target, Findings, Repeater, Report, SiteMap, API Client, Assistant.
+Launch with `--gui` flag. Tabs: Dashboard, Scan, Target, Findings, Report, Repeater, Fuzzer, SiteMap, API Client, Assistant.
 
 ```
 +-----------------------------------------------------------------------------------+
 | AnarCry                                            [Privacy] [Preferences]        |
 +-----------------------------------------------------------------------------------+
-| Dashboard | Scan | Target | Findings | Repeater | Report | SiteMap | API | Asst   |
+| Dashboard | Scan | Target | Findings | Report | Repeater | Fuzzer | SiteMap | API | Asst |
 +-----------------------------------------------------------------------------------+
 |                                                                                   |
 |  Severity Distribution (pie)               |   Recent Findings                    |
