@@ -172,7 +172,8 @@ java -jar build/libs/anarcry-2.5.0.jar --gui
 |  Knowledge Base      |  knowledge_base.json (47 entries, CWE+CVSS+VRT)    |
 |                      |  knowledge-base/*.md (47 enriched entries,         |
 |                      |  2329 payloads, 282 CVEs)                          |
-|  AI Assistant        |  Multi-provider (Claude, OpenAI, Gemini, Ollama)   |
+|  AI Assistant        |  Multi-provider (Claude, OpenAI, Gemini, DeepSeek, |
+|                      |  OpenRouter, NotHoly, Ollama) + Settings UI        |
 |  GUI                 |  Swing + FlatLaf (dark/light) + RSyntaxTextArea    |
 |                      |  + JFreeChart                                      |
 |  Test                |  JUnit 5.11.3                                      |
@@ -312,7 +313,7 @@ Launch with `--gui` flag. Tabs: Dashboard, Scan, Target, Findings, Report, Repea
 +-----------------------------------------------------------------------------------+
 ```
 
-**AI Assistant tab:** chat interface with SSE streaming, tool-use indicators, and token usage display. Supports Claude, OpenAI, Gemini, and Ollama. Configure provider and API key in Preferences.
+**AI Assistant tab:** chat interface with SSE streaming, tool-use indicators, and token usage display. Supports Claude, OpenAI, Gemini, DeepSeek, OpenRouter, NotHoly, and Ollama. Configure providers via the Settings dialog (gear button) or `.env.local`. Auto-detects API keys from system env vars and installed CLI tools (e.g. NotHoly CLI at `~/.notholy/credentials`). Persists config to `~/.anarcry/providers.json`.
 
 ---
 
@@ -391,10 +392,15 @@ src/main/java/gg/effront/anarcry/
 |   +-- AssistantConfig.java       Provider/model/API key/temperature config
 |   +-- ChatMessage.java           Conversation message record
 |   +-- UsageTracker.java          Token usage tracking and cost estimation
+|   +-- ProviderConfigStore.java    Auto-detect keys (env vars, CLI tools),
+|   |                               persist to ~/.anarcry/providers.json
 |   +-- providers/
 |   |   +-- ProviderAdapter.java   Interface: formatRequest, parseResponse, streaming
 |   |   +-- AnthropicProvider      Claude API (content_block_start/input_json_delta)
 |   |   +-- OpenAiProvider         OpenAI API (delta.tool_calls)
+|   |   +-- DeepSeekProvider       DeepSeek API (extends OpenAiProvider)
+|   |   +-- OpenRouterProvider     OpenRouter API (extends OpenAiProvider)
+|   |   +-- NotHolyProvider        NotHoly API (extends OpenAiProvider)
 |   |   +-- GeminiProvider         Google Gemini API
 |   |   +-- OllamaProvider         Local Ollama API
 |   +-- tools/
@@ -418,6 +424,7 @@ src/main/java/gg/effront/anarcry/
 |   |   +-- ReportView             Report generation and export
 |   |   +-- ApiClientView          API Client with collection tree + request tabs
 |   |   +-- AssistantView          AI Assistant chat with streaming + tools
+|   |   +-- ProviderSettingsDialog Provider API key config + auto-detection
 |   |   +-- PreferencesDialog      Settings dialog with persistence (10 categories)
 |   |   +-- EnvironmentEditorDialog  API Client environment variable editor
 |   |   +-- GlobalSearchDialog     Cross-tab search (Ctrl+K)
@@ -483,14 +490,19 @@ The AI Assistant uses the markdown KB via `QueryKbTool` for contextual vulnerabi
 
 ## 09 - AI Assistant
 
-Built-in LLM-powered security analyst available in both TUI and GUI. Supports four providers:
+Built-in LLM-powered security analyst available in both TUI and GUI. Supports seven providers:
 
 | Provider | Models | Streaming |
 |----------|--------|-----------|
-| Claude (Anthropic) | claude-sonnet-4-20250514, claude-opus-4-20250514 | SSE with tool fragments |
-| OpenAI | gpt-4o, gpt-4o-mini | SSE with tool fragments |
-| Gemini | gemini-2.0-flash, gemini-2.5-pro | SSE |
+| Claude (Anthropic) | claude-sonnet-4-6, claude-opus-4-6, claude-sonnet-5-5, claude-haiku-5-5, claude-opus-5-5 | SSE with tool fragments |
+| OpenAI | gpt-4.1-mini, gpt-4.1, gpt-4o-mini, o4-mini | SSE with tool fragments |
+| DeepSeek | deepseek-chat, deepseek-reasoner | SSE |
+| OpenRouter | deepseek/deepseek-chat-v3-0324:free, qwen/qwen3-235b-a22b:free, + more | SSE |
+| NotHoly | notholy-specter, notholy-pulse, notholy-vector, notholy-wisp | SSE |
+| Gemini | gemini-2.5-flash, gemini-2.5-pro, gemini-2.0-flash | SSE |
 | Ollama | any local model | SSE |
+
+**Configuration:** Click the gear button in the Assistant tab to open the Provider Settings dialog. API keys are auto-detected from system environment variables (`ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, etc.) and installed CLI tools (NotHoly CLI at `~/.notholy/credentials`). User-configured keys persist to `~/.anarcry/providers.json`. Priority: `.env.local` > saved config > auto-detected.
 
 **Tools:** The assistant has 7 tools it can call proactively during analysis:
 
@@ -824,7 +836,7 @@ Other:
 
 ### v1.8.0
 
-- **AI Assistant integration**: multi-provider LLM assistant (Claude, OpenAI, Gemini, Ollama) with SSE streaming, tool use, and conversation history -- available in both TUI (AssistantPanel) and GUI (AssistantView)
+- **AI Assistant integration**: multi-provider LLM assistant (Claude, OpenAI, Gemini, DeepSeek, OpenRouter, NotHoly, Ollama) with SSE streaming, tool use, conversation history, and Settings UI with auto-detection -- available in both TUI (AssistantPanel) and GUI (AssistantView)
 - **Assistant tools**: 7 built-in tools -- get_findings, get_sitemap, get_scan_config, query_kb, explain_cwe, save_document -- dispatched automatically via streaming tool fragment detection
 - **Finding Validation Protocol**: 6-step mandatory validation in assistant system prompt based on Bug Bounty Bootcamp methodology -- prevents false positive relay in AI analysis
 - **Streaming tool fragments**: cross-provider SSE tool-call detection (Anthropic content_block_start/input_json_delta, OpenAI delta.tool_calls) with robust fragment accumulation
