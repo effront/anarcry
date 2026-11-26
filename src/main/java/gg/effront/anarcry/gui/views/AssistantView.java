@@ -296,7 +296,7 @@ public class AssistantView extends JPanel {
     }
 
     private void openProviderSettings() {
-        ProviderSettingsDialog dlg = new ProviderSettingsDialog(SwingUtilities.getWindowAncestor(this));
+        ProviderSettingsDialog dlg = new ProviderSettingsDialog(SwingUtilities.getWindowAncestor(this), lastEnvMap);
         dlg.setVisible(true);
         if (dlg.wasSaved()) {
             configure(lastEnvMap);
