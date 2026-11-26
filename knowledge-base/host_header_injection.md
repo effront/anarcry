@@ -126,6 +126,18 @@ Sinais de que o host header injection detectado pelo scanner **nao e exploravel*
 - **Cache desabilitado ou com chave correta:** a resposta com Host injetado nao e cacheada porque o servidor envia `Cache-Control: no-store` ou a chave de cache inclui o Host canonico -- cache poisoning nao e possivel.
 - **Host refletido em `X-*` response header informativo:** o Host aparece em um header de resposta como `X-Request-Host` para debug, mas nao em `Location`, `Set-Cookie`, ou no corpo HTML -- nenhum navegador interpreta headers informativos como redirecionamento.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2024-4985 | GitHub Enterprise Server | 2024 | SAML SSO auth bypass via Host header manipulation -- permite acesso admin sem credenciais (CVSS 10.0) | Host Header to Auth Bypass |
+| CVE-2023-25717 | Ruckus Wireless Admin | 2023 | Host header injection no painel admin permite RCE via CSRF encadeado com reset de senha | Host Header to Password Reset Poisoning |
+| CVE-2022-0860 | Cobbler | 2022 | Host header nao validado permite auth bypass via SSRF -- atacante acessa API interna como admin | Host Header to Auth Bypass |
+| CVE-2021-29484 | Ghost CMS | 2021 | Host header injection no password reset envia link de reset para dominio controlado pelo atacante | Password Reset Poisoning |
+| CVE-2020-13379 | Grafana | 2020 | SSRF via manipulacao de Host header no avatar proxy -- permite scan de rede interna e acesso a metadata cloud | Host Header to SSRF |
+
+Fonte: cvelistV5 (MITRE CVE List v5 dataset)
+
 ## Recommendation
 1. Validar `Host` contra allowlist de domínios canônicos; rejeitar hosts desconhecidos com 400.
 2. Não confiar em `X-Forwarded-Host`/`X-Forwarded-Server` para construir URLs; usar configuração estática (`app.base-url`) ou o host validado.

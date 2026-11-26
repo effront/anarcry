@@ -3,6 +3,7 @@ package gg.effront.anarcry.scanner.web.deser;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -19,6 +20,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -75,6 +77,20 @@ public class DeserializationModule implements Scanner {
             "Apache-Coyote|JBoss|WebLogic|WildFly|GlassFish|Jenkins|" + "Struts|Oracle.*Application Server",
             Pattern.CASE_INSENSITIVE);
 
+    // -- Framework-specific body indicators per endpoint --
+    // JBoss JMXInvokerServlet returns binary serialized data
+    private static final Pattern JBOSS_BODY = Pattern
+            .compile("application/x-java-serialized-object|JBoss|JMX|MBean|org\\.jboss", Pattern.CASE_INSENSITIVE);
+    // WebLogic WSAT/Async endpoints return WSDL XML
+    private static final Pattern WEBLOGIC_BODY = Pattern.compile(
+            "<wsdl:|<definitions|CoordinatorPortType|AsyncResponseService|WebLogic|Oracle", Pattern.CASE_INSENSITIVE);
+    // WebLogic console returns a login form
+    private static final Pattern WEBLOGIC_CONSOLE_BODY = Pattern
+            .compile("WebLogic|Oracle.*Console|AdminServer|wl_authParam", Pattern.CASE_INSENSITIVE);
+    // Jenkins returns its own UI
+    private static final Pattern JENKINS_BODY = Pattern
+            .compile("Jenkins|jenkins-ci|Groovy script|Script Console|Dashboard \\[Jenkins", Pattern.CASE_INSENSITIVE);
+
     // -- Malformed Java serialized payload (triggers error on deser endpoints) --
     // This is a truncated Java serialized stream header (magic + version only)
     private static final byte[] MALFORMED_JAVA_BYTES = new byte[]{(byte) 0xAC, (byte) 0xED, 0x00, 0x05, 0x73, 0x72,
@@ -90,6 +106,14 @@ public class DeserializationModule implements Scanner {
             0x00, 0x00, 0x00, 0x00};
 
     private static final String MALFORMED_PICKLE_B64 = Base64.getEncoder().encodeToString(MALFORMED_PICKLE_BYTES);
+
+    // -- Hardcoded injection payloads (merged with KB at runtime) --
+    private static final List<String> HARDCODED_INJECTION_PAYLOADS = List.of(MALFORMED_JAVA_B64, MALFORMED_PHP,
+            MALFORMED_PICKLE_B64);
+
+    // -- Patterns for KB payloads that are tool commands, not injectable strings --
+    private static final Pattern TOOL_COMMAND = Pattern
+            .compile("^(?:java |phpggc |ysoserial|import |class |def |print\\()", Pattern.CASE_INSENSITIVE);
 
     @Override
     public String id() {
@@ -111,6 +135,11 @@ public class DeserializationModule implements Scanner {
         String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
         log.accept("[~] " + id() + ": iniciando deteccao de desserializacao insegura em " + base);
+        List<String> kbPayloads = mergeKbPayloads();
+        int kbExtra = kbPayloads.size() - HARDCODED_INJECTION_PAYLOADS.size();
+        if (kbExtra > 0) {
+            log.accept("[~] " + id() + ": " + kbExtra + " payloads adicionais do Knowledge Base");
+        }
 
         AtomicBoolean cancel = new AtomicBoolean(false);
         List<Callable<List<Finding>>> tasks = new ArrayList<>();
@@ -131,14 +160,19 @@ public class DeserializationModule implements Scanner {
                     int status = resp.statusCode();
                     String body = resp.body() != null ? resp.body() : "";
 
-                    // A 200 or 500 (not 404) on these paths is significant
                     if (status != 404 && status != 0) {
                         String serverHdr = resp.headers().firstValue("Server").orElse("");
                         String contentType = resp.headers().firstValue("Content-Type").orElse("");
 
-                        if (status == 200 || status == 500
-                                || contentType.contains("application/x-java-serialized-object")
-                                || JAVA_DESER_ERROR.matcher(body).find()) {
+                        // Validate response actually belongs to the expected framework.
+                        // A generic catch-all page (Vercel, Netlify, Cloudflare Pages)
+                        // returns 200 for any path -- that is NOT a real framework endpoint.
+                        boolean confirmed = contentType.contains("application/x-java-serialized-object")
+                                || JAVA_DESER_ERROR.matcher(body).find()
+                                || VULN_FRAMEWORK_HEADER.matcher(serverHdr).find()
+                                || matchesFrameworkBody(endpoint, body);
+
+                        if (confirmed) {
                             log.accept("[!!] " + id() + ": endpoint de framework acessivel -- " + endpoint + " (HTTP "
                                     + status + ")");
                             local.add(Finding.of(id(), endpoint,
@@ -280,6 +314,24 @@ public class DeserializationModule implements Scanner {
                         local.add(pickleFinding);
                         cancel.set(true);
                         return local;
+                    }
+
+                    // -- KB payloads: inject additional deserialization payloads --
+                    for (String kbp : kbPayloads) {
+                        if (cancel.get()) {
+                            return local;
+                        }
+                        // Skip payloads already tested by the specific probe methods above
+                        if (HARDCODED_INJECTION_PAYLOADS.contains(kbp)) {
+                            continue;
+                        }
+                        Finding kbFinding = probeKbDeser(ctx, hc, base, path, param, baselineBody, kbp, log, cweId,
+                                cweTitle, cvssVec, cvssScore);
+                        if (kbFinding != null) {
+                            local.add(kbFinding);
+                            cancel.set(true);
+                            return local;
+                        }
                     }
                 }
                 return local;
@@ -462,7 +514,108 @@ public class DeserializationModule implements Scanner {
         return null;
     }
 
+    // -- KB payload probe: test a single KB payload against all deserialization
+    // error patterns --
+    private Finding probeKbDeser(ScanContext ctx, HttpClient hc, String base, String path, String param,
+            String baseline, String payload, Consumer<String> log, String cweId, String cweTitle, String cvssVec,
+            double cvssScore) {
+        try {
+            String encoded = URLEncoder.encode(payload, "UTF-8");
+            String url = base + path + "?" + param + "=" + encoded;
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6)).GET()
+                    .build();
+            HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
+            String body = resp.body() != null ? resp.body() : "";
+            String endpoint = path + "?" + param + "=" + encoded;
+
+            if (JAVA_DESER_ERROR.matcher(body).find() && !JAVA_DESER_ERROR.matcher(baseline).find()) {
+                log.accept("[!!] " + id() + ": Java deser error via KB payload em " + endpoint);
+                return Finding.of(id(), endpoint, "Deserialization -- Java ObjectInputStream detectado via KB payload",
+                        Severity.CRITICAL,
+                        "Payload: KB deserialization payload | Erro de desserializacao Java na resposta | URL: " + url,
+                        "Servidor tenta desserializar input via ObjectInputStream. "
+                                + "Atacante pode usar ysoserial para gerar gadget chains para RCE.",
+                        "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "=" + payload + "'",
+                        "Nunca usar ObjectInputStream em dados de usuario. "
+                                + "Implementar ValidatingObjectInputStream com allowlist de classes. "
+                                + "Migrar para JSON/Protocol Buffers.",
+                        cweId, cweTitle, cvssVec, cvssScore);
+            }
+            if (PHP_DESER_ERROR.matcher(body).find() && !PHP_DESER_ERROR.matcher(baseline).find()) {
+                log.accept("[!!] " + id() + ": PHP deser error via KB payload em " + endpoint);
+                return Finding.of(id(), endpoint, "Deserialization -- PHP unserialize() detectado via KB payload",
+                        Severity.CRITICAL,
+                        "Payload: KB deserialization payload | Erro de unserialize() na resposta | URL: " + url,
+                        "Servidor processa input via unserialize(). "
+                                + "Atacante pode criar POP chains para execucao de codigo arbitrario.",
+                        "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "=" + payload + "'",
+                        "Nunca usar unserialize() em dados de usuario. "
+                                + "Usar json_decode() para dados estruturados.",
+                        cweId, cweTitle, cvssVec, cvssScore);
+            }
+            if (PYTHON_PICKLE_ERROR.matcher(body).find() && !PYTHON_PICKLE_ERROR.matcher(baseline).find()) {
+                log.accept("[!!] " + id() + ": Python pickle error via KB payload em " + endpoint);
+                return Finding.of(id(), endpoint, "Deserialization -- Python pickle.loads() detectado via KB payload",
+                        Severity.CRITICAL,
+                        "Payload: KB deserialization payload | Erro de unpickling na resposta | URL: " + url,
+                        "Servidor processa input via pickle.loads(). "
+                                + "pickle.loads() executa codigo arbitrario via __reduce__.",
+                        "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "=" + payload + "'",
+                        "Nunca usar pickle.loads() em dados de usuario. Migrar para JSON ou MessagePack.", cweId,
+                        cweTitle, cvssVec, cvssScore);
+            }
+            if (DOTNET_DESER_ERROR.matcher(body).find() && !DOTNET_DESER_ERROR.matcher(baseline).find()) {
+                log.accept("[!!] " + id() + ": .NET deser error via KB payload em " + endpoint);
+                return Finding.of(id(), endpoint, "Deserialization -- .NET desserializacao detectada via KB payload",
+                        Severity.CRITICAL,
+                        "Payload: KB deserialization payload | Erro de desserializacao .NET na resposta | URL: " + url,
+                        "Servidor usa BinaryFormatter/ObjectStateFormatter inseguro. "
+                                + "Atacante pode usar ysoserial.net para RCE.",
+                        "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "=" + payload + "'",
+                        "Nunca usar BinaryFormatter em dados de usuario. Usar System.Text.Json.", cweId, cweTitle,
+                        cvssVec, cvssScore);
+            }
+        } catch (CircuitBreakerException cbe) {
+            throw cbe;
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
     // -- Utility methods --
+
+    // Check if the response body contains indicators specific to the framework
+    // expected at this endpoint. Prevents FPs from catch-all pages (Vercel, etc.)
+    private static boolean matchesFrameworkBody(String endpoint, String body) {
+        if (body == null || body.isEmpty()) {
+            return false;
+        }
+        if (endpoint.contains("JMXInvokerServlet")) {
+            return JBOSS_BODY.matcher(body).find();
+        }
+        if (endpoint.contains("CoordinatorPortType") || endpoint.contains("AsyncResponseService")) {
+            return WEBLOGIC_BODY.matcher(body).find();
+        }
+        if (endpoint.equals("/console/")) {
+            return WEBLOGIC_CONSOLE_BODY.matcher(body).find();
+        }
+        if (endpoint.contains("jenkins")) {
+            return JENKINS_BODY.matcher(body).find();
+        }
+        return false;
+    }
+
+    // Merge hardcoded injection payloads with KB payloads. Tool commands and code
+    // snippets from KB are filtered out -- only injectable strings are kept.
+    private List<String> mergeKbPayloads() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(HARDCODED_INJECTION_PAYLOADS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            if (!TOOL_COMMAND.matcher(kbp).find()) {
+                merged.add(kbp);
+            }
+        }
+        return List.copyOf(merged);
+    }
 
     private List<String> mergeWithDiscoveredPaths(ScanContext ctx) {
         List<String> merged = new ArrayList<>(PROBE_PATHS);

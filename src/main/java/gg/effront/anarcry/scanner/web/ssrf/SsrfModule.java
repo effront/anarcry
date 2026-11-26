@@ -3,6 +3,7 @@ package gg.effront.anarcry.scanner.web.ssrf;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -19,6 +20,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -110,6 +112,67 @@ public class SsrfModule implements Scanner {
     private static final List<String> REDIRECT_PARAMS = List.of("url", "redirect", "proxy", "fetch", "src",
             "webhook_url", "callback_url");
 
+    // KB payload URL scheme detection
+    private static final Pattern KB_URL_SCHEME = Pattern.compile("^(?:https?|gopher|dict|ftp|ldap|file|jar):",
+            Pattern.CASE_INSENSITIVE);
+
+    // Cloud metadata host patterns -- CRITICAL severity
+    private static final Pattern KB_METADATA_HOST = Pattern
+            .compile("169\\.254\\.169\\.254|metadata\\.google|metadata/instance|100\\.100\\.100\\.200"
+                    + "|metadata\\.packet\\.net|169\\.254\\.170\\.2");
+
+    // Localhost/loopback patterns -- HIGH severity
+    private static final Pattern KB_LOCALHOST_HOST = Pattern
+            .compile("127\\.0\\.0\\.|localhost|0\\.0\\.0\\.0|\\[::1]|\\[::ffff:|\\[0:0:0:0:0:ffff:"
+                    + "|2130706433|0x7f000001|0177\\.|127\\.1|\\[64:ff9b");
+
+    private List<SsrfProbe> mergeKbProbes() {
+        LinkedHashSet<String> seenUrls = new LinkedHashSet<>();
+        List<SsrfProbe> merged = new ArrayList<>();
+        for (SsrfProbe p : SSRF_PROBES) {
+            if (seenUrls.add(p.url())) {
+                merged.add(p);
+            }
+        }
+        int kbCount = 0;
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String trimmed = kbp.strip();
+            if (!KB_URL_SCHEME.matcher(trimmed).find()) {
+                continue;
+            }
+            if (!seenUrls.add(trimmed)) {
+                continue;
+            }
+            Severity sev;
+            String label;
+            if (KB_METADATA_HOST.matcher(trimmed).find()) {
+                sev = Severity.CRITICAL;
+                label = "kb-metadata";
+            } else if (KB_LOCALHOST_HOST.matcher(trimmed).find()) {
+                sev = Severity.HIGH;
+                label = "kb-localhost";
+            } else if (trimmed.startsWith("gopher://")) {
+                sev = Severity.HIGH;
+                label = "kb-gopher";
+            } else if (trimmed.startsWith("file://")) {
+                sev = Severity.HIGH;
+                label = "kb-file";
+            } else if (trimmed.startsWith("dict://") || trimmed.startsWith("ldap://")) {
+                sev = Severity.HIGH;
+                label = "kb-protocol";
+            } else if (trimmed.startsWith("jar:")) {
+                sev = Severity.HIGH;
+                label = "kb-jar";
+            } else {
+                sev = Severity.MEDIUM;
+                label = "kb-ssrf";
+            }
+            merged.add(new SsrfProbe(trimmed, label, sev));
+            kbCount++;
+        }
+        return List.copyOf(merged);
+    }
+
     @Override
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
         List<Finding> findings = new ArrayList<>();
@@ -189,6 +252,11 @@ public class SsrfModule implements Scanner {
         log.accept("[~] SSRF: " + activePaths.size() + "/" + probePaths.size() + " paths ativos");
 
         int concurrency = ctx.config().probeConcurrency();
+        List<SsrfProbe> allProbes = mergeKbProbes();
+        int kbProbeCount = allProbes.size() - SSRF_PROBES.size();
+        if (kbProbeCount > 0) {
+            log.accept("[~] " + id() + ": " + kbProbeCount + " payloads adicionais do Knowledge Base");
+        }
 
         // Phase 2: Main probing -- parallelized by path
         AtomicBoolean cancelMain = new AtomicBoolean(false);
@@ -200,7 +268,7 @@ public class SsrfModule implements Scanner {
                 List<Finding> local = new ArrayList<>();
                 boolean waf = ctx.wafState().isWafDetected();
                 List<String> params = waf ? WAF_URL_PARAMS : urlParams;
-                List<SsrfProbe> probes = waf ? WAF_SSRF_PROBES : SSRF_PROBES;
+                List<SsrfProbe> probes = waf ? WAF_SSRF_PROBES : allProbes;
                 log.accept("[~] SSRF: [" + (pathIdx + 1) + "/" + activePaths.size() + "] " + path + " -- "
                         + params.size() + " params x " + probes.size() + " probes" + (waf ? " (WAF mode)" : ""));
                 for (String param : params) {

@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner.web.secrets;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -124,6 +125,7 @@ public class SecretsModule implements Scanner {
         Set<String> seenSecrets = new HashSet<>();
         Set<String> scannedUrls = new HashSet<>();
         Set<String> jsUrls = new LinkedHashSet<>();
+        List<SecretPattern> patterns = mergeKbSecretPatterns();
 
         String base = ctx.targetUrl().replaceAll("/+$", "");
 
@@ -143,7 +145,7 @@ public class SecretsModule implements Scanner {
             if (body == null || body.isBlank()) {
                 continue;
             }
-            scanContent(body, url, findings, seenSecrets, log);
+            scanContent(body, url, findings, seenSecrets, patterns, log);
         }
 
         // Phase 2: JavaScript bundle scan (with chunk discovery)
@@ -161,7 +163,7 @@ public class SecretsModule implements Scanner {
             if (body == null || body.isBlank()) {
                 continue;
             }
-            scanContent(body, jsUrl, findings, seenSecrets, log);
+            scanContent(body, jsUrl, findings, seenSecrets, patterns, log);
             // Check for source maps
             Matcher smMatcher = SOURCE_MAP_URL.matcher(body);
             if (smMatcher.find()) {
@@ -183,7 +185,7 @@ public class SecretsModule implements Scanner {
                 continue;
             }
             log.accept("[+] " + id() + ": accessible source map at " + smUrl);
-            scanContent(body, smUrl, findings, seenSecrets, log);
+            scanContent(body, smUrl, findings, seenSecrets, patterns, log);
         }
 
         if (findings.isEmpty()) {
@@ -208,13 +210,64 @@ public class SecretsModule implements Scanner {
         return null;
     }
 
+    private List<SecretPattern> mergeKbSecretPatterns() {
+        List<SecretPattern> merged = new ArrayList<>(DIRECT_PATTERNS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            try {
+                Pattern compiled = Pattern.compile(kbp);
+                merged.add(new SecretPattern("KB Secret Pattern", compiled, Severity.MEDIUM));
+            } catch (java.util.regex.PatternSyntaxException ignored) {
+                // Skip KB entries that are not valid regex patterns
+            }
+        }
+        return List.copyOf(merged);
+    }
+
+    private static final Pattern UI_LABEL_INDICATOR = Pattern
+            .compile("(?i)\\b(?:enter|type|your|please|minimum|minim|caractere|character|digit|"
+                    + "letter|confirm|new|old|current|forgot|reset|change|create|must be|"
+                    + "at least|no m[ií]nimo|senha|contrase[nñ]a|mot de passe|passwort|"
+                    + "placeholder|label|hint|campo|field|input|required)\\b");
+
+    private static boolean isLikelyUiLabel(String value) {
+        if (value.length() > 200) {
+            return false;
+        }
+        int spaceCount = 0;
+        boolean hasNonAscii = false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == ' ') {
+                spaceCount++;
+            }
+            if (c > 127) {
+                hasNonAscii = true;
+            }
+        }
+        if (spaceCount >= 3) {
+            return true;
+        }
+        if (hasNonAscii && spaceCount >= 1) {
+            return true;
+        }
+        return UI_LABEL_INDICATOR.matcher(value).find();
+    }
+
     private void scanContent(String content, String url, List<Finding> findings, Set<String> seenSecrets,
-            Consumer<String> log) {
-        // Direct pattern matching
-        for (SecretPattern sp : DIRECT_PATTERNS) {
+            List<SecretPattern> patterns, Consumer<String> log) {
+        // Direct pattern matching (hardcoded + KB-merged patterns)
+        for (SecretPattern sp : patterns) {
             Matcher matcher = sp.pattern.matcher(content);
             while (matcher.find()) {
                 String matched = matcher.group();
+                if (sp.type.startsWith("Generic")) {
+                    String value = matcher.groupCount() >= 1 ? matcher.group(matcher.groupCount()) : matched;
+                    // Strip surrounding quotes for label check
+                    String stripped = value.replaceAll("^[\"']|[\"']$", "");
+                    if (isLikelyUiLabel(stripped)) {
+                        continue;
+                    }
+                }
                 if (seenSecrets.add(matched)) {
                     String masked = maskSecret(matched);
                     log.accept("[!!] " + id() + ": " + sp.type + " found in " + url);

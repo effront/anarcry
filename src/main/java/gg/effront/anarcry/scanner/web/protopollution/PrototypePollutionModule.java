@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner.web.protopollution;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -16,6 +17,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -51,6 +53,9 @@ public class PrototypePollutionModule implements Scanner {
                     + "|TypeError.*undefined|Cannot set prop.*of undefined" + "|\\[object Object\\].*ppcanary",
             Pattern.CASE_INSENSITIVE);
 
+    private static final Set<Integer> SKIP_STATUS_CODES = Set.of(404, 405, 410);
+    private static final int MIN_BODY_LENGTH = 100;
+
     @Override
     public String id() {
         return "ProtoPollution";
@@ -68,7 +73,10 @@ public class PrototypePollutionModule implements Scanner {
         Set<String> crawledPaths = ctx.discoveredPaths().paths();
         List<String> paths = crawledPaths.isEmpty() ? FALLBACK_PATHS : new ArrayList<>(crawledPaths);
 
-        log.accept("[~] " + id() + ": testando prototype pollution em " + paths.size() + " paths");
+        List<String> clientPayloads = mergeKbClientPayloads();
+        List<String> serverPayloads = mergeKbServerPayloads();
+        log.accept("[~] " + id() + ": testando prototype pollution em " + paths.size() + " paths ("
+                + clientPayloads.size() + " client, " + serverPayloads.size() + " server payloads)");
 
         int concurrency = ctx.config().probeConcurrency();
         AtomicBoolean cancel = new AtomicBoolean(false);
@@ -86,13 +94,13 @@ public class PrototypePollutionModule implements Scanner {
 
                 // Phase 1: Client-side -- inject __proto__ and constructor.prototype in query
                 // params
-                Finding clientFinding = probeClientSide(ctx, hc, base, path, log);
+                Finding clientFinding = probeClientSide(ctx, hc, base, path, log, clientPayloads);
                 if (clientFinding != null) {
                     local.add(clientFinding);
                 }
 
                 // Phase 2: Server-side -- POST JSON payloads with polluted prototypes
-                Finding serverFinding = probeServerSide(ctx, hc, base, path, log);
+                Finding serverFinding = probeServerSide(ctx, hc, base, path, log, serverPayloads);
                 if (serverFinding != null) {
                     local.add(serverFinding);
                 }
@@ -109,21 +117,65 @@ public class PrototypePollutionModule implements Scanner {
 
         findings.addAll(ProbeExecutor.run(tasks, concurrency, cancel));
 
+        if (paths.size() > 3) {
+            long clientHits = findings.stream().filter(f -> f.title().startsWith("Client-Side Prototype Pollution"))
+                    .count();
+            if (clientHits >= paths.size()) {
+                log.accept("[~] " + id() + ": 100% hit rate on client-side (" + clientHits + "/" + paths.size()
+                        + " paths) -- suppressing as false positive");
+                findings.removeIf(f -> f.title().startsWith("Client-Side Prototype Pollution"));
+            }
+        }
+
         if (findings.isEmpty()) {
             log.accept("[+] " + id() + ": nenhuma vulnerabilidade de prototype pollution detectada");
         }
         return findings;
     }
 
+    private List<String> mergeKbClientPayloads() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(CLIENT_PAYLOADS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String trimmed = kbp.strip();
+            // Only merge client-side query param payloads containing prototype keys
+            if (!trimmed.startsWith("?") || !trimmed.contains("__proto__") && !trimmed.contains("constructor")) {
+                continue;
+            }
+            // Strip leading ? since CLIENT_PAYLOADS don't have it
+            String payload = trimmed.substring(1);
+            // Replace generic canary/value placeholders with module canary
+            payload = payload.replace("[canary]", "[ppcanary]").replace(".canary=", ".ppcanary=").replace("=value",
+                    "=" + CANARY);
+            merged.add(payload);
+        }
+        return List.copyOf(merged);
+    }
+
+    private List<String> mergeKbServerPayloads() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(SERVER_JSON_PAYLOADS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String trimmed = kbp.strip();
+            // Only merge JSON payloads
+            if (!trimmed.startsWith("{")) {
+                continue;
+            }
+            // Replace generic canary/value placeholders with module canary
+            String payload = trimmed.replace("\"canary\"", "\"ppcanary\"").replace("\"value\"", "\"" + CANARY + "\"");
+            merged.add(payload);
+        }
+        return List.copyOf(merged);
+    }
+
     // -------------------------------------------------------------------------
     // Phase 1: Client-side prototype pollution via query parameters
     // -------------------------------------------------------------------------
 
-    private Finding probeClientSide(ScanContext ctx, HttpClient hc, String base, String path, Consumer<String> log) {
+    private Finding probeClientSide(ScanContext ctx, HttpClient hc, String base, String path, Consumer<String> log,
+            List<String> clientPayloads) {
         // Baseline
         String baselineBody = fetchBody(ctx, hc, base + path, log);
 
-        for (String payload : CLIENT_PAYLOADS) {
+        for (String payload : clientPayloads) {
             try {
                 String url = base + path + "?" + payload;
                 HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6)).GET()
@@ -131,8 +183,15 @@ public class PrototypePollutionModule implements Scanner {
                 HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
                 String body = resp.body() != null ? resp.body() : "";
 
-                // Check if the canary is reflected in the response (server-side processing)
-                if (body.contains(CANARY) && !baselineBody.contains(CANARY)) {
+                if (SKIP_STATUS_CODES.contains(resp.statusCode())) {
+                    continue;
+                }
+                if (body.equals(baselineBody)) {
+                    continue;
+                }
+
+                if (!isErrorEchoBody(body) && isGenuineReflection(body, CANARY, url)
+                        && !baselineBody.contains(CANARY)) {
                     log.accept("[!!] " + id() + ": client-side pollution reflected -- " + path);
                     return Finding.of(id(), path + "?" + payload,
                             "Client-Side Prototype Pollution -- Property Reflected", Severity.MEDIUM,
@@ -174,7 +233,8 @@ public class PrototypePollutionModule implements Scanner {
     // Phase 2: Server-side prototype pollution via JSON POST
     // -------------------------------------------------------------------------
 
-    private Finding probeServerSide(ScanContext ctx, HttpClient hc, String base, String path, Consumer<String> log) {
+    private Finding probeServerSide(ScanContext ctx, HttpClient hc, String base, String path, Consumer<String> log,
+            List<String> serverPayloads) {
         // First send a normal JSON POST to establish baseline behavior
         String normalJson = "{\"test\": \"value\"}";
         String baselineBody = "";
@@ -197,7 +257,7 @@ public class PrototypePollutionModule implements Scanner {
             return null;
         }
 
-        for (String jsonPayload : SERVER_JSON_PAYLOADS) {
+        for (String jsonPayload : serverPayloads) {
             try {
                 HttpRequest req = HttpRequest.newBuilder().uri(URI.create(base + path)).timeout(Duration.ofSeconds(6))
                         .header("Content-Type", "application/json")
@@ -297,7 +357,15 @@ public class PrototypePollutionModule implements Scanner {
                 HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
                 String body = resp.body() != null ? resp.body() : "";
 
-                if (body.contains(CANARY) && !baselineBody.contains(CANARY)) {
+                if (SKIP_STATUS_CODES.contains(resp.statusCode())) {
+                    continue;
+                }
+                if (body.equals(baselineBody)) {
+                    continue;
+                }
+
+                if (!isErrorEchoBody(body) && isGenuineReflection(body, CANARY, url)
+                        && !baselineBody.contains(CANARY)) {
                     log.accept("[!!] " + id() + ": parameter pollution via __proto__ -- " + path + " param=" + param);
                     return Finding.of(id(), path + "?" + protoPayload, "Prototype Pollution via Parameter Injection",
                             Severity.MEDIUM,
@@ -337,6 +405,20 @@ public class PrototypePollutionModule implements Scanner {
     // -------------------------------------------------------------------------
     // Utility
     // -------------------------------------------------------------------------
+
+    private boolean isGenuineReflection(String body, String canary, String probeUrl) {
+        String stripped = body.replace(probeUrl, "");
+        stripped = stripped.replace(URLEncoder.encode(canary, StandardCharsets.UTF_8), "");
+        return stripped.contains(canary);
+    }
+
+    private boolean isErrorEchoBody(String body) {
+        if (body.length() < MIN_BODY_LENGTH) {
+            return true;
+        }
+        String trimmed = body.stripLeading();
+        return trimmed.startsWith("{\"message\":\"Cannot ") || trimmed.startsWith("{\"statusCode\":4");
+    }
 
     private String fetchBody(ScanContext ctx, HttpClient hc, String url, Consumer<String> log) {
         try {

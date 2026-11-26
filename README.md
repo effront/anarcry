@@ -29,10 +29,10 @@
 +===========================================================================+
 |  ANARCRY -- Java 27 Security Scanner                                      |
 +===========================================================================+
-|  Security scanner for bug bounty. 38 attack modules, parallel execution,  |
-|  CVSS v3.1 auto-scoring, knowledge base with 34 entries, WAF detection    |
-|  (15 providers) + circuit breaker. OAST blind detection infra.            |
-|  TUI + Swing GUI + AI Assistant.                                          |
+|  Security scanner for bug bounty. 44 attack modules, parallel execution,  |
+|  CVSS v3.1 auto-scoring, knowledge base with 47 entries (2329 payloads,   |
+|  282 CVEs), WAF detection (15 providers) + circuit breaker. OAST blind    |
+|  detection infra. TUI + Swing GUI + AI Assistant.                         |
 |  Built-in API Client (Bruno-inspired) with collections, environments,     |
 |  auth injectors, variable interpolation, scripting, runner + assertions.  |
 +===========================================================================+
@@ -47,7 +47,7 @@
 +---------------------------------------------------------------------------+
 |  RECON                                                                    |
 |  [x] Crawler         -- HTML/JS path extraction, wordlist, OpenAPI        |
-|  [ ] Infra           -- port scan, SSH/Redis/Docker/panel fingerprint     |
+|  [x] Infra           -- port scan, SSH/Redis/Docker/panel fingerprint     |
 |                                                                           |
 |  CRYPTO / INFRASTRUCTURE                                                  |
 |  [x] TLS             -- version, weak ciphers (raw TLS probe), cert, SHA-1|
@@ -85,8 +85,17 @@
 |  [x] WebSocket     -- origin validation, unauth endpoint detection        |
 |  [x] ProtoPollution-- __proto__, constructor.prototype injection          |
 |  [x] CloudMisconfig-- S3/Azure/GCS public access, metadata endpoint       |
-|  [ ] RaceCondition  -- concurrent request state inconsistency (opt-in)    |
-|  [ ] FileUpload    -- extension/content-type/magic byte bypass (opt-in)   |
+|  [x] RaceCondition  -- concurrent request state inconsistency (opt-in)    |
+|  [x] FileUpload    -- extension/content-type/magic byte bypass (opt-in)   |
+|  [x] RateLimit     -- auth endpoint brute-force detection (429/Retry)     |
+|  [x] Clickjacking  -- X-Frame-Options / frame-ancestors validation        |
+|  [x] ErrorDisclosure-- stack trace, debug info, version leak              |
+|  [x] FrameworkConfig-- exposed config endpoints per framework             |
+|  [x] DomSinks      -- dangerous JS sinks (innerHTML, eval, document.write)|
+|  [x] JsAnalyzer    -- API keys, endpoints, secrets in JS bundles          |
+|  [x] EmailSec      -- SPF/DKIM/DMARC policy validation                    |
+|  [x] Clerk         -- Clerk auth misconfiguration                         |
+|  [x] BackendLiveness-- backend health/liveness probe                      |
 |                                                                           |
 |  OAST (Out-of-Band Application Security Testing)                          |
 |  [x] OastServer     -- HTTP/DNS callback server for blind detection       |
@@ -123,7 +132,7 @@
 
 ```bash
 ./gradlew shadowJar
-java -jar build/libs/anarcry-2.4.0.jar
+java -jar build/libs/anarcry-2.5.0.jar
 ```
 
 Or use the launcher (auto-builds if source changed):
@@ -141,7 +150,7 @@ With `.env.local` for pre-configured targets:
 Launch in GUI mode (Swing + FlatLaf):
 
 ```bash
-java -jar build/libs/anarcry-2.4.0.jar --gui
+java -jar build/libs/anarcry-2.5.0.jar --gui
 ```
 
 ---
@@ -160,9 +169,11 @@ java -jar build/libs/anarcry-2.4.0.jar --gui
 |  HTTP Client         |  java.net.http.HttpClient (HTTP/2 default)         |
 |  JSON                |  Gson 2.11.0                                       |
 |  CVSS                |  CvssCalculator.java (FIRST formula, zero deps)    |
-|  Knowledge Base      |  knowledge_base.json (34 entries, CWE+CVSS+VRT)    |
-|                      |  knowledge-base/*.md (27 enriched entries)         |
-|  AI Assistant        |  Multi-provider (Claude, OpenAI, Gemini, Ollama)   |
+|  Knowledge Base      |  knowledge_base.json (47 entries, CWE+CVSS+VRT)    |
+|                      |  knowledge-base/*.md (47 enriched entries,         |
+|                      |  2329 payloads, 282 CVEs)                          |
+|  AI Assistant        |  Multi-provider (Claude, OpenAI, Gemini, DeepSeek, |
+|                      |  OpenRouter, NotHoly, Ollama) + Settings UI        |
 |  GUI                 |  Swing + FlatLaf (dark/light) + RSyntaxTextArea    |
 |                      |  + JFreeChart                                      |
 |  Test                |  JUnit 5.11.3                                      |
@@ -227,10 +238,10 @@ Two interfaces: **TUI** (Lanterna, terminal-native) and **GUI** (Swing + FlatLaf
 
 ### TUI
 
-Nine modes: Dashboard, Scan, Target, Findings, Repeater, Report, SiteMap, API Client, Assistant. Tab bar at the top, status bar at the bottom with severity counters and progress.
+Ten modes: Dashboard, Scan, Target, Findings, Report, Repeater, Fuzzer, SiteMap, API Client, Assistant. Tab bar at the top, status bar at the bottom with severity counters and progress.
 
 ```
- [Dash] [Scan] [Target] [Findings] [Repeater] [Report] [SiteMap] [API] [Asst] [Ctrl+P]
+ [Dash] [Scan] [Target] [Findings] [Report] [Repeater] [Fuzzer] [SiteMap] [API] [Asst] [Ctrl+P]
 +---------------+-------------------------------------------------------+
 | MODULES       | LOG                                     scroll: Up/Dn |
 |               |                                                       |
@@ -283,13 +294,13 @@ Nine modes: Dashboard, Scan, Target, Findings, Repeater, Report, SiteMap, API Cl
 
 ### GUI
 
-Launch with `--gui` flag. Tabs: Dashboard, Scan, Target, Findings, Repeater, Report, SiteMap, API Client, Assistant.
+Launch with `--gui` flag. Tabs: Dashboard, Scan, Target, Findings, Report, Repeater, Fuzzer, SiteMap, API Client, Assistant.
 
 ```
 +-----------------------------------------------------------------------------------+
 | AnarCry                                            [Privacy] [Preferences]        |
 +-----------------------------------------------------------------------------------+
-| Dashboard | Scan | Target | Findings | Repeater | Report | SiteMap | API | Asst   |
+| Dashboard | Scan | Target | Findings | Report | Repeater | Fuzzer | SiteMap | API | Asst |
 +-----------------------------------------------------------------------------------+
 |                                                                                   |
 |  Severity Distribution (pie)               |   Recent Findings                    |
@@ -302,7 +313,7 @@ Launch with `--gui` flag. Tabs: Dashboard, Scan, Target, Findings, Repeater, Rep
 +-----------------------------------------------------------------------------------+
 ```
 
-**AI Assistant tab:** chat interface with SSE streaming, tool-use indicators, and token usage display. Supports Claude, OpenAI, Gemini, and Ollama. Configure provider and API key in Preferences.
+**AI Assistant tab:** chat interface with SSE streaming, tool-use indicators, and token usage display. Supports Claude, OpenAI, Gemini, DeepSeek, OpenRouter, NotHoly, and Ollama. Configure providers via the Settings dialog (gear button) or `.env.local`. Auto-detects API keys from system env vars and installed CLI tools (e.g. NotHoly CLI at `~/.notholy/credentials`). Persists config to `~/.anarcry/providers.json`.
 
 ---
 
@@ -313,7 +324,7 @@ Launch with `--gui` flag. Tabs: Dashboard, Scan, Target, Findings, Repeater, Rep
 ./gradlew integrationTest   # tests with external hosts (badssl.com, etc.)
 ```
 
-Test suite covers: JWT probes (alg:none, weak secret, RS256->HS256, JKU, null signature, signature disclosure, x5c, x5u, key confusion), CORS (origin reflection, wildcard, null origin), OAuth (well-known discovery, redirect_uri bypass), CRLF (path + header injection), SSRF, GraphQL (introspection, mutation, nested DoS, batching), Open Redirect, Cache Poisoning, Request Smuggling (CL.TE, TE.CL, Duplicate CL, CL.0, Hop-by-hop TE, H2.CL, H2.TE), SQLi (error-based + time-based), PQC, Headers, HSTS, IDOR (COOKIE auth, cross-user), OAST (server lifecycle, correlator matching, config validation), ScanRunner orchestration (callbacks, module isolation, dedup, omnibus E2E), ReportEngine (MD+JSON+SARIF export, JSON serialization), KnowledgeBase (34 entries, lookups, CweRegistry delegation), CvssCalculator, API Client (collections, importers, runner, assertions), and a false-positive regression suite on a clean server.
+Test suite covers: JWT probes (alg:none, weak secret, RS256->HS256, JKU, null signature, signature disclosure, x5c, x5u, key confusion), CORS (origin reflection, wildcard, null origin), OAuth (well-known discovery, redirect_uri bypass), CRLF (path + header injection), SSRF, GraphQL (introspection, mutation, nested DoS, batching), Open Redirect, Cache Poisoning, Request Smuggling (CL.TE, TE.CL, Duplicate CL, CL.0, Hop-by-hop TE, H2.CL, H2.TE), SQLi (error-based + time-based), PQC, Headers, HSTS, IDOR (COOKIE auth, cross-user), OAST (server lifecycle, correlator matching, config validation), ScanRunner orchestration (callbacks, module isolation, dedup, omnibus E2E), ReportEngine (MD+JSON+SARIF export, JSON serialization), KnowledgeBase (47 entries, lookups, CweRegistry delegation, payload filtering), CvssCalculator, API Client (collections, importers, runner, assertions), and a false-positive regression suite on a clean server.
 
 ---
 
@@ -334,7 +345,7 @@ src/main/java/gg/effront/anarcry/
 |   |                                recommendation, cweId, cweTitle, cvssVector,
 |   |                                cvssScore)
 |   +-- Severity.java                CRITICAL / HIGH / MEDIUM / LOW / INFO
-|   +-- CweRegistry.java            Delegates to KnowledgeBase (34 entries + fallback)
+|   +-- CweRegistry.java            Delegates to KnowledgeBase (47 entries + fallback)
 |   +-- CvssCalculator.java         CVSS v3.1 Base Score (FIRST formula)
 |   +-- KnowledgeBase.java          Singleton: loads knowledge_base.json, lookup by
 |   |                                module or ID
@@ -362,12 +373,14 @@ src/main/java/gg/effront/anarcry/
 |   |   +-- CircuitBreaker.java    Per-module WAF block counter with dynamic threshold
 |   +-- crypto/                    5 modules: TLS (+ RawTlsProbe), Headers, HSTS,
 |   |                               JWT (8 probes incl. x5c, x5u, key confusion), PQC
-|   +-- web/                       30 modules: SQLi, XSS, LFI, CmdInject, CORS, OAuth,
+|   +-- web/                       39 modules: SQLi, XSS, LFI, CmdInject, CORS, OAuth,
 |   |                               OpenRedirect, SSRF, GraphQL, CRLF, XXE, SSTI, IDOR,
 |   |                               HostHeader, Actuator, MassAssign, CachePoisoning,
 |   |                               ReqSmuggling, Crawler, Infra, CSRF, Secrets,
 |   |                               RaceCondition, NoSQLi, Deserialization, FileUpload,
-|   |                               SubTakeover, WebSocket, ProtoPollution, CloudMisconfig
+|   |                               SubTakeover, WebSocket, ProtoPollution, CloudMisconfig,
+|   |                               RateLimit, Clickjacking, ErrorDisclosure, FrameworkConfig,
+|   |                               DomSinks, JsAnalyzer, EmailSec, Clerk, BackendLiveness
 |   +-- oast/                      OAST infrastructure: OastServer, OastCorrelator,
 |                                   OastPayload, OastCallback, OastConfig
 +-- report/
@@ -379,10 +392,15 @@ src/main/java/gg/effront/anarcry/
 |   +-- AssistantConfig.java       Provider/model/API key/temperature config
 |   +-- ChatMessage.java           Conversation message record
 |   +-- UsageTracker.java          Token usage tracking and cost estimation
+|   +-- ProviderConfigStore.java    Auto-detect keys (env vars, CLI tools),
+|   |                               persist to ~/.anarcry/providers.json
 |   +-- providers/
 |   |   +-- ProviderAdapter.java   Interface: formatRequest, parseResponse, streaming
 |   |   +-- AnthropicProvider      Claude API (content_block_start/input_json_delta)
 |   |   +-- OpenAiProvider         OpenAI API (delta.tool_calls)
+|   |   +-- DeepSeekProvider       DeepSeek API (extends OpenAiProvider)
+|   |   +-- OpenRouterProvider     OpenRouter API (extends OpenAiProvider)
+|   |   +-- NotHolyProvider        NotHoly API (extends OpenAiProvider)
 |   |   +-- GeminiProvider         Google Gemini API
 |   |   +-- OllamaProvider         Local Ollama API
 |   +-- tools/
@@ -406,6 +424,7 @@ src/main/java/gg/effront/anarcry/
 |   |   +-- ReportView             Report generation and export
 |   |   +-- ApiClientView          API Client with collection tree + request tabs
 |   |   +-- AssistantView          AI Assistant chat with streaming + tools
+|   |   +-- ProviderSettingsDialog Provider API key config + auto-detection
 |   |   +-- PreferencesDialog      Settings dialog with persistence (10 categories)
 |   |   +-- EnvironmentEditorDialog  API Client environment variable editor
 |   |   +-- GlobalSearchDialog     Cross-tab search (Ctrl+K)
@@ -451,16 +470,19 @@ ScanRunner.run(ScanContext)
 
 Two layers:
 
-**Structured data** -- `src/main/resources/knowledge_base.json` contains 34 entries (one per vulnerability class). Each entry provides CWE ID, CVSS v3.1 vector, VRT ID, summary, payloads, crawler hints, and remediation. `CweRegistry` delegates to `KnowledgeBase` at runtime -- findings auto-resolve CWE and CVSS from the KB when created via `Finding.of()`.
+**Structured data** -- `src/main/resources/knowledge_base.json` contains 47 entries (one per vulnerability class). Each entry provides CWE ID, CVSS v3.1 vector, VRT ID, summary, payloads, crawler hints, and remediation. `CweRegistry` delegates to `KnowledgeBase` at runtime -- findings auto-resolve CWE and CVSS from the KB when created via `Finding.of()`. 29 scanner modules consume KB payloads dynamically via `filteredPayloads()` at runtime.
 
-**Enriched markdown** -- `knowledge-base/*.md` contains 27 entries with extended sections:
+**Enriched markdown** -- `knowledge-base/*.md` contains 47 entries with extended sections:
 
-- Description, impact, payloads and bypasses
+- Description, impact, payloads and bypasses (2,329 total payloads)
 - Escalation Techniques (account takeover, data exfiltration, lateral movement)
 - Hunting Methodology (step-by-step discovery procedure)
 - False Positive Indicators (non-exploitable contexts, framework auto-escape)
-- Notable CVEs (71 real-world CVEs across 7 classes from MITRE CVE List v5)
+- Notable CVEs (282 real-world CVEs across all vulnerability classes)
+- HackerOne real-world intel (report IDs, bounty amounts, escalation chains from 15,050-report dataset)
 - WAF evasion strategies (Cloudflare, Akamai, Vercel-specific bypasses)
+
+**Source docs** -- `knowledge-base/_sources/` contains the raw intelligence used for enrichment: HackerOne reports analysis, payload collection mapping, Bug Bounty Bootcamp extraction, and SSRF research guides.
 
 The AI Assistant uses the markdown KB via `QueryKbTool` for contextual vulnerability analysis.
 
@@ -468,14 +490,19 @@ The AI Assistant uses the markdown KB via `QueryKbTool` for contextual vulnerabi
 
 ## 09 - AI Assistant
 
-Built-in LLM-powered security analyst available in both TUI and GUI. Supports four providers:
+Built-in LLM-powered security analyst available in both TUI and GUI. Supports seven providers:
 
 | Provider | Models | Streaming |
 |----------|--------|-----------|
-| Claude (Anthropic) | claude-sonnet-4-20250514, claude-opus-4-20250514 | SSE with tool fragments |
-| OpenAI | gpt-4o, gpt-4o-mini | SSE with tool fragments |
-| Gemini | gemini-2.0-flash, gemini-2.5-pro | SSE |
+| Claude (Anthropic) | claude-sonnet-4-6, claude-opus-4-6, claude-sonnet-5-5, claude-haiku-5-5, claude-opus-5-5 | SSE with tool fragments |
+| OpenAI | gpt-4.1-mini, gpt-4.1, gpt-4o-mini, o4-mini | SSE with tool fragments |
+| DeepSeek | deepseek-chat, deepseek-reasoner | SSE |
+| OpenRouter | deepseek/deepseek-chat-v3-0324:free, qwen/qwen3-235b-a22b:free, + more | SSE |
+| NotHoly | notholy-specter, notholy-pulse, notholy-vector, notholy-wisp | SSE |
+| Gemini | gemini-2.5-flash, gemini-2.5-pro, gemini-2.0-flash | SSE |
 | Ollama | any local model | SSE |
+
+**Configuration:** Click the gear button in the Assistant tab to open the Provider Settings dialog. API keys are auto-detected from system environment variables (`ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, etc.) and installed CLI tools (NotHoly CLI at `~/.notholy/credentials`). User-configured keys persist to `~/.anarcry/providers.json`. Priority: `.env.local` > saved config > auto-detected.
 
 **Tools:** The assistant has 7 tools it can call proactively during analysis:
 
@@ -530,6 +557,36 @@ Built-in API client inspired by [Bruno](https://www.usebruno.com/) for manual AP
 
 ## 11 - Changelog
 
+### v2.5.0
+
+**Knowledge Base Pipeline Overhaul, Dynamic Payload Consumption, Scanner Quality**
+
+Knowledge Base:
+- **47 KB entries** covering all 44 scanner modules (zero CWE-200 fallback) -- up from 34
+- **2,329 payloads** across all entries, extracted from code blocks in enriched markdown
+- **282 real-world CVEs** across all vulnerability classes (up from 71)
+- **HackerOne intelligence**: 8 KBs enriched with real-world report data from 15,050-report dataset analysis (report IDs, bounty amounts, escalation chains)
+- **Full section coverage**: all 47 entries have Summary, Description, Impact, Payloads, Target Context, Notable CVEs, Escalation Techniques, Hunting Methodology, False Positive Indicators, Recommendation
+- **15 new KB entries**: Clerk, CloudMisconfig, DNS Pentesting, EmailSec, ErrorDisclosure, FileUpload, Deserialization, NoSQLi, ProtoPollution, RaceCondition, RateLimit, Secrets, Sensitive Endpoint Exposure (Crawler), SubTakeover, WebSocket
+- **Source docs**: `knowledge-base/_sources/` with HackerOne analysis, payload collection mapping
+
+Dynamic Payload Consumption:
+- **29 scanner modules** now load payloads from KB at runtime via `filteredPayloads()` (was 4)
+- Modules refactored: SSRF, SSTI, XXE, NoSQLi, CRLF, OpenRedirect, ProtoPollution, CachePoisoning, GraphQL, OAuth, FileUpload, Deserialization, HostHeader, Actuator, CloudMisconfig, CORS, Infra, MassAssignment, RaceCondition, RequestSmuggling, Secrets, SubTakeover, WebSocket (+ existing XSS, SQLi, CmdInjection, LFI, Crawler)
+- KB payloads are additive -- existing hardcoded detection is preserved, KB payloads extend coverage
+
+Scanner Quality:
+- **DeserializationModule FP reduction**: validates response body for framework-specific indicators (JBoss, WebLogic, Jenkins) instead of trusting bare HTTP 200 -- eliminates false positives on Vercel/Netlify/Cloudflare catch-all pages
+- **NoSQLi request cap**: early-exit on uniform baselines (3 consecutive same-status = skip), canary-first operator strategy ($ne, $gt, $regex first, extended only on signal), per-path cap (60) -- reduces requests from 5,000+ to ~130-200
+- **Log export fix**: GUI LogPane uses unbounded `fullLog` list for export/Copy-All (display still capped at 5,000 for performance); TUI LogPanel buffer increased from 500 to 50,000
+
+Other:
+- **generateKnowledgeBase Gradle task**: syncs `knowledge-base/*.md` to `knowledge_base.json` at build time -- MDs are the source of truth
+- Version bump to 2.5.0
+
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
+
 ### v2.4.0
 
 **HTTP Fuzzer/Intruder, Post-Exploitation Explorers (DB + FTP)**
@@ -553,9 +610,6 @@ Post-Exploitation:
 Other:
 - **HttpRequestUtil**: shared utility for applyMethod, applyHeaders, csvEscape (dedup between FuzzEngine, RepeaterView, Main)
 - Version bump to 2.4.0
-
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v2.3.0
 
@@ -782,7 +836,7 @@ Other:
 
 ### v1.8.0
 
-- **AI Assistant integration**: multi-provider LLM assistant (Claude, OpenAI, Gemini, Ollama) with SSE streaming, tool use, and conversation history -- available in both TUI (AssistantPanel) and GUI (AssistantView)
+- **AI Assistant integration**: multi-provider LLM assistant (Claude, OpenAI, Gemini, DeepSeek, OpenRouter, NotHoly, Ollama) with SSE streaming, tool use, conversation history, and Settings UI with auto-detection -- available in both TUI (AssistantPanel) and GUI (AssistantView)
 - **Assistant tools**: 7 built-in tools -- get_findings, get_sitemap, get_scan_config, query_kb, explain_cwe, save_document -- dispatched automatically via streaming tool fragment detection
 - **Finding Validation Protocol**: 6-step mandatory validation in assistant system prompt based on Bug Bounty Bootcamp methodology -- prevents false positive relay in AI analysis
 - **Streaming tool fragments**: cross-provider SSE tool-call detection (Anthropic content_block_start/input_json_delta, OpenAI delta.tool_calls) with robust fragment accumulation

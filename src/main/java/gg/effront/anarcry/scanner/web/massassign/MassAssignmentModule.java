@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner.web.massassign;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -14,6 +15,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -73,6 +75,18 @@ public class MassAssignmentModule implements Scanner {
             }
             log.accept("[~] MassAssign: " + endpoints.size() + " endpoints (+" + (endpoints.size() - ENDPOINTS.size())
                     + " from Crawler)");
+        }
+
+        // Extend with KB payloads that look like endpoint paths
+        int preKbSize = endpoints.size();
+        for (String kbp : mergeKbEndpointPaths()) {
+            if (endpoints.stream().noneMatch(e -> e.path().equals(kbp))) {
+                endpoints.add(new Endpoint("PUT", kbp));
+                endpoints.add(new Endpoint("PATCH", kbp));
+            }
+        }
+        if (endpoints.size() > preKbSize) {
+            log.accept("[~] MassAssign: +" + (endpoints.size() - preKbSize) + " endpoints from KB");
         }
 
         log.accept("[~] MassAssign: testando " + endpoints.size() + " endpoints em " + baseUrl);
@@ -202,6 +216,18 @@ public class MassAssignmentModule implements Scanner {
             log.accept("[+] MassAssign: nenhum endpoint vulnerável detectado");
         }
         return findings;
+    }
+
+    // Merge KB payloads filtered to path-like strings for endpoint discovery
+    private List<String> mergeKbEndpointPaths() {
+        LinkedHashSet<String> paths = new LinkedHashSet<>();
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String trimmed = kbp.strip();
+            if (trimmed.startsWith("/")) {
+                paths.add(trimmed);
+            }
+        }
+        return List.copyOf(paths);
     }
 
     private static boolean isHtml(String body) {

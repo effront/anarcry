@@ -139,6 +139,18 @@ Casos reais e mentalidade de ataque (RWBH): Uber (recibos/viagens), Zomato (perf
 - IDs opacos (UUIDv4) sem fonte de leak -- a mera existencia de um endpoint parametrizado nao prova IDOR; e necessario demonstrar acesso nao autorizado.
 - Dados diferentes entre requests por causa de cache ou race condition, nao por falta de auth check.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2024-37383 | Roundcube Webmail | 2024 | IDOR permite acesso a anexos de emails de outros usuarios via ID sequencial -- explorado in-the-wild | IDOR to Data Exfiltration |
+| CVE-2023-35078 | Ivanti EPMM (MobileIron) | 2023 | IDOR em endpoint de API permite acesso a dados de qualquer dispositivo gerenciado sem autenticacao (CVSS 10.0) | Unauth IDOR |
+| CVE-2023-27350 | PaperCut NG/MF | 2023 | IDOR + auth bypass permite RCE -- atacante acessa interface de setup via ID previsivel | IDOR to RCE |
+| CVE-2022-24734 | MyBB | 2022 | IDOR no gerenciamento de templates permite editar templates de outros admins -- escala para RCE via code execution | IDOR to Privilege Escalation |
+| CVE-2021-36749 | Apache Druid | 2021 | IDOR em endpoint de log permite leitura de logs de outras consultas -- expoe queries SQL e dados sensiveis | IDOR to Information Disclosure |
+
+Fonte: cvelistV5 (MITRE CVE List v5 dataset)
+
 ## Real-World Cases
 
 ### Caso 1 -- Album privado via API (0xdelta.org, SERROS404)

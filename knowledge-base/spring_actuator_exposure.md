@@ -54,9 +54,61 @@ curl -s https://alvo.com/beans
 curl -s https://alvo.com/trace
 curl -s https://alvo.com/dump
 
-# Variações de prefixo / base path
+# Endpoints adicionais (Spring Boot 2.x/3.x)
+curl -s https://alvo.com/actuator/configprops
+curl -s https://alvo.com/actuator/metrics
+curl -s https://alvo.com/actuator/loggers
+curl -s https://alvo.com/actuator/logfile
+curl -s https://alvo.com/actuator/info
+curl -s https://alvo.com/actuator/shutdown -X POST
+curl -s https://alvo.com/actuator/prometheus
+curl -s https://alvo.com/actuator/integrationgraph
+curl -s https://alvo.com/actuator/httpexchanges
+
+# Subpaths de /env (vazam variaveis especificas)
+curl -s https://alvo.com/actuator/env/home
+curl -s https://alvo.com/actuator/env/pwd
+curl -s https://alvo.com/actuator/env/lang
+curl -s https://alvo.com/actuator/env/path
+curl -s https://alvo.com/actuator/env/hostname
+
+# Caminhos legados adicionais (Spring Boot 1.x)
+curl -s https://alvo.com/autoconfig
+curl -s https://alvo.com/configprops
+curl -s https://alvo.com/logfile
+curl -s https://alvo.com/loggers
+curl -s https://alvo.com/metrics
+curl -s https://alvo.com/info
+curl -s https://alvo.com/shutdown -X POST
+
+# Spring Cloud Gateway
+curl -s https://alvo.com/actuator/gateway/routes
+curl -s https://alvo.com/actuator/gateway/globalfilters
+curl -s https://alvo.com/actuator/gateway/routefilters
+
+# CAS (Apereo) -- endpoints especificos
+curl -s https://alvo.com/actuator/sso
+curl -s https://alvo.com/actuator/ssoSessions
+curl -s https://alvo.com/actuator/registeredServices
+curl -s https://alvo.com/actuator/resolveAttributes
+curl -s https://alvo.com/actuator/releaseAttributes
+curl -s https://alvo.com/actuator/exportRegisteredServices
+
+# Redis Actuator (Spring Data Redis)
+curl -s https://alvo.com/actuator/redis/info
+curl -s https://alvo.com/actuator/redis/keysSize
+curl -s https://alvo.com/actuator/redis/memoryInfo
+
+# JHipster
+curl -s https://alvo.com/management/jhimetrics
+curl -s https://alvo.com/management/quartz
+curl -s https://alvo.com/management/health
+curl -s https://alvo.com/management/env
+
+# Variacoes de prefixo / base path
 /actuator/
 /management/actuator/
+/management/
 /api/actuator/
 /internal/actuator/
 /actuator;.js
@@ -99,7 +151,6 @@ Casos reais e mentalidade de ataque (RWBH): em aplicações Spring Boot, o padr�
 - **Parâmetros comuns:** `name`, `value` (POST /env); `endpoint`; headers `X-Forwarded-Prefix`.
 - **Paths comuns:** `/actuator`, `/actuator/env`, `/actuator/heapdump`, `/actuator/mappings`, `/actuator/beans`, `/actuator/httptrace`, `/actuator/loggers`, `/actuator/threaddump`, `/actuator/jolokia`, `/env`, `/heapdump`, `/mappings`, `/beans`, `/trace`.
 - **Sinais:** JSON com `_links`; `whitelabel` error; Spring Boot headers; `management.endpoints.web.exposure.include=*`; heapdump grande.
-
 ## Escalation Techniques
 Actuator exposto e o ponto de partida para ataques de alto impacto -- o vazamento de informacao leva a comprometimento real:
 
@@ -136,6 +187,16 @@ Sinais de que o Actuator detectado **nao representa risco real**:
 - **Ambiente de staging/desenvolvimento:** se o alvo e claramente ambiente de staging e nao producao (verificar via dominio, dados, configuracao), o impacto real e menor, embora ainda deva ser reportado.
 - **Resposta generica sem dados sensiveis:** se /actuator/env retorna apenas propriedades de configuracao inofensivas (server.port, spring.profiles.active) sem credenciais ou tokens, o impacto e reduzido.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2022-22947 | Spring Cloud Gateway | 2022 | RCE via code injection no endpoint Actuator /gateway/routes -- CVSS 10.0, explorado in-the-wild | RCE (Actuator endpoint) |
+| CVE-2022-22965 | Spring Framework (Spring4Shell) | 2022 | RCE via class loader manipulation em data binding -- /actuator/env revela configuracao vulneravel | RCE (class loader) |
+| CVE-2023-34055 | Spring Boot 2.7-3.1 | 2023 | DoS via requests HTTP especialmente construidos em endpoints Actuator | DoS (Actuator) |
+| CVE-2022-22963 | Spring Cloud Function | 2022 | RCE via SpEL injection no header routing-expression -- funcoes expostas sem autenticacao | RCE (SpEL injection) |
+| CVE-2020-5410 | Spring Cloud Config | 2020 | Directory traversal em Config Server -- expoe arquivos de configuracao com segredos via path manipulation | Path Traversal |
+| CVE-2017-8046 | Spring Data REST | 2017 | RCE via JSON Patch path em PATCH requests -- endpoints descobertos via /actuator/mappings | RCE (JSON Patch) |
 
 ## Recommendation
 1. Expor apenas endpoints necessários (`health`, `info`) e desabilitar o resto:

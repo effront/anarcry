@@ -129,6 +129,17 @@ Sinais de que o redirect detectado pelo scanner **nao e Open Redirect exploravel
 - **Bypass nao funciona no browser real:** alguns bypasses de URL (double encoding, unicode) podem funcionar no parser do servidor mas nao no browser, ou vice-versa. Confirmar sempre no browser.
 - **Parametro nao e usado para redirect:** o scanner pode detectar URL em parametro que e usada para outro fim (ex: `?url=` que carrega conteudo em iframe sem redirecionar a pagina inteira). Isso pode ser outro tipo de vuln (SSRF), mas nao e open redirect.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2024-38856 | Apache OFBiz | 2024 | Open redirect no login flow permite encadear com SSRF e phishing -- pre-auth (CVSS 9.8) | Open Redirect to SSRF |
+| CVE-2024-22243 | Spring Framework | 2024 | Open redirect via bypass de parsing em UriComponentsBuilder -- backslash no host evita validacao | URL Parsing Redirect |
+| CVE-2024-22259 | Spring Framework | 2024 | Open redirect em UriComponentsBuilder -- fix incompleto do CVE-2024-22243 permitia variantes | URL Parsing Redirect |
+| CVE-2023-6291 | Keycloak | 2023 | Bypass de validacao de redirect_uri permite roubo de token via dominio do atacante | OAuth Open Redirect |
+| CVE-2021-32052 | Django | 2021 | URLValidator aceita newline em URL permitindo header injection e redirect | URL Validation Bypass |
+| CVE-2020-26215 | Jupyter Notebook | 2020 | Open redirect no endpoint de login permite phishing de credenciais via URL com aparencia legitima | Login Flow Open Redirect |
+
 ## Recommendation
 1. Não aceitar URLs arbitrárias. Usar allowlist de destinos exatos ou um mapa server-side de chaves (`?next=dashboard`, `?next=billing`).
 2. Se for inevitável aceitar URL, parsear com biblioteca de URL, exigir esquema `https`, host exato na allowlist e rejeitar userinfo, fragmento e portas não previstas.

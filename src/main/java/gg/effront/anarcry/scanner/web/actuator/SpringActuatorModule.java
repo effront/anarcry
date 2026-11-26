@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner.web.actuator;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -13,9 +14,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.CvssCalculator;
 
@@ -53,9 +57,34 @@ public class SpringActuatorModule implements Scanner {
             new ActuatorEndpoint("/mappings", "bean|method", Severity.HIGH, "mappings (Boot 1.x) -- mapa de endpoints"),
             new ActuatorEndpoint("/beans", "bean|scope", Severity.HIGH, "beans (Boot 1.x) -- beans expostos"));
 
+    private static final Pattern CURL_PATH = Pattern.compile("https?://[^/]+(/[^\\s'\"]+)");
+
     @Override
     public String id() {
         return "Actuator";
+    }
+
+    private List<ActuatorEndpoint> mergeKbEndpoints() {
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        for (ActuatorEndpoint ep : ENDPOINTS) {
+            seen.add(ep.path());
+        }
+        List<ActuatorEndpoint> merged = new ArrayList<>(ENDPOINTS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String path = null;
+            if (kbp.startsWith("/")) {
+                path = kbp;
+            } else {
+                Matcher m = CURL_PATH.matcher(kbp);
+                if (m.find()) {
+                    path = m.group(1);
+                }
+            }
+            if (path != null && seen.add(path)) {
+                merged.add(new ActuatorEndpoint(path, null, Severity.MEDIUM, "kb: " + path));
+            }
+        }
+        return List.copyOf(merged);
     }
 
     @Override
@@ -71,9 +100,10 @@ public class SpringActuatorModule implements Scanner {
         String baseUrl = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
         HttpClient hc = HttpClientFactory.noRedirect();
-        log.accept("[~] Actuator: verificando " + ENDPOINTS.size() + " endpoints em " + baseUrl);
+        List<ActuatorEndpoint> endpoints = mergeKbEndpoints();
+        log.accept("[~] Actuator: verificando " + endpoints.size() + " endpoints em " + baseUrl);
 
-        for (ActuatorEndpoint ep : ENDPOINTS) {
+        for (ActuatorEndpoint ep : endpoints) {
             String url = baseUrl + ep.path();
             try {
                 HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(url))
@@ -125,6 +155,13 @@ public class SpringActuatorModule implements Scanner {
                 boolean looksJson = ct.map(s -> s.contains("application/json")).orElse(false)
                         || (!isHtml(body) && body.stripLeading().startsWith("{"));
                 if (!looksJson) {
+                    continue;
+                }
+
+                // KB-sourced endpoints without body pattern -- JSON response indicates exposure
+                if (ep.bodyPattern() == null && !body.isBlank()) {
+                    log.accept("[!] Actuator: " + ep.severity() + " -- " + ep.description() + " em " + url);
+                    findings.add(buildFinding(ep, url, body));
                     continue;
                 }
 

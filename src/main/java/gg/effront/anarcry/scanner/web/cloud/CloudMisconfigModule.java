@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner.web.cloud;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -15,6 +16,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -93,7 +95,7 @@ public class CloudMisconfigModule implements Scanner {
 
         // Scan responses for cloud URLs
         Set<String> crawledPaths = ctx.discoveredPaths().paths();
-        List<String> scanPaths = crawledPaths.isEmpty() ? FALLBACK_PATHS : new ArrayList<>(crawledPaths);
+        List<String> scanPaths = crawledPaths.isEmpty() ? mergeKbScanPaths() : new ArrayList<>(crawledPaths);
 
         tasks.add(() -> {
             if (cancel.get()) {
@@ -446,6 +448,18 @@ public class CloudMisconfigModule implements Scanner {
             // Project may not exist
         }
         return null;
+    }
+
+    // -------------------------------------------------------------------------
+    // KB payload merge
+    // -------------------------------------------------------------------------
+
+    private List<String> mergeKbScanPaths() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(FALLBACK_PATHS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            merged.add(kbp);
+        }
+        return List.copyOf(merged);
     }
 
     // -------------------------------------------------------------------------

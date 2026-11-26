@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner.web.hostheader;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -13,7 +14,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.CvssCalculator;
@@ -38,6 +41,36 @@ public class HostHeaderModule implements Scanner {
         return "HostHeader";
     }
 
+    // Headers where injecting a hostname value does not make sense
+    private static final Set<String> NON_HOST_VALUE_HEADERS = Set.of("x-forwarded-port", "x-forwarded-proto",
+            "x-original-url", "x-rewrite-url", "forwarded", "content-type", "cookie", "authorization");
+
+    private List<String> mergeKbHeaders() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(HOST_HEADERS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String trimmed = kbp.strip();
+            int colon = trimmed.indexOf(':');
+            if (colon <= 0) {
+                continue;
+            }
+            String name = trimmed.substring(0, colon).strip();
+            // Skip non-header lines (HTTP methods, curl commands, etc.)
+            if (name.contains(" ")) {
+                continue;
+            }
+            String lower = name.toLowerCase();
+            // Skip headers where a hostname value does not apply
+            if (NON_HOST_VALUE_HEADERS.contains(lower)) {
+                continue;
+            }
+            // Include Host, X-* headers that accept host/server values
+            if (lower.startsWith("x-") || lower.equals("host")) {
+                merged.add(name);
+            }
+        }
+        return List.copyOf(merged);
+    }
+
     @Override
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
         String _cweId = CweRegistry.cweId(id());
@@ -51,10 +84,11 @@ public class HostHeaderModule implements Scanner {
         String baseUrl = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
         HttpClient hc = HttpClientFactory.noRedirect();
-        log.accept("[~] HostHeader: iniciando probes em " + baseUrl);
+        List<String> hostHeaders = mergeKbHeaders();
+        log.accept("[~] HostHeader: iniciando probes em " + baseUrl + " (" + hostHeaders.size() + " headers)");
 
         for (ProbeTarget target : TARGETS) {
-            for (String headerName : HOST_HEADERS) {
+            for (String headerName : hostHeaders) {
                 try {
                     String url = baseUrl + target.path();
                     HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(url))

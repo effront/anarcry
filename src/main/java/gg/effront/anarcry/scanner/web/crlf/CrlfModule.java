@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner.web.crlf;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -21,6 +22,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Consumer;
 import gg.effront.anarcry.model.CweRegistry;
@@ -69,10 +71,15 @@ public class CrlfModule implements Scanner {
         String baseUrl = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
         HttpClient hc = HttpClientFactory.noRedirect();
-        log.accept("[~] CRLF: testando " + PAYLOADS.size() + " payloads de path em " + baseUrl);
+        List<String> payloads = mergeKbPayloads();
+        int kbCount = payloads.size() - PAYLOADS.size();
+        if (kbCount > 0) {
+            log.accept("[~] " + id() + ": " + kbCount + " payloads adicionais do Knowledge Base");
+        }
+        log.accept("[~] CRLF: testando " + payloads.size() + " payloads de path em " + baseUrl);
 
-        // Phase 1: path-based CRLF (existing payloads)
-        for (String payload : PAYLOADS) {
+        // Phase 1: path-based CRLF (hardcoded + KB payloads)
+        for (String payload : payloads) {
             String url = baseUrl + payload;
             try {
                 HttpRequest req = HttpRequest.newBuilder().uri(new URI(url)).timeout(Duration.ofSeconds(5)).GET()
@@ -115,6 +122,30 @@ public class CrlfModule implements Scanner {
             log.accept("[+] CRLF: nenhuma injeção detectada (path e headers)");
         }
         return findings;
+    }
+
+    private List<String> mergeKbPayloads() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(PAYLOADS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String p = kbp.strip();
+            if (p.isEmpty()) {
+                continue;
+            }
+            // Skip parameter-based, descriptions, literal escapes
+            if (p.startsWith("?") || p.startsWith("-") || p.startsWith("\\")) {
+                continue;
+            }
+            // Skip header names, HTTP lines (start with a letter)
+            if (Character.isLetter(p.charAt(0))) {
+                continue;
+            }
+            // Ensure path-based format: prepend / for raw encoding payloads
+            if (!p.startsWith("/")) {
+                p = "/" + p;
+            }
+            merged.add(p);
+        }
+        return List.copyOf(merged);
     }
 
     // Sends raw HTTP request with CRLF injected into each of INJECTABLE_HEADERS.

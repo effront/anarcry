@@ -131,7 +131,7 @@ public class HSTSModule implements Scanner {
                         "curl -sI " + httpUrl, "Forçar HTTPS em todas as rotas e adicionar HSTS", cweId, cweTitle,
                         cvssVector, score));
             } else if (status / 100 == 3) {
-                if (!ctx.jwtToken().isBlank()) {
+                if (!ctx.jwtToken().isBlank() && !hstsAdequate) {
                     findings.add(Finding.of(id(), ctx.targetUrl(),
                             "JWT transmitido em plaintext antes do redirect HTTP " + status, Severity.HIGH, evidence,
                             "Authorization: Bearer enviado em TCP plaintext antes do " + status

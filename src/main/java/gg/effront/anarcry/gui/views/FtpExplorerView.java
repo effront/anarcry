@@ -923,6 +923,7 @@ public class FtpExplorerView extends JPanel {
                 });
 
                 runFingerprint(session);
+                runTlsAudit();
 
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
@@ -1331,6 +1332,7 @@ public class FtpExplorerView extends JPanel {
                 }
 
                 runFingerprint(session);
+                runTlsAudit();
                 runSensitiveScanInternal(session, "/", log);
 
                 SwingUtilities.invokeLater(() -> {
@@ -1604,8 +1606,8 @@ public class FtpExplorerView extends JPanel {
                     String reply = session.ftpClient.sendCommand(cmd, log);
                     SwingUtilities.invokeLater(() -> appendRawOutput(session, ">> " + cmd + "\n<< " + reply + "\n"));
                 } else if (session.sftpClient != null) {
-                    SwingUtilities.invokeLater(() -> appendRawOutput(session,
-                            ">> " + cmd + "\n<< [SFTP] Raw FTP" + " commands not" + " supported over" + " SFTP\n"));
+                    String output = session.sftpClient.exec(cmd, log);
+                    SwingUtilities.invokeLater(() -> appendRawOutput(session, ">> " + cmd + "\n" + output + "\n"));
                 }
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(

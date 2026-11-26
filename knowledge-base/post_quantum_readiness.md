@@ -79,6 +79,17 @@ Casos reais e mentalidade de ataque (RWBH): a mentalidade é de risco futuro -- 
 - Grupo PQC ausente no handshake mas CDN/proxy na frente suporta PQC e termina TLS -- o link externo esta protegido.
 - Biblioteca suporta PQC mas o runtime (Java, Python) nao expoe a API -- limitacao de plataforma, nao da aplicacao.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2024-36405 | liboqs (Open Quantum Safe) | 2024 | Timing side-channel em Kyber (ML-KEM-512) compilado com Clang permite recuperacao de chave em ~10 minutos | PQC Implementation Flaw |
+| CVE-2024-37880 | Kyber (reference implementation) | 2024 | Branch dependente de segredo emitido pelo Clang em poly_frommsg permite timing attack na implementacao de referencia | PQC Implementation Flaw |
+| CVE-2024-31497 | PuTTY | 2024 | Bias na geracao de nonces ECDSA P-521 permite recuperacao da chave privada com ~60 assinaturas -- demonstra fragilidade de crypto classica | ECDSA Key Recovery |
+| CVE-2023-48795 | OpenSSH (Terrapin) | 2023 | Prefix truncation attack no SSH Binary Packet Protocol compromete integridade do canal -- motiva transicao para protocolos PQC-safe | SSH Handshake Manipulation |
+| CVE-2022-21449 | Java JDK 15-18 (Psychic Signatures) | 2022 | Verificacao ECDSA aceita assinatura vazia -- qualquer JWT ou TLS handshake pode ser forjado | ECDSA Signature Bypass |
+| CVE-2024-3596 | RADIUS Protocol (Blast-RADIUS) | 2024 | Collision attack em MD5 permite forjar respostas de autenticacao -- motiva transicao para crypto PQC-resistant | Protocol Crypto Weakness |
+
 ## Recommendation
 1. Habilitar TLS 1.3 e o grupo híbrido `X25519MLKEM768` (ou `SecP256r1MLKEM768`) nos terminadores TLS, load balancers, CDN e API gateways.
 2. Atualizar OpenSSL/BoringSSL/AWS-LC e runtime Java; validar interoperabilidade com clientes antes de tornar o grupo preferencial.

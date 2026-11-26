@@ -137,6 +137,20 @@ Casos reais e mentalidade de ataque (RWBH): Yahoo e Uber (ferramentas de diagnó
 - OOB request recebido mas de IP diferente do servidor alvo -- pode ser scanner ou bot, nao a aplicacao.
 - Funcionalidade usa API nativa (ex.: `InetAddress.getByName()`) e nao shell -- nao e command injection mesmo com input refletido em erro.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2024-3400 | Palo Alto PAN-OS GlobalProtect | 2024 | Command injection no GlobalProtect gateway via crafted session -- RCE pre-auth explorado in-the-wild (CVSS 10.0) | OS Command Injection |
+| CVE-2024-21887 | Ivanti Connect Secure/Policy Secure | 2024 | Command injection nos web components -- encadeado com CVE-2023-46805 (auth bypass) para RCE sem credenciais | OS Command Injection |
+| CVE-2023-46805 | Ivanti Connect Secure/Policy Secure | 2023 | Auth bypass que combinado com CVE-2024-21887 permite command injection sem autenticacao -- explorado em massa | Auth Bypass + Command Injection |
+| CVE-2022-42475 | Fortinet FortiOS SSL-VPN | 2022 | Heap overflow no SSL-VPN permite execucao de comandos arbitrarios -- explorado por APTs in-the-wild | Memory Corruption to Command Execution |
+| CVE-2021-22205 | GitLab CE/EE | 2021 | Command injection via ExifTool no upload de imagens -- RCE sem autenticacao, explorado em massa para criptomineracao | OS Command Injection |
+| CVE-2021-25296 | Nagios XI | 2021 | Command injection via parametro de configuracao em interface web -- RCE como usuario nagios | OS Command Injection (authenticated) |
+| CVE-2020-5902 | F5 BIG-IP TMUI | 2020 | Command injection no Traffic Management UI -- RCE pre-auth (CVSS 10.0), explorado massivamente apos disclosure | OS Command Injection |
+
+Fonte: cvelistV5 (MITRE CVE List v5 dataset)
+
 ## Recommendation
 1. Evitar shell: usar APIs nativas (`InetAddress`, bibliotecas de DNS, parsing de imagem) em vez de comandos.
 2. Se for inevitável, usar `ProcessBuilder` com lista de argumentos e **não** `shell=True`/`Runtime.exec(String)`; validar cada argumento.

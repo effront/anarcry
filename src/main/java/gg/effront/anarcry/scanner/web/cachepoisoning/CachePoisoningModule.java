@@ -1,6 +1,7 @@
 package gg.effront.anarcry.scanner.web.cachepoisoning;
 
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -14,8 +15,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.CvssCalculator;
 
@@ -29,6 +33,10 @@ public class CachePoisoningModule implements Scanner {
             "X-Original-URL", "X-Rewrite-URL", "X-Forwarded-Prefix");
 
     private static final List<String> PROBE_PATHS = List.of("/", "/api/", "/api/v1/");
+
+    // Pattern to extract header names from KB payload lines (e.g. "X-Host:
+    // evil.com")
+    private static final Pattern KB_HEADER_LINE = Pattern.compile("^([A-Z][A-Za-z-]+):\\s+.+");
 
     @Override
     public String id() {
@@ -48,11 +56,16 @@ public class CachePoisoningModule implements Scanner {
         String baseUrl = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
         HttpClient hc = HttpClientFactory.http2();
-        log.accept("[~] CachePoisoning: testando " + UNKEYED_HEADERS.size() + " unkeyed headers em " + baseUrl);
+        List<String> unkeyedHeaders = mergeKbUnkeyedHeaders();
+        int kbExtra = unkeyedHeaders.size() - UNKEYED_HEADERS.size();
+        if (kbExtra > 0) {
+            log.accept("[~] " + id() + ": " + kbExtra + " payloads adicionais do Knowledge Base");
+        }
+        log.accept("[~] CachePoisoning: testando " + unkeyedHeaders.size() + " unkeyed headers em " + baseUrl);
 
         outer : for (String path : PROBE_PATHS) {
             String url = baseUrl + path;
-            for (String header : UNKEYED_HEADERS) {
+            for (String header : unkeyedHeaders) {
                 try {
                     HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(5))
                             .header(header, PROBE_VALUE).GET().build();
@@ -113,6 +126,26 @@ public class CachePoisoningModule implements Scanner {
             log.accept("[+] CachePoisoning: nenhum unkeyed header refletido detectado");
         }
         return findings;
+    }
+
+    // Merge hardcoded unkeyed headers with header names extracted from KB payloads.
+    // KB payloads are raw HTTP request lines -- we extract header names from lines
+    // matching "HeaderName: value" and keep only those likely to be unkeyed by
+    // caches (X-* prefix, Forwarded, Origin).
+    private List<String> mergeKbUnkeyedHeaders() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(UNKEYED_HEADERS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            Matcher m = KB_HEADER_LINE.matcher(kbp);
+            if (!m.matches()) {
+                continue;
+            }
+            String header = m.group(1);
+            // Only include headers likely to be unkeyed by caches
+            if (header.startsWith("X-") || header.equalsIgnoreCase("Forwarded") || header.equalsIgnoreCase("Origin")) {
+                merged.add(header);
+            }
+        }
+        return List.copyOf(merged);
     }
 
     private boolean isCacheHit(HttpResponse<?> resp) {

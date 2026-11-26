@@ -3,6 +3,7 @@ package gg.effront.anarcry.scanner.web.graphql;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -17,6 +18,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
@@ -62,7 +64,15 @@ public class GraphQLModule implements Scanner {
         // Track confirmed GraphQL endpoints for advanced probes
         List<String> confirmedEndpoints = new ArrayList<>();
 
-        for (String endpoint : ENDPOINTS) {
+        List<String> endpoints = mergeKbEndpoints();
+        List<String> kbIntrospectionQueries = mergeKbIntrospectionQueries();
+        List<String> kbTypoQueries = mergeKbTypoQueries();
+        int kbCount = (endpoints.size() - ENDPOINTS.size()) + kbIntrospectionQueries.size()
+                + (kbTypoQueries.size() - 5);
+        if (kbCount > 0) {
+            log.accept("[~] " + id() + ": " + kbCount + " payloads adicionais do Knowledge Base");
+        }
+        for (String endpoint : endpoints) {
             String url = baseUrl + endpoint;
             try {
                 HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
@@ -95,6 +105,46 @@ public class GraphQLModule implements Scanner {
                             _cweId, _cweTitle, _cveVector, _score));
                     confirmedEndpoints.add(url);
                     continue;
+                }
+
+                // Try KB introspection bypass variants (e.g. "query __schema { ... }" prefix)
+                if ((status == 200 || status == 400 || status == 422) && ct.contains("json")) {
+                    boolean bypassFound = false;
+                    for (String kbQuery : kbIntrospectionQueries) {
+                        try {
+                            HttpRequest kbReq = HttpRequest.newBuilder().uri(URI.create(url))
+                                    .header("Content-Type", "application/json").timeout(Duration.ofSeconds(5))
+                                    .POST(HttpRequest.BodyPublishers.ofString(kbQuery)).build();
+                            HttpResponse<String> kbResp = Http.send(ctx, hc, kbReq,
+                                    HttpResponse.BodyHandlers.ofString(), id());
+                            String kbBody = kbResp.body() != null ? kbResp.body() : "";
+                            if (kbBody.contains("__schema") && kbBody.contains("types")) {
+                                log.accept("[!] GraphQL: HIGH -- introspection bypass em " + url);
+                                findings.add(Finding.of("GraphQL", url,
+                                        "GraphQL introspection bypass -- schema exposto via query variant",
+                                        Severity.HIGH,
+                                        "Endpoint: " + url + " | HTTP " + kbResp.statusCode()
+                                                + " | __schema presente via bypass query",
+                                        "Introspection bloqueada para query padrao mas acessivel via variante"
+                                                + " -- atacante pode mapear schema completo da API",
+                                        "curl -sX POST " + url + " \\\n" + "  -H 'Content-Type: application/json' \\\n"
+                                                + "  -d '" + kbQuery + "'",
+                                        "Desabilitar introspection para todas as variantes de query;"
+                                                + " usar WAF ou middleware que bloqueia __schema em qualquer"
+                                                + " formato de request",
+                                        _cweId, _cweTitle, _cveVector, _score));
+                                confirmedEndpoints.add(url);
+                                bypassFound = true;
+                                break;
+                            }
+                        } catch (CircuitBreakerException cbe) {
+                            throw cbe;
+                        } catch (Exception ignored) {
+                        }
+                    }
+                    if (bypassFound) {
+                        continue;
+                    }
                 }
 
                 // Endpoint exists but introspection disabled -- confirm with __typename probe
@@ -138,7 +188,8 @@ public class GraphQLModule implements Scanner {
             probeMutationTesting(ctx, hc, gqlUrl, findings, log, _cweId, _cweTitle, _cveVector, _score);
             probeNestedQueryDoS(ctx, hc, gqlUrl, findings, log, _cweId, _cweTitle, _cveVector, _score);
             probeBatchingBypass(ctx, hc, gqlUrl, findings, log, _cweId, _cweTitle, _cveVector, _score);
-            probeFieldSuggestionLeak(ctx, hc, gqlUrl, findings, log, _cweId, _cweTitle, _cveVector, _score);
+            probeFieldSuggestionLeak(ctx, hc, gqlUrl, findings, log, kbTypoQueries, _cweId, _cweTitle, _cveVector,
+                    _score);
         }
 
         if (findings.isEmpty()) {
@@ -363,14 +414,10 @@ public class GraphQLModule implements Scanner {
     // Send queries with intentional typos to check if error messages reveal valid
     // field names
     private void probeFieldSuggestionLeak(ScanContext ctx, HttpClient hc, String url, List<Finding> findings,
-            Consumer<String> log, String cweId, String cweTitle, String cveVector, double score) {
+            Consumer<String> log, List<String> typoQueries, String cweId, String cweTitle, String cveVector,
+            double score) {
         log.accept("[~] GraphQL: testando field suggestion leak em " + url);
         try {
-            // Send queries with intentional typos in common field names
-            List<String> typoQueries = List.of("{\"query\":\"{ usr { id } }\"}", "{\"query\":\"{ usrs { email } }\"}",
-                    "{\"query\":\"{ me { passwrd } }\"}", "{\"query\":\"{ admi { role } }\"}",
-                    "{\"query\":\"{ accont { balance } }\"}");
-
             for (String typoPayload : typoQueries) {
                 HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
                         .header("Content-Type", "application/json").timeout(Duration.ofSeconds(6))
@@ -404,6 +451,67 @@ public class GraphQLModule implements Scanner {
         } catch (Exception e) {
             log.accept("[~] GraphQL: erro no teste de field suggestion -- " + e.getMessage());
         }
+    }
+
+    // Merge hardcoded endpoints with KB payloads that look like paths
+    private List<String> mergeKbEndpoints() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(ENDPOINTS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String trimmed = kbp.strip();
+            if (trimmed.startsWith("/") && !trimmed.contains(" ")) {
+                merged.add(trimmed);
+            }
+        }
+        return List.copyOf(merged);
+    }
+
+    // Extract introspection bypass query variants from KB (queries containing
+    // __schema)
+    private List<String> mergeKbIntrospectionQueries() {
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        seen.add(INTROSPECTION);
+        List<String> queries = new ArrayList<>();
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String trimmed = kbp.strip();
+            if (!trimmed.contains("__schema")) {
+                continue;
+            }
+            // Raw GraphQL query -- wrap as JSON payload
+            String json;
+            if (trimmed.startsWith("{\"query\"")) {
+                json = trimmed;
+            } else if (trimmed.startsWith("{") || trimmed.startsWith("query ")) {
+                json = "{\"query\":\"" + trimmed.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}";
+            } else {
+                continue;
+            }
+            if (seen.add(json)) {
+                queries.add(json);
+            }
+        }
+        return List.copyOf(queries);
+    }
+
+    // Extract field suggestion typo probe queries from KB
+    private List<String> mergeKbTypoQueries() {
+        // Hardcoded typo queries
+        LinkedHashSet<String> seen = new LinkedHashSet<>(List.of("{\"query\":\"{ usr { id } }\"}",
+                "{\"query\":\"{ usrs { email } }\"}", "{\"query\":\"{ me { passwrd } }\"}",
+                "{\"query\":\"{ admi { role } }\"}", "{\"query\":\"{ accont { balance } }\"}"));
+        List<String> merged = new ArrayList<>(seen);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String trimmed = kbp.strip();
+            // Short queries that look like field access probes (no operators, no mutations)
+            if (trimmed.startsWith("{") && !trimmed.startsWith("{\"") && trimmed.endsWith("}")
+                    && !trimmed.contains("__schema") && !trimmed.contains("mutation") && !trimmed.contains("__typename")
+                    && trimmed.length() < 80) {
+                String json = "{\"query\":\"" + trimmed.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}";
+                if (seen.add(json)) {
+                    merged.add(json);
+                }
+            }
+        }
+        return List.copyOf(merged);
     }
 
     // Build a deeply nested query: { a { a { a { ... { id } ... } } } }

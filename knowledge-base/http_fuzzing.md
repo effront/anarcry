@@ -1,91 +1,122 @@
-# HTTP Fuzzing / Intruder
+---
+id: http_fuzzing
+title: "HTTP Fuzzing and Intruder Techniques"
+module: "waf"
+severity: "MEDIUM"
+cwe_id: "CWE-20"
+cwe_title: "Improper Input Validation"
+cvss_vector: "AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N"
+vrt_id: "input_validation.fuzzing"
+---
 
-## Overview
+## Summary
+HTTP fuzzing e a tecnica automatizada de enviar multiplas requisicoes HTTP modificadas a um alvo, variando parametros especificos com payloads de wordlists ou ranges numericos, para descobrir vulnerabilidades como SQLi, XSS, auth bypass, IDOR e enumeracao de diretorios.
 
-HTTP fuzzing is the automated technique of sending many modified HTTP requests to a target, varying specific parameters with payloads from wordlists or generated ranges. It is used to discover vulnerabilities like SQL injection, XSS, authentication bypass, IDOR, and directory enumeration.
+## Description
+O fuzzer HTTP (Intruder) permite injetar payloads em posicoes marcadas com `{{N}}` em templates de requisicao HTTP. Quatro modos de ataque cobrem cenarios distintos:
 
-## Attack Types
+- **Sniper**: testa uma posicao por vez com um wordlist -- ideal para testar cada parametro individualmente.
+- **Battering Ram**: mesma payload em todas as posicoes simultaneamente -- para valores que devem ser identicos em multiplos pontos.
+- **Pitchfork**: wordlists diferentes em paralelo (zip) -- para pares correlacionados (username:password).
+- **Cluster Bomb**: produto cartesiano de todas as wordlists -- para brute-force de combinacoes.
 
-### Sniper
-Tests one payload position at a time while keeping others at their default values. Good for testing each parameter individually with a single wordlist.
+Payloads podem ser transformados via pipeline de processadores (URL encode, Base64, hash, regex replace, prefix/suffix) antes da injecao.
 
-**Use when**: Testing each input separately (e.g., checking each form field for SQLi).
+## Impact
+- Descoberta de vulnerabilidades de injecao (SQLi, XSS, CMDi, SSTI) via variacao automatizada de payloads.
+- Brute-force de credenciais e tokens.
+- Enumeracao de diretorios, arquivos e endpoints ocultos.
+- Descoberta de IDOR via iteracao de IDs.
+- Bypass de rate limiting e deteccao de WAF.
 
-### Battering Ram
-Uses the same payload in all positions simultaneously. Good for testing identical values across multiple injection points.
+## Payloads and Bypasses
+Wordlists essenciais para fuzzing:
+```
+# Enumeracao de diretorios
+common.txt
+directory-list-2.3-medium.txt
+raft-large-directories.txt
+raft-large-files.txt
 
-**Use when**: The same value must appear in multiple places (e.g., username repeated in body and header).
+# Injecao
+xss.txt
+sqli-time-based.txt
+command-injection.txt
+ssti-payloads.txt
+lfi-linux.txt
+lfi-windows.txt
 
-### Pitchfork
-Uses different wordlists for each position in parallel (zip). Position 1 gets wordlist 1 line N, position 2 gets wordlist 2 line N. Stops when the shortest list runs out.
+# Auth
+default-credentials.txt
+top-passwords-10000.txt
+usernames-top-500.txt
 
-**Use when**: Testing correlated values (e.g., username:password pairs).
+# Parametros
+burp-parameter-names.txt
+common-api-params.txt
+```
 
-### Cluster Bomb
-Cartesian product of all wordlists across all positions. Tests every combination.
+Tecnicas de fuzzing avancado:
+```
+# Content-Type fuzzing
+application/json
+application/xml
+application/x-www-form-urlencoded
+multipart/form-data
+text/plain
+text/xml
 
-**Use when**: Brute-forcing combinations (e.g., all usernames x all passwords). Warning: combinatorial explosion with large lists.
+# HTTP Method fuzzing
+GET POST PUT DELETE PATCH OPTIONS HEAD TRACE
 
-## Payload Sources
+# Header fuzzing
+X-Forwarded-For: 127.0.0.1
+X-Forwarded-Host: evil.com
+X-Original-URL: /admin
+X-Rewrite-URL: /admin
+```
 
-- **Wordlist files**: .txt files with one payload per line (SecLists, custom lists)
-- **Inline payloads**: Manually entered payloads separated by newlines
-- **Numeric range**: Generated sequences with start, end, step, and zero-padding
+## Target Context (Crawler Hints)
+- **Parameters:** `id`, `q`, `search`, `username`, `password`, `email`, `page`, `limit`, `sort`, `order`, `filter`, `token`, `file`, `path`, `url`, `redirect`
+- **Paths:** `/api/*`, `/login`, `/search`, `/admin`, `/upload`, `/export`, `/import`, `/graphql`, `/api/v1/*`, `/api/v2/*`
 
-## Payload Processing
+## Notable CVEs
 
-Payloads can be transformed before injection through a processing pipeline:
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2023-34362 | MOVEit Transfer | 2023 | SQLi descoberto via fuzzing de parametros em endpoint de transferencia -- explorado em massa pelo Cl0p | Fuzzing-discovered SQLi |
+| CVE-2023-46747 | F5 BIG-IP | 2023 | Auth bypass descoberto via fuzzing de headers em endpoint de management -- AJP smuggling | Header fuzzing |
+| CVE-2024-3400 | Palo Alto PAN-OS | 2024 | Command injection via fuzzing de cookie SESSID em GlobalProtect -- RCE pre-auth (CVSS 10.0) | Parameter fuzzing |
+| CVE-2021-44228 | Log4j | 2021 | JNDI injection descoberto via fuzzing de headers User-Agent e X-Forwarded-For -- Log4Shell | Header fuzzing |
+| CVE-2023-22515 | Atlassian Confluence | 2023 | Auth bypass via fuzzing de parametros de setup -- permite criar admin sem autenticacao | Parameter fuzzing |
 
-| Processor | Description |
-|---|---|
-| URL encode/decode | Percent-encoding for URLs |
-| Base64 encode/decode | Base64 transformation |
-| HTML encode/decode | HTML entity encoding |
-| Hash (MD5/SHA) | One-way hash of payload |
-| Prefix/Suffix | Add fixed text before/after |
-| Match/Replace | Regex-based transformation |
-| Skip if matches | Filter out payloads matching a pattern |
+## Escalation Techniques
+- **De enumeracao para injecao:** usar o fuzzer para encontrar parametros que refletem input no body (potencial XSS) ou causam erros de banco (potencial SQLi), depois escalar com payloads especificos.
+- **De auth bypass para account takeover:** quando fuzzing de credenciais encontra credenciais validas, usar para acessar a conta e escalar privilegios.
+- **De IDOR para data dump:** quando fuzzing de IDs revela dados de outros usuarios, automatizar a extracao iterando todo o range de IDs.
+- **Combinacao com grep extract:** usar grep para extrair tokens CSRF, session IDs ou dados sensiveis das respostas, e usa-los em requisicoes subsequentes.
+- **Rate limit bypass via fuzzing:** testar diferentes headers (X-Forwarded-For, X-Real-IP) com IPs variados para contornar rate limiting.
 
-## Grep Match / Extract
+## Hunting Methodology
+1. Mapear todos os endpoints e parametros da aplicacao via Crawler.
+2. Para cada parametro, fazer fuzzing inicial com payloads de deteccao generica (aspas, operadores SQL, tags HTML, template markers).
+3. Filtrar respostas por anomalias: status code diferente, tamanho de resposta significativamente diferente, tempo de resposta anormal.
+4. Para parametros que mostraram anomalia, escalar com payloads especificos do tipo de vulnerabilidade suspeita.
+5. Usar grep match para identificar padroes de erro (stack traces, SQL errors, template errors) nas respostas.
+6. Para autenticacao, usar Pitchfork com listas de credenciais e monitorar diferencas no tamanho da resposta.
+7. Para IDOR, usar Range source com IDs sequenciais e filtrar por respostas com tamanho variavel.
 
-**Grep Match**: Count occurrences of patterns in responses to identify interesting behavior (error messages, SQL syntax, tokens).
+## False Positive Indicators
+- Resposta com status 200 mas body identico para todos os payloads -- servidor retorna pagina generica independente do input.
+- Variacao de tamanho de resposta e minima (< 10 bytes) e consistente -- pode ser timestamp ou request ID no body.
+- Rate limiting ativado (429) confundido com deteccao de vulnerabilidade -- repetir com delay.
+- WAF bloqueando payloads (403) -- indica protecao, nao vulnerabilidade.
+- Respostas lentas devido a carga do servidor, nao a time-based injection -- repetir com baseline.
 
-**Grep Extract**: Extract specific values from responses using regex capture groups (CSRF tokens, session IDs, error codes).
-
-## Common Fuzzing Scenarios
-
-### Directory/File Discovery
-- Fuzz the path component with a directory wordlist
-- Filter by status code (200, 301, 403) and response length
-- Use wordlists like `common.txt`, `directory-list-2.3-medium.txt`
-
-### Parameter Brute-Force
-- Fuzz parameter values with common injection payloads
-- Monitor for status code changes, response length anomalies
-- Grep for error strings indicating successful injection
-
-### Authentication Testing
-- Pitchfork with username:password lists
-- Monitor response length differences (login success vs failure)
-- Rate limit detection via 429 or response time changes
-
-### IDOR Discovery
-- Range source (1-10000) on ID parameters
-- Filter by response length changes (different user data)
-- Grep for PII patterns
-
-## Mitigation (Defensive Perspective)
-
-- Input validation and parameterized queries prevent injection
-- Rate limiting and account lockout slow brute-force
-- WAF rules detect common fuzzing patterns
-- CSRF tokens prevent automated form submission
-- Consistent error messages prevent information leakage
-
-## References
-
-- CWE-20: Improper Input Validation
-- CWE-307: Improper Restriction of Excessive Authentication Attempts
-- OWASP Testing Guide -- Input Validation Testing
-- Burp Suite Intruder documentation
-- OWASP ZAP Fuzzer documentation
+## Recommendation
+1. Implementar validacao de input e queries parametrizadas para prevenir injecao.
+2. Aplicar rate limiting e lockout de conta para mitigar brute-force.
+3. Configurar regras de WAF para detectar padroes comuns de fuzzing.
+4. Usar CSRF tokens para prevenir submissao automatizada de formularios.
+5. Retornar mensagens de erro consistentes para prevenir information leakage.
+6. Monitorar logs para detectar padroes de fuzzing (volume alto de requests com payloads similares).

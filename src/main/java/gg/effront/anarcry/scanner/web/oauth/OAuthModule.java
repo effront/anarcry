@@ -5,6 +5,7 @@ import com.google.gson.JsonParser;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
@@ -20,6 +21,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -31,7 +33,9 @@ public class OAuthModule implements Scanner {
             "/.well-known/oauth-authorization-server");
     private static final List<String> AUTHORIZE_PATHS = List.of("/oauth/authorize", "/oauth2/authorize", "/authorize",
             "/auth/authorize", "/connect/authorize", "/oauth/auth");
-    private static final String EVIL_REDIRECT = "https://evil.anarcry-probe.com/callback";
+    private static final String EVIL_DOMAIN = "evil.anarcry-probe.com";
+    private static final String EVIL_REDIRECT = "https://" + EVIL_DOMAIN + "/callback";
+    private static final List<String> HARDCODED_REDIRECT_URIS = List.of(EVIL_REDIRECT);
 
     @Override
     public String id() {
@@ -90,7 +94,8 @@ public class OAuthModule implements Scanner {
 
         // ── 2. Fallback: probe common authorize paths ─────────────────
         if (authorizeEndpoint == null) {
-            for (String path : AUTHORIZE_PATHS) {
+            List<String> authorizePaths = mergeKbAuthorizePaths();
+            for (String path : authorizePaths) {
                 try {
                     String testUrl = baseUrl + path + "?response_type=code&client_id=anarcry-test";
                     HttpRequest req = HttpRequest.newBuilder().uri(URI.create(testUrl)).timeout(Duration.ofSeconds(5))
@@ -157,41 +162,50 @@ public class OAuthModule implements Scanner {
         String _cweTitle = CweRegistry.cweTitle(id());
         String _cveVector = CweRegistry.cvssVector(id());
         double _score = CvssCalculator.calculate(_cveVector);
-        log.accept("[~] OAuth: probe redirect_uri bypass → " + endpoint);
-        String encodedRedirect;
-        try {
-            encodedRedirect = URLEncoder.encode(EVIL_REDIRECT, "UTF-8");
-        } catch (Exception e) {
-            encodedRedirect = EVIL_REDIRECT;
-        }
-        String url = endpoint + "?response_type=code&client_id=anarcry-test" + "&redirect_uri=" + encodedRedirect
-                + "&state=anarchtest";
-        try {
-            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(5)).GET()
-                    .build();
-            HttpResponse<Void> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.discarding(), id());
-            int status = resp.statusCode();
-            String location = resp.headers().firstValue("location").orElse("").trim();
-            log.accept("[~] OAuth: redirect_uri probe → HTTP " + status + " Location=" + location);
 
-            if ((status == 301 || status == 302 || status == 307 || status == 308)
-                    && location.startsWith(EVIL_REDIRECT)) {
-                log.accept("[!] OAuth: CRÍTICO -- redirect_uri bypass confirmado → " + location);
-                return Optional.of(Finding.of("OAuth", endpoint,
-                        "OAuth redirect_uri bypass -- roubo de código de autorização", Severity.CRITICAL,
-                        "Endpoint: " + endpoint + " | redirect_uri injetada: " + EVIL_REDIRECT + " | Location: "
-                                + location,
-                        "Servidor redireciona o código de autorização para URL controlada pelo atacante -- "
-                                + "permite roubo de sessão OAuth completo",
-                        "# 1. Enviar vítima para:\n" + url + "\n"
-                                + "# 2. O código chega em evil.anarcry-probe.com/callback\n"
-                                + "# 3. Trocar por access_token no token endpoint",
-                        "Validar redirect_uri contra whitelist estrita registrada por cliente;"
-                                + " rejeitar qualquer desvio",
-                        _cweId, _cweTitle, _cveVector, _score));
+        List<String> redirectUris = mergeKbRedirectUris(ctx.host());
+        int kbExtra = redirectUris.size() - HARDCODED_REDIRECT_URIS.size();
+        if (kbExtra > 0) {
+            log.accept("[~] " + id() + ": " + kbExtra + " payloads adicionais do Knowledge Base");
+        }
+        log.accept("[~] OAuth: probe redirect_uri bypass (" + redirectUris.size() + " URIs) -> " + endpoint);
+
+        for (String redirectUri : redirectUris) {
+            String encodedRedirect;
+            try {
+                encodedRedirect = URLEncoder.encode(redirectUri, "UTF-8");
+            } catch (Exception e) {
+                encodedRedirect = redirectUri;
             }
-        } catch (Exception e) {
-            log.accept("[~] OAuth: redirect_uri probe -- " + e.getMessage());
+            String url = endpoint + "?response_type=code&client_id=anarcry-test" + "&redirect_uri=" + encodedRedirect
+                    + "&state=anarchtest";
+            try {
+                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(5)).GET()
+                        .build();
+                HttpResponse<Void> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.discarding(), id());
+                int status = resp.statusCode();
+                String location = resp.headers().firstValue("location").orElse("").trim();
+
+                if ((status == 301 || status == 302 || status == 307 || status == 308)
+                        && (location.startsWith(redirectUri) || location.contains(EVIL_DOMAIN))) {
+                    log.accept("[!] OAuth: CRITICO -- redirect_uri bypass confirmado -> " + location);
+                    return Optional.of(Finding.of("OAuth", endpoint,
+                            "OAuth redirect_uri bypass -- roubo de codigo de autorizacao", Severity.CRITICAL,
+                            "Endpoint: " + endpoint + " | redirect_uri injetada: " + redirectUri + " | Location: "
+                                    + location,
+                            "Servidor redireciona o codigo de autorizacao para URL controlada pelo atacante -- "
+                                    + "permite roubo de sessao OAuth completo",
+                            "# 1. Enviar vitima para:\n" + url + "\n" + "# 2. O codigo chega em " + EVIL_DOMAIN + "\n"
+                                    + "# 3. Trocar por access_token no token endpoint",
+                            "Validar redirect_uri contra whitelist estrita registrada por cliente;"
+                                    + " rejeitar qualquer desvio",
+                            _cweId, _cweTitle, _cveVector, _score));
+                }
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
+            } catch (Exception e) {
+                log.accept("[~] OAuth: redirect_uri probe -- " + e.getMessage());
+            }
         }
         return Optional.empty();
     }
@@ -246,6 +260,40 @@ public class OAuthModule implements Scanner {
             log.accept("[~] OAuth: state probe -- " + e.getMessage());
         }
         return Optional.empty();
+    }
+
+    // Merge hardcoded authorize paths with KB payloads that look like paths
+    private List<String> mergeKbAuthorizePaths() {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(AUTHORIZE_PATHS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            String trimmed = kbp.strip();
+            if (trimmed.startsWith("/")) {
+                merged.add(trimmed);
+            }
+        }
+        return List.copyOf(merged);
+    }
+
+    // Merge hardcoded redirect URI with bypass payloads from KB. KB payloads
+    // use "alvo.com" / "target.com" as target placeholders and "evil.com" /
+    // "attacker.com" as attacker placeholders -- we adapt them to the actual target
+    // host and the probe domain.
+    private List<String> mergeKbRedirectUris(String targetHost) {
+        LinkedHashSet<String> merged = new LinkedHashSet<>(HARDCODED_REDIRECT_URIS);
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            if (!kbp.startsWith("redirect_uri=")) {
+                continue;
+            }
+            String uri = kbp.substring("redirect_uri=".length()).trim();
+            if (uri.isEmpty()) {
+                continue;
+            }
+            // Adapt placeholder hosts to actual target and probe domain
+            String adapted = uri.replace("alvo.com", targetHost).replace("target.com", targetHost)
+                    .replace("evil.com", EVIL_DOMAIN).replace("attacker.com", EVIL_DOMAIN);
+            merged.add(adapted);
+        }
+        return List.copyOf(merged);
     }
 
     private HttpClient buildClient(boolean followRedirects) throws Exception {

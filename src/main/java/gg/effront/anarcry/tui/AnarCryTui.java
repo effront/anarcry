@@ -50,6 +50,7 @@ import gg.effront.anarcry.EnvLoader;
 import gg.effront.anarcry.assistant.AiAssistant;
 import gg.effront.anarcry.assistant.AssistantConfig;
 import gg.effront.anarcry.assistant.ContextBuilder;
+import gg.effront.anarcry.assistant.ProviderConfigStore;
 import gg.effront.anarcry.assistant.ProviderRegistry;
 import gg.effront.anarcry.assistant.tools.AssistantTool;
 import gg.effront.anarcry.assistant.tools.ExplainCweTool;
@@ -548,8 +549,9 @@ public class AnarCryTui {
     private void initAssistant() {
         try {
             Map<String, String> envMap = envPreload != null ? envPreload.asMap() : Map.of();
-            availableProviders = ProviderRegistry.detect(envMap);
-            maxTokens = AssistantConfig.parseMaxTokens(envMap);
+            Map<String, String> merged = ProviderConfigStore.mergeAll(envMap);
+            availableProviders = ProviderRegistry.detect(merged);
+            maxTokens = AssistantConfig.parseMaxTokens(merged);
 
             String legacyProvider = envMap.getOrDefault("assistant_provider", "").toLowerCase();
             String resolvedId = "anthropic".equals(legacyProvider) ? "claude" : legacyProvider;

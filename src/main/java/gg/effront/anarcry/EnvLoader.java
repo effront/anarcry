@@ -9,7 +9,8 @@ import java.util.Map;
 
 public record EnvLoader(String target, String jwt1, String jwt2, String scopeHosts, String sessionCookie,
         String assistantProvider, String assistantApiKey, String assistantModel, int assistantMaxTokens,
-        String geminiApiKey, String anthropicApiKey, String openaiApiKey, String ollamaUrl) {
+        String geminiApiKey, String anthropicApiKey, String openaiApiKey, String deepseekApiKey,
+        String openrouterApiKey, String notholyApiKey, String ollamaUrl) {
 
     public static EnvLoader load(String path) throws IOException {
         Map<String, String> map = new HashMap<>();
@@ -46,9 +47,13 @@ public record EnvLoader(String target, String jwt1, String jwt2, String scopeHos
         String geminiApiKey = map.getOrDefault("gemini_api_key", "");
         String anthropicApiKey = map.getOrDefault("anthropic_api_key", "");
         String openaiApiKey = map.getOrDefault("openai_api_key", "");
+        String deepseekApiKey = map.getOrDefault("deepseek_api_key", "");
+        String openrouterApiKey = map.getOrDefault("openrouter_api_key", "");
+        String notholyApiKey = map.getOrDefault("notholy_api_key", "");
         String ollamaUrl = map.getOrDefault("ollama_url", "");
         return new EnvLoader(target, jwt1, jwt2, scopeHosts, sessionCookie, assistantProvider, assistantApiKey,
-                assistantModel, assistantMaxTokens, geminiApiKey, anthropicApiKey, openaiApiKey, ollamaUrl);
+                assistantModel, assistantMaxTokens, geminiApiKey, anthropicApiKey, openaiApiKey, deepseekApiKey,
+                openrouterApiKey, notholyApiKey, ollamaUrl);
     }
 
     public boolean hasTarget() {
@@ -59,7 +64,10 @@ public record EnvLoader(String target, String jwt1, String jwt2, String scopeHos
         return (assistantProvider != null && !assistantProvider.isBlank())
                 || (geminiApiKey != null && !geminiApiKey.isBlank())
                 || (anthropicApiKey != null && !anthropicApiKey.isBlank())
-                || (openaiApiKey != null && !openaiApiKey.isBlank()) || (ollamaUrl != null && !ollamaUrl.isBlank());
+                || (openaiApiKey != null && !openaiApiKey.isBlank())
+                || (deepseekApiKey != null && !deepseekApiKey.isBlank())
+                || (openrouterApiKey != null && !openrouterApiKey.isBlank())
+                || (notholyApiKey != null && !notholyApiKey.isBlank()) || (ollamaUrl != null && !ollamaUrl.isBlank());
     }
 
     public Map<String, String> asMap() {
@@ -76,6 +84,9 @@ public record EnvLoader(String target, String jwt1, String jwt2, String scopeHos
         m.put("gemini_api_key", geminiApiKey != null ? geminiApiKey : "");
         m.put("anthropic_api_key", anthropicApiKey != null ? anthropicApiKey : "");
         m.put("openai_api_key", openaiApiKey != null ? openaiApiKey : "");
+        m.put("deepseek_api_key", deepseekApiKey != null ? deepseekApiKey : "");
+        m.put("openrouter_api_key", openrouterApiKey != null ? openrouterApiKey : "");
+        m.put("notholy_api_key", notholyApiKey != null ? notholyApiKey : "");
         m.put("ollama_url", ollamaUrl != null ? ollamaUrl : "");
         return Collections.unmodifiableMap(m);
     }

