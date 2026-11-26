@@ -584,6 +584,9 @@ Other:
 - **generateKnowledgeBase Gradle task**: syncs `knowledge-base/*.md` to `knowledge_base.json` at build time -- MDs are the source of truth
 - Version bump to 2.5.0
 
+<details>
+<summary><kbd>Previous releases (click to expand)</kbd></summary>
+
 ### v2.4.0
 
 **HTTP Fuzzer/Intruder, Post-Exploitation Explorers (DB + FTP)**
@@ -607,9 +610,6 @@ Post-Exploitation:
 Other:
 - **HttpRequestUtil**: shared utility for applyMethod, applyHeaders, csvEscape (dedup between FuzzEngine, RepeaterView, Main)
 - Version bump to 2.4.0
-
-<details>
-<summary><kbd>Previous releases (click to expand)</kbd></summary>
 
 ### v2.3.0
 
