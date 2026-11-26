@@ -3,6 +3,7 @@ package gg.effront.anarcry.gui.views;
 import gg.effront.anarcry.assistant.AiAssistant;
 import gg.effront.anarcry.assistant.AssistantConfig;
 import gg.effront.anarcry.assistant.ContextBuilder;
+import gg.effront.anarcry.assistant.ProviderConfigStore;
 import gg.effront.anarcry.assistant.ProviderRegistry;
 import gg.effront.anarcry.assistant.UsageTracker;
 import gg.effront.anarcry.assistant.tools.AssistantTool;
@@ -23,6 +24,7 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Insets;
 import java.awt.event.ItemEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
@@ -97,6 +99,7 @@ public class AssistantView extends JPanel {
     private Supplier<DiscoveredPaths> discoveredPathsSupplier = DiscoveredPaths::new;
 
     private List<ProviderRegistry.ProviderInfo> availableProviders = List.of();
+    private Map<String, String> lastEnvMap = Map.of();
     private int maxTokens = 4096;
     private boolean suppressComboEvents;
     private int thinkingStart = -1;
@@ -138,12 +141,20 @@ public class AssistantView extends JPanel {
         modelLabel.setForeground(labelColor());
         modelLabel.setFont(CHAT_FONT);
 
+        JButton settingsBtn = new JButton("⚙");
+        settingsBtn.setToolTipText("Provider Settings");
+        settingsBtn.setFont(CHAT_FONT.deriveFont(14f));
+        settingsBtn.setMargin(new Insets(2, 6, 2, 6));
+        settingsBtn.setFocusPainted(false);
+        settingsBtn.addActionListener(e -> openProviderSettings());
+
         JPanel selectorBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 4));
         selectorBar.setBackground(darkBg());
         selectorBar.add(providerLabel);
         selectorBar.add(providerCombo);
         selectorBar.add(modelLabel);
         selectorBar.add(modelCombo);
+        selectorBar.add(settingsBtn);
 
         chatPane = new JTextPane();
         chatPane.setEditable(false);
@@ -230,8 +241,10 @@ public class AssistantView extends JPanel {
     }
 
     public void configure(Map<String, String> envMap) {
-        availableProviders = ProviderRegistry.detect(envMap);
-        maxTokens = AssistantConfig.parseMaxTokens(envMap);
+        Map<String, String> merged = ProviderConfigStore.mergeAll(envMap);
+        this.lastEnvMap = envMap;
+        availableProviders = ProviderRegistry.detect(merged);
+        maxTokens = AssistantConfig.parseMaxTokens(merged);
 
         suppressComboEvents = true;
         providerCombo.removeAllItems();
@@ -280,6 +293,14 @@ public class AssistantView extends JPanel {
 
     public JTextField getInputField() {
         return inputField;
+    }
+
+    private void openProviderSettings() {
+        ProviderSettingsDialog dlg = new ProviderSettingsDialog(SwingUtilities.getWindowAncestor(this));
+        dlg.setVisible(true);
+        if (dlg.wasSaved()) {
+            configure(lastEnvMap);
+        }
     }
 
     private void onProviderChanged() {

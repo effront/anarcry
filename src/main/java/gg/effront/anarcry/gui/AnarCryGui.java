@@ -305,11 +305,7 @@ public class AnarCryGui {
 
         statusBar.setOnSettingsClick(() -> openPreferences(null));
 
-        statusBar.setOnThemeClick(() -> {
-            AnarCryLaf.toggle();
-            SwingUtilities.updateComponentTreeUI(frame);
-            AnarCryLaf.fireThemeChanged(frame);
-        });
+        statusBar.setOnThemeClick(this::applyThemeToggle);
 
         statusBar.setOnKeybindingsClick(() -> openPreferences("Keybindings"));
 
@@ -530,11 +526,7 @@ public class AnarCryGui {
         JMenuItem toggleTheme = new JMenuItem("Toggle Theme");
         toggleTheme.setAccelerator(
                 KeyStroke.getKeyStroke(KeyEvent.VK_T, InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
-        toggleTheme.addActionListener(e -> {
-            AnarCryLaf.toggle();
-            SwingUtilities.updateComponentTreeUI(frame);
-            AnarCryLaf.fireThemeChanged(frame);
-        });
+        toggleTheme.addActionListener(e -> applyThemeToggle());
         menu.add(toggleTheme);
 
         menu.addSeparator();
@@ -557,6 +549,20 @@ public class AnarCryGui {
         menu.add(about);
 
         return menu;
+    }
+
+    private void applyThemeToggle() {
+        AnarCryLaf.toggle();
+        SwingUtilities.updateComponentTreeUI(frame);
+        // modulesPanel is detached from the frame when non-scan tabs are active,
+        // so updateComponentTreeUI misses it -- update it separately.
+        if (!modulesPanel.isShowing()) {
+            SwingUtilities.updateComponentTreeUI(modulesPanel);
+        }
+        AnarCryLaf.fireThemeChanged(frame);
+        if (!modulesPanel.isShowing()) {
+            AnarCryLaf.fireThemeChanged(modulesPanel);
+        }
     }
 
     private void onTabChanged() {

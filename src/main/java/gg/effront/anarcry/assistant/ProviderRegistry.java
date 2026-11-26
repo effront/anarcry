@@ -11,9 +11,16 @@ public final class ProviderRegistry {
     }
 
     private static final List<String> GEMINI_MODELS = List.of("gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash");
-    private static final List<String> CLAUDE_MODELS = List.of("claude-sonnet-4-6", "claude-haiku-4-6",
-            "claude-opus-4-6");
+    private static final List<String> CLAUDE_MODELS = List.of("claude-sonnet-4-6", "claude-haiku-4-5-20251001",
+            "claude-opus-4-6", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5");
     private static final List<String> OPENAI_MODELS = List.of("gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini", "o4-mini");
+    private static final List<String> DEEPSEEK_MODELS = List.of("deepseek-chat", "deepseek-reasoner");
+    private static final List<String> OPENROUTER_MODELS = List.of("deepseek/deepseek-chat-v3-0324:free",
+            "deepseek/deepseek-r1:free", "qwen/qwen3-235b-a22b:free", "meta-llama/llama-4-maverick:free",
+            "google/gemini-2.5-flash-preview:thinking", "anthracite-org/magnum-v4-72b",
+            "sophosympatheia/rogue-rose-103b-v0.2:free");
+    private static final List<String> NOTHOLY_MODELS = List.of("notholy-specter", "notholy-pulse", "notholy-vector",
+            "notholy-wisp");
     private static final List<String> OLLAMA_MODELS = List.of("llama3.1", "llama3.2", "mistral", "codellama",
             "deepseek-coder-v2", "qwen2.5-coder");
 
@@ -36,6 +43,22 @@ public final class ProviderRegistry {
         String openaiKey = firstNonEmpty(env, "openai_api_key");
         if (!openaiKey.isEmpty()) {
             providers.add(new ProviderInfo("openai", "OpenAI", openaiKey, OPENAI_MODELS, "gpt-4.1-mini"));
+        }
+
+        String deepseekKey = firstNonEmpty(env, "deepseek_api_key");
+        if (!deepseekKey.isEmpty()) {
+            providers.add(new ProviderInfo("deepseek", "DeepSeek", deepseekKey, DEEPSEEK_MODELS, "deepseek-chat"));
+        }
+
+        String openrouterKey = firstNonEmpty(env, "openrouter_api_key");
+        if (!openrouterKey.isEmpty()) {
+            providers.add(new ProviderInfo("openrouter", "OpenRouter", openrouterKey, OPENROUTER_MODELS,
+                    "deepseek/deepseek-chat-v3-0324:free"));
+        }
+
+        String notholyKey = firstNonEmpty(env, "notholy_api_key");
+        if (!notholyKey.isEmpty()) {
+            providers.add(new ProviderInfo("notholy", "NotHoly", notholyKey, NOTHOLY_MODELS, "notholy-pulse"));
         }
 
         addLegacyIfMissing(env, providers);
@@ -69,6 +92,12 @@ public final class ProviderRegistry {
                 providers.add(new ProviderInfo("claude", "Claude", legacyKey, CLAUDE_MODELS, "claude-sonnet-4-6"));
             case "openai" ->
                 providers.add(new ProviderInfo("openai", "OpenAI", legacyKey, OPENAI_MODELS, "gpt-4.1-mini"));
+            case "deepseek" ->
+                providers.add(new ProviderInfo("deepseek", "DeepSeek", legacyKey, DEEPSEEK_MODELS, "deepseek-chat"));
+            case "openrouter" -> providers.add(new ProviderInfo("openrouter", "OpenRouter", legacyKey,
+                    OPENROUTER_MODELS, "deepseek/deepseek-chat-v3-0324:free"));
+            case "notholy" ->
+                providers.add(new ProviderInfo("notholy", "NotHoly", legacyKey, NOTHOLY_MODELS, "notholy-pulse"));
             default -> {
             }
         }
@@ -77,6 +106,9 @@ public final class ProviderRegistry {
     private static String inferProvider(String apiKey) {
         if (apiKey.startsWith("sk-ant-")) {
             return "claude";
+        }
+        if (apiKey.startsWith("sk-or-")) {
+            return "openrouter";
         }
         if (apiKey.startsWith("sk-")) {
             return "openai";

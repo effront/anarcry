@@ -3,9 +3,12 @@ package gg.effront.anarcry.assistant;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import gg.effront.anarcry.assistant.providers.AnthropicProvider;
+import gg.effront.anarcry.assistant.providers.DeepSeekProvider;
 import gg.effront.anarcry.assistant.providers.GeminiProvider;
+import gg.effront.anarcry.assistant.providers.NotHolyProvider;
 import gg.effront.anarcry.assistant.providers.OllamaProvider;
 import gg.effront.anarcry.assistant.providers.OpenAiProvider;
+import gg.effront.anarcry.assistant.providers.OpenRouterProvider;
 import gg.effront.anarcry.assistant.providers.ProviderAdapter;
 
 import java.io.BufferedReader;
@@ -267,6 +270,9 @@ public final class AiAssistant {
             case "gemini" -> new GeminiProvider();
             case "claude", "anthropic" -> new AnthropicProvider();
             case "openai" -> new OpenAiProvider();
+            case "deepseek" -> new DeepSeekProvider();
+            case "openrouter" -> new OpenRouterProvider();
+            case "notholy" -> new NotHolyProvider();
             case "ollama" -> new OllamaProvider();
             default -> throw new IllegalArgumentException("Unknown AI provider: " + providerId);
         };

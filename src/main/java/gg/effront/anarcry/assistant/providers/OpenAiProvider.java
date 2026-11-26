@@ -13,7 +13,7 @@ import java.net.URI;
 import java.net.http.HttpRequest;
 import java.util.List;
 
-public final class OpenAiProvider implements ProviderAdapter {
+public class OpenAiProvider implements ProviderAdapter {
 
     private static final String API_URL = "https://api.openai.com/v1/chat/completions";
     private static final Gson GSON = new Gson();
