@@ -28,6 +28,12 @@ public class HeadersModule implements Scanner {
     private static final Set<String> CDN_WAF_NAMES = Set.of("cloudflare", "akamai", "akamaighost", "awselb",
             "incapsula", "sucuri", "ddos-guard", "cloudfront", "fastly", "varnish");
 
+    private static final Set<String> PAAS_NAMES = Set.of("railway-hikari", "railway", "heroku", "render", "fly",
+            "vercel", "netlify");
+
+    private static final List<String> FALLBACK_PATHS = List.of("/health", "/api", "/api/health", "/status",
+            "/robots.txt", "/favicon.ico");
+
     @Override
     public String id() {
         return "Headers";
@@ -47,10 +53,11 @@ public class HeadersModule implements Scanner {
         HttpRequest request = HttpRequest.newBuilder().uri(URI.create(ctx.targetUrl())).timeout(Duration.ofSeconds(10))
                 .header("User-Agent", gg.effront.anarcry.Version.userAgent()).GET().build();
         HttpResponse<String> response = Http.send(ctx, hc, request, HttpResponse.BodyHandlers.ofString(), id());
-        final int code = response.statusCode();
+        int code = response.statusCode();
         log.accept("[~] HEADERS: HTTP " + code);
-        final Map<String, List<String>> headers = response.headers().map();
-        final String evidence = "HTTP " + code + " -- " + ctx.targetUrl();
+        Map<String, List<String>> headers = response.headers().map();
+        String checkedUrl = ctx.targetUrl();
+        boolean isErrorPage = code >= 400;
 
         if (code == 403) {
             String server = getHeader(headers, "Server");
@@ -61,7 +68,7 @@ public class HeadersModule implements Scanner {
                         + " -- possivel bloqueio por WAF, headers nao confiaveis");
                 findings.add(
                         Finding.of("Headers", ctx.targetUrl(), "Possivel bloqueio por WAF -- headers nao confiaveis",
-                                Severity.INFO, evidence + " | Server: " + server,
+                                Severity.INFO, "HTTP " + code + " -- " + ctx.targetUrl() + " | Server: " + server,
                                 "Response 403 de WAF (" + server
                                         + ") -- headers reportados pertencem ao WAF, nao a aplicacao real."
                                         + " Findings de headers ausentes nao sao confiaveis neste contexto.",
@@ -71,11 +78,54 @@ public class HeadersModule implements Scanner {
             }
         }
 
+        if (isErrorPage) {
+            log.accept("[~] HEADERS: base retornou HTTP " + code + " -- tentando fallback paths");
+            String baseUrl = ctx.targetUrl();
+            if (baseUrl.endsWith("/")) {
+                baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+            }
+            for (String path : FALLBACK_PATHS) {
+                String probeUrl = baseUrl + path;
+                try {
+                    HttpRequest probeReq = HttpRequest.newBuilder().uri(URI.create(probeUrl))
+                            .timeout(Duration.ofSeconds(6)).header("User-Agent", gg.effront.anarcry.Version.userAgent())
+                            .GET().build();
+                    HttpResponse<String> probeResp = Http.send(ctx, hc, probeReq, HttpResponse.BodyHandlers.ofString(),
+                            id());
+                    int probeCode = probeResp.statusCode();
+                    if (probeCode >= 200 && probeCode < 300) {
+                        log.accept("[+] HEADERS: fallback " + path + " retornou HTTP " + probeCode
+                                + " -- usando como fonte primaria");
+                        code = probeCode;
+                        headers = probeResp.headers().map();
+                        checkedUrl = probeUrl;
+                        isErrorPage = false;
+                        break;
+                    }
+                } catch (Exception e) {
+                    // skip failed probes
+                }
+            }
+            if (isErrorPage) {
+                log.accept("[~] HEADERS: nenhum fallback retornou 2xx -- usando response original com nota");
+            }
+        }
+
+        String evidenceBase = "HTTP " + code + " -- " + checkedUrl;
+        if (isErrorPage) {
+            evidenceBase += " (error page -- headers may not reflect production routes)";
+        }
+        final String evidence = evidenceBase;
+
         if (!hasHeader(headers, "Content-Security-Policy")) {
-            findings.add(Finding.of("Headers", ctx.targetUrl(), "CSP ausente", Severity.MEDIUM, evidence,
-                    "Sem CSP, a aplicação é mais vulnerável a XSS e injeção de conteúdo",
-                    "curl -sI " + ctx.targetUrl() + " | grep -i content-security-policy",
-                    "Implementar Content-Security-Policy com política restritiva", _cweId, _cweTitle, _cveVector,
+            Severity cspSev = isErrorPage ? Severity.LOW : Severity.MEDIUM;
+            String cspImpact = "Sem CSP, a aplicacao e mais vulneravel a XSS e injecao de conteudo";
+            if (isErrorPage) {
+                cspImpact += " (severidade reduzida: pagina de erro tem impacto limitado de XSS)";
+            }
+            findings.add(Finding.of("Headers", ctx.targetUrl(), "CSP ausente", cspSev, evidence, cspImpact,
+                    "curl -sI " + checkedUrl + " | grep -i content-security-policy",
+                    "Implementar Content-Security-Policy com politica restritiva", _cweId, _cweTitle, _cveVector,
                     _score));
         }
 
@@ -85,89 +135,107 @@ public class HeadersModule implements Scanner {
             boolean styleUnsafe = !scriptUnsafe
                     && directiveHasEffectiveUnsafeInline(cspVal, "style-src", "default-src");
             if (scriptUnsafe) {
-                findings.add(
-                        Finding.of("Headers", ctx.targetUrl(), "CSP script-src contém unsafe-inline sem nonce/hash",
-                                Severity.MEDIUM, evidence + " | CSP: " + cspVal,
-                                "unsafe-inline em script-src sem nonce/hash anula a proteção contra XSS",
-                                "curl -sI " + ctx.targetUrl() + " | grep -i content-security-policy",
-                                "Remover 'unsafe-inline' do script-src e usar nonces ou hashes para scripts legítimos",
-                                _cweId, _cweTitle, _cveVector, _score));
+                Severity scriptSev = isErrorPage ? Severity.LOW : Severity.MEDIUM;
+                findings.add(Finding.of("Headers", ctx.targetUrl(),
+                        "CSP script-src contem unsafe-inline sem nonce/hash", scriptSev, evidence + " | CSP: " + cspVal,
+                        "unsafe-inline em script-src sem nonce/hash anula a protecao contra XSS",
+                        "curl -sI " + checkedUrl + " | grep -i content-security-policy",
+                        "Remover 'unsafe-inline' do script-src e usar nonces ou hashes para scripts legitimos", _cweId,
+                        _cweTitle, _cveVector, _score));
             } else if (styleUnsafe) {
                 boolean scriptStrict = !directiveHasEffectiveUnsafeInline(cspVal, "script-src", "default-src");
                 boolean frameAncestorsNone = cspDirectiveContains(cspVal, "frame-ancestors", "'none'");
                 boolean imgSrcRestricted = !directiveContainsWildcard(cspVal, "img-src", "default-src");
                 boolean fullyMitigated = scriptStrict && frameAncestorsNone && imgSrcRestricted;
 
-                Severity styleSev = fullyMitigated ? Severity.INFO : Severity.LOW;
+                Severity styleSev;
+                if (isErrorPage || fullyMitigated) {
+                    styleSev = Severity.INFO;
+                } else {
+                    styleSev = Severity.LOW;
+                }
                 String styleImpact = fullyMitigated
                         ? "CSS injection severamente mitigada: script-src estrito impede escalada para JS; "
-                                + "frame-ancestors 'none' bloqueia clickjacking; img-src restrita limita exfiltração"
+                                + "frame-ancestors 'none' bloqueia clickjacking; img-src restrita limita exfiltracao"
                         : "unsafe-inline em style-src permite CSS injection"
-                                + (scriptStrict ? "" : "; script-src não é estrito -- escalada para XSS possível")
+                                + (scriptStrict ? "" : "; script-src nao e estrito -- escalada para XSS possivel")
                                 + (frameAncestorsNone
                                         ? ""
                                         : "; frame-ancestors ausente/permissivo -- clickjacking via iframe")
                                 + (imgSrcRestricted
                                         ? ""
-                                        : "; img-src tem wildcard -- exfiltração via background:url() possível");
-                findings.add(Finding.of("Headers", ctx.targetUrl(), "CSP style-src contém unsafe-inline sem nonce/hash",
+                                        : "; img-src tem wildcard -- exfiltracao via background:url() possivel");
+                findings.add(Finding.of("Headers", ctx.targetUrl(), "CSP style-src contem unsafe-inline sem nonce/hash",
                         styleSev, evidence + " | CSP: " + cspVal, styleImpact,
-                        "curl -sI " + ctx.targetUrl() + " | grep -i content-security-policy",
-                        "Remover 'unsafe-inline' do style-src e usar nonces ou hashes para estilos legítimos", _cweId,
+                        "curl -sI " + checkedUrl + " | grep -i content-security-policy",
+                        "Remover 'unsafe-inline' do style-src e usar nonces ou hashes para estilos legitimos", _cweId,
                         _cweTitle, _cveVector, _score));
             }
         }
 
         if (!hasHeader(headers, "X-Frame-Options")) {
-            findings.add(Finding.of("Headers", ctx.targetUrl(), "X-Frame-Options ausente", Severity.MEDIUM, evidence,
-                    "Sem X-Frame-Options, a página pode ser embutida em iframes -- risco de clickjacking",
-                    "curl -sI " + ctx.targetUrl() + " | grep -i x-frame-options",
-                    "Adicionar: X-Frame-Options: DENY (ou SAMEORIGIN se necessário)", _cweId, _cweTitle, _cveVector,
+            Severity xfoSev = isErrorPage ? Severity.LOW : Severity.MEDIUM;
+            String xfoImpact = "Sem X-Frame-Options, a pagina pode ser embutida em iframes -- risco de clickjacking";
+            if (isErrorPage) {
+                xfoImpact += " (severidade reduzida: pagina de erro tem impacto limitado de clickjacking)";
+            }
+            findings.add(Finding.of("Headers", ctx.targetUrl(), "X-Frame-Options ausente", xfoSev, evidence, xfoImpact,
+                    "curl -sI " + checkedUrl + " | grep -i x-frame-options",
+                    "Adicionar: X-Frame-Options: DENY (ou SAMEORIGIN se necessario)", _cweId, _cweTitle, _cveVector,
                     _score));
         }
 
         if (!hasHeader(headers, "X-Content-Type-Options")) {
-            findings.add(Finding.of("Headers", ctx.targetUrl(), "X-Content-Type-Options ausente", Severity.LOW,
-                    evidence, "Sem X-Content-Type-Options, o browser pode interpretar erroneamente o MIME type",
-                    "curl -sI " + ctx.targetUrl() + " | grep -i x-content-type-options",
+            Severity xctoSev = isErrorPage ? Severity.INFO : Severity.LOW;
+            String xctoImpact = "Sem X-Content-Type-Options, o browser pode interpretar erroneamente o MIME type";
+            if (isErrorPage) {
+                xctoImpact += " (severidade reduzida: pagina de erro tem impacto limitado)";
+            }
+            findings.add(Finding.of("Headers", ctx.targetUrl(), "X-Content-Type-Options ausente", xctoSev, evidence,
+                    xctoImpact, "curl -sI " + checkedUrl + " | grep -i x-content-type-options",
                     "Adicionar: X-Content-Type-Options: nosniff", _cweId, _cweTitle, _cveVector, _score));
         }
 
         if (!hasHeader(headers, "Referrer-Policy")) {
             findings.add(Finding.of("Headers", ctx.targetUrl(), "Referrer-Policy ausente", Severity.INFO, evidence,
-                    "Sem Referrer-Policy, a URL completa pode ser enviada em requisições cross-origin",
-                    "curl -sI " + ctx.targetUrl() + " | grep -i referrer-policy",
+                    "Sem Referrer-Policy, a URL completa pode ser enviada em requisicoes cross-origin",
+                    "curl -sI " + checkedUrl + " | grep -i referrer-policy",
                     "Adicionar: Referrer-Policy: strict-origin-when-cross-origin", _cweId, _cweTitle, _cveVector,
                     _score));
         }
 
         if (!hasHeader(headers, "Permissions-Policy")) {
             findings.add(Finding.of("Headers", ctx.targetUrl(), "Permissions-Policy ausente", Severity.INFO, evidence,
-                    "Sem Permissions-Policy, features do browser (câmera, microfone etc.) não estão restritas",
-                    "curl -sI " + ctx.targetUrl() + " | grep -i permissions-policy",
+                    "Sem Permissions-Policy, features do browser (camera, microfone etc.) nao estao restritas",
+                    "curl -sI " + checkedUrl + " | grep -i permissions-policy",
                     "Adicionar: Permissions-Policy: camera=(), microphone=(), geolocation=()", _cweId, _cweTitle,
                     _cveVector, _score));
         }
 
         String serverHeader = getHeader(headers, "Server");
         if (serverHeader != null && !isCdnOrWaf(serverHeader)) {
-            findings.add(Finding.of("Headers", ctx.targetUrl(), "Header Server expõe tecnologia: " + serverHeader,
-                    Severity.INFO, evidence + " | Server: " + serverHeader,
-                    "Divulgação de versão de servidor facilita reconhecimento do atacante",
-                    "curl -sI " + ctx.targetUrl() + " | grep -i '^server:'", "Remover ou ofuscar o header Server",
-                    _cweId, _cweTitle, _cveVector, _score));
+            if (isPaas(serverHeader)) {
+                log.accept("[~] HEADERS: Server header e infraestrutura PaaS (" + serverHeader
+                        + ") -- pulando finding de tech disclosure");
+            } else {
+                findings.add(Finding.of("Headers", ctx.targetUrl(), "Header Server expoe tecnologia: " + serverHeader,
+                        Severity.INFO, evidence + " | Server: " + serverHeader,
+                        "Divulgacao de versao de servidor facilita reconhecimento do atacante",
+                        "curl -sI " + checkedUrl + " | grep -i '^server:'", "Remover ou ofuscar o header Server",
+                        _cweId, _cweTitle, _cveVector, _score));
+            }
         }
 
         String poweredBy = getHeader(headers, "X-Powered-By");
         if (poweredBy != null) {
-            findings.add(Finding.of("Headers", ctx.targetUrl(), "X-Powered-By expõe tecnologia: " + poweredBy,
+            findings.add(Finding.of("Headers", ctx.targetUrl(), "X-Powered-By expoe tecnologia: " + poweredBy,
                     Severity.LOW, evidence + " | X-Powered-By: " + poweredBy,
-                    "Divulgação de stack de tecnologia facilita ataques direcionados",
-                    "curl -sI " + ctx.targetUrl() + " | grep -i x-powered-by", "Remover o header X-Powered-By", _cweId,
+                    "Divulgacao de stack de tecnologia facilita ataques direcionados",
+                    "curl -sI " + checkedUrl + " | grep -i x-powered-by", "Remover o header X-Powered-By", _cweId,
                     _cweTitle, _cveVector, _score));
         }
 
-        // Flags de segurança nos cookies
+        final String curlTarget = checkedUrl;
         headers.entrySet().stream().filter(e -> e.getKey() != null && e.getKey().equalsIgnoreCase("Set-Cookie"))
                 .flatMap(e -> e.getValue().stream()).forEach(cookie -> {
                     String low = cookie.toLowerCase();
@@ -175,17 +243,17 @@ public class HeadersModule implements Scanner {
                     if (!low.contains("secure")) {
                         findings.add(Finding.of("Headers", ctx.targetUrl(), "Cookie sem flag Secure: " + cname,
                                 Severity.LOW, evidence + " | Set-Cookie: " + cookie,
-                                "Cookie pode ser transmitido por HTTP -- interceptável em rede não cifrada",
-                                "curl -sI " + ctx.targetUrl() + " | grep -i 'set-cookie'",
-                                "Adicionar a flag Secure em todos os cookies de sessão", _cweId, _cweTitle, _cveVector,
+                                "Cookie pode ser transmitido por HTTP -- interceptavel em rede nao cifrada",
+                                "curl -sI " + curlTarget + " | grep -i 'set-cookie'",
+                                "Adicionar a flag Secure em todos os cookies de sessao", _cweId, _cweTitle, _cveVector,
                                 _score));
                     }
                     if (!low.contains("httponly")) {
                         findings.add(Finding.of("Headers", ctx.targetUrl(), "Cookie sem flag HttpOnly: " + cname,
                                 Severity.LOW, evidence + " | Set-Cookie: " + cookie,
-                                "Cookie acessível via JavaScript -- roubo de sessão via XSS",
-                                "curl -sI " + ctx.targetUrl() + " | grep -i 'set-cookie'",
-                                "Adicionar a flag HttpOnly em todos os cookies de sessão", _cweId, _cweTitle,
+                                "Cookie acessivel via JavaScript -- roubo de sessao via XSS",
+                                "curl -sI " + curlTarget + " | grep -i 'set-cookie'",
+                                "Adicionar a flag HttpOnly em todos os cookies de sessao", _cweId, _cweTitle,
                                 _cveVector, _score));
                     }
                 });
@@ -315,6 +383,11 @@ public class HeadersModule implements Scanner {
     private static boolean isCdnOrWaf(String serverValue) {
         String low = serverValue.toLowerCase(Locale.ROOT);
         return CDN_WAF_NAMES.stream().anyMatch(low::contains);
+    }
+
+    private static boolean isPaas(String serverValue) {
+        String low = serverValue.toLowerCase(Locale.ROOT);
+        return PAAS_NAMES.stream().anyMatch(low::contains);
     }
 
     private static boolean directiveHasEffectiveUnsafeInline(String csp, String... candidates) {

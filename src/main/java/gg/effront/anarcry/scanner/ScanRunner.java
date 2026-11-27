@@ -49,8 +49,12 @@ import gg.effront.anarcry.scanner.web.secrets.SecretsModule;
 import gg.effront.anarcry.scanner.web.cloud.CloudMisconfigModule;
 import gg.effront.anarcry.scanner.web.sqli.SqlInjectionModule;
 import gg.effront.anarcry.scanner.web.backendliveness.BackendLivenessModule;
+import gg.effront.anarcry.scanner.web.clerk.ClerkModule;
 import gg.effront.anarcry.scanner.web.clickjacking.ClickjackingModule;
 import gg.effront.anarcry.scanner.web.domsink.DomSinkModule;
+import gg.effront.anarcry.scanner.web.emailsec.EmailSecurityModule;
+import gg.effront.anarcry.scanner.web.errordisclosure.ErrorDisclosureModule;
+import gg.effront.anarcry.scanner.web.ratelimit.RateLimitModule;
 import gg.effront.anarcry.scanner.web.frameworkconfig.FrameworkConfigModule;
 import gg.effront.anarcry.scanner.web.jsanalyzer.JsAnalyzerModule;
 import gg.effront.anarcry.scanner.web.subtakeover.SubdomainTakeoverModule;
@@ -318,6 +322,18 @@ public class ScanRunner {
         }
         if (ctx.has("Clickjacking")) {
             modules.add(new ClickjackingModule());
+        }
+        if (ctx.has("RateLimit")) {
+            modules.add(new RateLimitModule());
+        }
+        if (ctx.has("EmailSec")) {
+            modules.add(new EmailSecurityModule());
+        }
+        if (ctx.has("Clerk")) {
+            modules.add(new ClerkModule());
+        }
+        if (ctx.has("ErrorDisclosure")) {
+            modules.add(new ErrorDisclosureModule());
         }
         modules.addAll(customModules);
 

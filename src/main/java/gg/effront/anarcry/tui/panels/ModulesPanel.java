@@ -82,6 +82,10 @@ public class ModulesPanel extends Panel {
     private final CheckBox domSinksCheck;
     private final CheckBox backendLivenessCheck;
     private final CheckBox clickjackingCheck;
+    private final CheckBox rateLimitCheck;
+    private final CheckBox emailSecCheck;
+    private final CheckBox clerkCheck;
+    private final CheckBox errorDisclosureCheck;
     private final CheckBox exploitationCheck;
     private final List<CheckBox> allModuleChecks = new ArrayList<>();
     private final PasteableTextBox targetBox;
@@ -150,6 +154,10 @@ public class ModulesPanel extends Panel {
         domSinksCheck = new CheckBox("DomSinks");
         backendLivenessCheck = new CheckBox("BackendLiveness");
         clickjackingCheck = new CheckBox("Clickjacking");
+        rateLimitCheck = new CheckBox("RateLimit");
+        emailSecCheck = new CheckBox("EmailSec");
+        clerkCheck = new CheckBox("Clerk");
+        errorDisclosureCheck = new CheckBox("ErrorDisclosure");
 
         allModuleChecks.addAll(List.of(crawlerCheck, infraCheck, tlsCheck, headersCheck, hstsCheck, jwtCheck, pqcCheck,
                 corsCheck, oauthCheck, openRedirectCheck, ssrfCheck, graphqlCheck, crlfCheck, xxeCheck, sstiCheck,
@@ -157,7 +165,8 @@ public class ModulesPanel extends Panel {
                 sqliCheck, xssCheck, lfiCheck, cmdInjectionCheck, csrfCheck, secretsCheck, raceConditionCheck,
                 nosqliCheck, deserializationCheck, fileUploadCheck, subTakeoverCheck, webSocketCheck,
                 protoPollutionCheck, cloudMisconfigCheck, frameworkConfigCheck, jsAnalyzerCheck, domSinksCheck,
-                backendLivenessCheck, clickjackingCheck));
+                backendLivenessCheck, clickjackingCheck, rateLimitCheck, emailSecCheck, clerkCheck,
+                errorDisclosureCheck));
 
         Label selectLabel = new Label("Select modules:");
         selectLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.WHITE);
@@ -167,6 +176,10 @@ public class ModulesPanel extends Panel {
         Button noneBtn = new Button("none", () -> allModuleChecks.forEach(c -> c.setChecked(false)));
         Button passiveBtn = new Button("passive", this::selectPassiveOnly);
         Button reconBtn = new Button("recon", this::selectRecon);
+        Button injectBtn = new Button("inject", this::selectInject);
+        Button apiBtn = new Button("api", this::selectApi);
+        Button infraBtn = new Button("infra", this::selectInfra);
+        Button owaspBtn = new Button("owasp", this::selectOwasp);
         togglePanel.addComponent(allBtn);
         togglePanel.addComponent(new Label("|"));
         togglePanel.addComponent(noneBtn);
@@ -174,6 +187,14 @@ public class ModulesPanel extends Panel {
         togglePanel.addComponent(passiveBtn);
         togglePanel.addComponent(new Label("|"));
         togglePanel.addComponent(reconBtn);
+        togglePanel.addComponent(new Label("|"));
+        togglePanel.addComponent(injectBtn);
+        togglePanel.addComponent(new Label("|"));
+        togglePanel.addComponent(apiBtn);
+        togglePanel.addComponent(new Label("|"));
+        togglePanel.addComponent(infraBtn);
+        togglePanel.addComponent(new Label("|"));
+        togglePanel.addComponent(owaspBtn);
         addComponent(togglePanel);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
@@ -196,40 +217,64 @@ public class ModulesPanel extends Panel {
         addComponent(pqcCheck);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
-        Label webLabel = new Label("── WEB ─────────────────");
-        webLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.YELLOW);
-        addComponent(webLabel);
-        addComponent(corsCheck);
+        Label injLabel = new Label("── INJECTION ───────────");
+        injLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.YELLOW);
+        addComponent(injLabel);
+        addComponent(sqliCheck);
+        addComponent(nosqliCheck);
+        addComponent(xssCheck);
+        addComponent(sstiCheck);
+        addComponent(cmdInjectionCheck);
+        addComponent(crlfCheck);
+        addComponent(xxeCheck);
+        addComponent(lfiCheck);
+
+        addComponent(new EmptySpace(new TerminalSize(1, 1)));
+        Label authLabel = new Label("── AUTH & ACCESS ───────");
+        authLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.MAGENTA);
+        addComponent(authLabel);
         addComponent(oauthCheck);
+        addComponent(idorCheck);
+        addComponent(csrfCheck);
+        addComponent(massAssignCheck);
+        addComponent(rateLimitCheck);
+        addComponent(clerkCheck);
+
+        addComponent(new EmptySpace(new TerminalSize(1, 1)));
+        Label httpLabel = new Label("── HTTP & TRANSPORT ────");
+        httpLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.CYAN);
+        addComponent(httpLabel);
+        addComponent(corsCheck);
+        addComponent(hostHeaderCheck);
+        addComponent(cachePoisoningCheck);
+        addComponent(reqSmugglingCheck);
         addComponent(openRedirectCheck);
         addComponent(ssrfCheck);
         addComponent(graphqlCheck);
-        addComponent(crlfCheck);
-        addComponent(xxeCheck);
-        addComponent(sstiCheck);
-        addComponent(hostHeaderCheck);
-        addComponent(actuatorCheck);
-        addComponent(massAssignCheck);
-        addComponent(cachePoisoningCheck);
-        addComponent(reqSmugglingCheck);
-        addComponent(sqliCheck);
-        addComponent(xssCheck);
-        addComponent(lfiCheck);
-        addComponent(cmdInjectionCheck);
-        addComponent(csrfCheck);
-        addComponent(secretsCheck);
-        addComponent(raceConditionCheck);
-        addComponent(nosqliCheck);
-        addComponent(deserializationCheck);
-        addComponent(fileUploadCheck);
-        addComponent(subTakeoverCheck);
         addComponent(webSocketCheck);
-        addComponent(protoPollutionCheck);
-        addComponent(cloudMisconfigCheck);
+
+        addComponent(new EmptySpace(new TerminalSize(1, 1)));
+        Label cfgLabel = new Label("── CONFIG & EXPOSURE ───");
+        cfgLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.GREEN);
+        addComponent(cfgLabel);
+        addComponent(secretsCheck);
         addComponent(frameworkConfigCheck);
         addComponent(jsAnalyzerCheck);
         addComponent(domSinksCheck);
-        addComponent(idorCheck);
+        addComponent(protoPollutionCheck);
+        addComponent(errorDisclosureCheck);
+        addComponent(emailSecCheck);
+        addComponent(actuatorCheck);
+        addComponent(cloudMisconfigCheck);
+        addComponent(subTakeoverCheck);
+
+        addComponent(new EmptySpace(new TerminalSize(1, 1)));
+        Label destLabel = new Label("── DESTRUCTIVE ─────────");
+        destLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.RED);
+        addComponent(destLabel);
+        addComponent(raceConditionCheck);
+        addComponent(deserializationCheck);
+        addComponent(fileUploadCheck);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
         Label postLabel = new Label("── POST-SCAN ───────────");
@@ -401,6 +446,32 @@ public class ModulesPanel extends Panel {
         allModuleChecks.forEach(c -> c.setChecked(recon.contains(c)));
     }
 
+    private void selectInject() {
+        Set<CheckBox> inject = Set.of(crawlerCheck, sqliCheck, nosqliCheck, xssCheck, sstiCheck, lfiCheck,
+                cmdInjectionCheck, xxeCheck, crlfCheck, deserializationCheck, protoPollutionCheck);
+        allModuleChecks.forEach(c -> c.setChecked(inject.contains(c)));
+    }
+
+    private void selectApi() {
+        Set<CheckBox> api = Set.of(crawlerCheck, graphqlCheck, corsCheck, jwtCheck, oauthCheck, idorCheck,
+                massAssignCheck, rateLimitCheck, ssrfCheck, secretsCheck, errorDisclosureCheck, clerkCheck);
+        allModuleChecks.forEach(c -> c.setChecked(api.contains(c)));
+    }
+
+    private void selectInfra() {
+        Set<CheckBox> infra = Set.of(crawlerCheck, tlsCheck, headersCheck, hstsCheck, pqcCheck, actuatorCheck,
+                hostHeaderCheck, cloudMisconfigCheck, frameworkConfigCheck, emailSecCheck, subTakeoverCheck,
+                infraCheck);
+        allModuleChecks.forEach(c -> c.setChecked(infra.contains(c)));
+    }
+
+    private void selectOwasp() {
+        Set<CheckBox> owasp = Set.of(crawlerCheck, sqliCheck, xssCheck, ssrfCheck, xxeCheck, cmdInjectionCheck,
+                sstiCheck, corsCheck, jwtCheck, oauthCheck, idorCheck, csrfCheck, headersCheck, hstsCheck,
+                actuatorCheck, massAssignCheck, deserializationCheck);
+        allModuleChecks.forEach(c -> c.setChecked(owasp.contains(c)));
+    }
+
     private void onStart() {
         String target = TargetUtil.sanitizeTarget(targetBox.getText());
         if (target.isBlank() || target.equals("https://")) {
@@ -529,6 +600,18 @@ public class ModulesPanel extends Panel {
         }
         if (clickjackingCheck.isChecked()) {
             modules.add("Clickjacking");
+        }
+        if (rateLimitCheck.isChecked()) {
+            modules.add("RateLimit");
+        }
+        if (emailSecCheck.isChecked()) {
+            modules.add("EmailSec");
+        }
+        if (clerkCheck.isChecked()) {
+            modules.add("Clerk");
+        }
+        if (errorDisclosureCheck.isChecked()) {
+            modules.add("ErrorDisclosure");
         }
 
         if (modules.isEmpty()) {

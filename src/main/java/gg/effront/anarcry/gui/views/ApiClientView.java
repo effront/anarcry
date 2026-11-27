@@ -1023,7 +1023,7 @@ public class ApiClientView extends JPanel {
         JPanel respButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         respButtons.setOpaque(false);
 
-        responseFormatCombo = new JComboBox<>(new String[]{"JSON", "HTML", "XML", "Raw"});
+        responseFormatCombo = new JComboBox<>(new String[]{"JSON", "HTML", "XML", "JS", "Raw"});
         responseFormatCombo.setFont(responseFormatCombo.getFont().deriveFont(11f));
         responseFormatCombo.setPreferredSize(new Dimension(70, 22));
         responseFormatCombo.addActionListener(e -> {
@@ -1033,6 +1033,7 @@ public class ApiClientView extends JPanel {
                     case "JSON" -> SyntaxConstants.SYNTAX_STYLE_JSON;
                     case "HTML" -> SyntaxConstants.SYNTAX_STYLE_HTML;
                     case "XML" -> SyntaxConstants.SYNTAX_STYLE_XML;
+                    case "JS" -> SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT;
                     default -> SyntaxConstants.SYNTAX_STYLE_NONE;
                 });
             }
@@ -1130,6 +1131,18 @@ public class ApiClientView extends JPanel {
         }
     }
 
+    private static String autoPrettify(String body, String syntax) {
+        if (syntax.contains("json")) {
+            try {
+                com.google.gson.JsonElement el = com.google.gson.JsonParser.parseString(body);
+                return new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(el);
+            } catch (Exception ignored) {
+                return body;
+            }
+        }
+        return body;
+    }
+
     private void saveResponse() {
         String text = responseBody.getText();
         if (text.isBlank()) {
@@ -1140,11 +1153,12 @@ public class ApiClientView extends JPanel {
         }
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Save Response");
-        String ext = responseBody.getSyntaxEditingStyle().contains("json")
+        String style = responseBody.getSyntaxEditingStyle();
+        String ext = style.contains("json")
                 ? ".json"
-                : responseBody.getSyntaxEditingStyle().contains("html")
+                : style.contains("html")
                         ? ".html"
-                        : responseBody.getSyntaxEditingStyle().contains("xml") ? ".xml" : ".txt";
+                        : style.contains("xml") ? ".xml" : style.contains("javascript") ? ".js" : ".txt";
         chooser.setSelectedFile(new java.io.File("response" + ext));
         if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
             try {
@@ -2717,11 +2731,10 @@ public class ApiClientView extends JPanel {
             responseSizeLabel.setForeground(new Color(0x8B, 0x94, 0x9E));
             responseSizeLabel.setVisible(true);
 
-            responseBody.setText(pf(resp.body()));
-            responseBody.setCaretPosition(0);
-
             String ct = resp.header("content-type");
             String syntax = detectSyntax(ct != null ? ct : "");
+            responseBody.setText(pf(autoPrettify(resp.body(), syntax)));
+            responseBody.setCaretPosition(0);
             responseBody.setSyntaxEditingStyle(syntax);
             selectResponseFormat(syntax);
 
@@ -2831,6 +2844,7 @@ public class ApiClientView extends JPanel {
             case SyntaxConstants.SYNTAX_STYLE_JSON -> "JSON";
             case SyntaxConstants.SYNTAX_STYLE_HTML -> "HTML";
             case SyntaxConstants.SYNTAX_STYLE_XML -> "XML";
+            case SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT -> "JS";
             default -> "Raw";
         };
         responseFormatCombo.setSelectedItem(fmt);

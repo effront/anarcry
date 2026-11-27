@@ -29,14 +29,15 @@ public class ScriptEngine {
                 }
             }
             function expect(actual) {
-                return {
-                    toBe: function(expected) {
+                var obj = {
+                    equal: function(expected) {
                         if (actual !== expected) {
                             throw new Error('Expected '
                                 + JSON.stringify(expected)
                                 + ' but got ' + JSON.stringify(actual));
                         }
                     },
+                    toBe: function(expected) { obj.equal(expected); },
                     toEqual: function(expected) {
                         if (JSON.stringify(actual) !== JSON.stringify(expected)) {
                             throw new Error('Expected '
@@ -44,16 +45,19 @@ public class ScriptEngine {
                                 + ' but got ' + JSON.stringify(actual));
                         }
                     },
+                    eql: function(expected) { obj.toEqual(expected); },
                     toBeGreaterThan: function(expected) {
                         if (!(actual > expected)) {
                             throw new Error('Expected ' + actual + ' to be greater than ' + expected);
                         }
                     },
+                    above: function(expected) { obj.toBeGreaterThan(expected); },
                     toBeLessThan: function(expected) {
                         if (!(actual < expected)) {
                             throw new Error('Expected ' + actual + ' to be less than ' + expected);
                         }
                     },
+                    below: function(expected) { obj.toBeLessThan(expected); },
                     toBeGreaterThanOrEqual: function(expected) {
                         if (!(actual >= expected)) {
                             throw new Error('Expected ' + actual + ' to be >= ' + expected);
@@ -67,30 +71,36 @@ public class ScriptEngine {
                     toContain: function(expected) {
                         if (typeof actual === 'string') {
                             if (actual.indexOf(expected) === -1) {
-                                throw new Error('Expected string to contain ' + JSON.stringify(expected));
+                                throw new Error('Expected string to contain '
+                                    + JSON.stringify(expected));
                             }
                         } else if (Array.isArray(actual)) {
                             if (actual.indexOf(expected) === -1) {
-                                throw new Error('Expected array to contain ' + JSON.stringify(expected));
+                                throw new Error('Expected array to contain '
+                                    + JSON.stringify(expected));
                             }
                         } else {
                             throw new Error('toContain requires a string or array');
                         }
                     },
+                    include: function(expected) { obj.toContain(expected); },
                     toHaveLength: function(expected) {
                         var len = actual ? actual.length : 0;
                         if (len !== expected) {
-                            throw new Error('Expected length ' + expected + ' but got ' + len);
+                            throw new Error('Expected length ' + expected
+                                + ' but got ' + len);
                         }
                     },
                     toBeTruthy: function() {
                         if (!actual) {
-                            throw new Error('Expected truthy but got ' + JSON.stringify(actual));
+                            throw new Error('Expected truthy but got '
+                                + JSON.stringify(actual));
                         }
                     },
                     toBeFalsy: function() {
                         if (actual) {
-                            throw new Error('Expected falsy but got ' + JSON.stringify(actual));
+                            throw new Error('Expected falsy but got '
+                                + JSON.stringify(actual));
                         }
                     },
                     toBeDefined: function() {
@@ -100,57 +110,92 @@ public class ScriptEngine {
                     },
                     toBeUndefined: function() {
                         if (actual !== undefined && actual !== null) {
-                            throw new Error('Expected undefined but got ' + JSON.stringify(actual));
+                            throw new Error('Expected undefined but got '
+                                + JSON.stringify(actual));
                         }
                     },
                     toMatch: function(pattern) {
-                        var regex = (typeof pattern === 'string') ? new RegExp(pattern) : pattern;
-                        if (!regex.test(actual)) {
-                            throw new Error('Expected ' + JSON.stringify(actual) + ' to match ' + pattern);
+                        var re = (typeof pattern === 'string')
+                            ? new RegExp(pattern) : pattern;
+                        if (!re.test(actual)) {
+                            throw new Error('Expected ' + JSON.stringify(actual)
+                                + ' to match ' + pattern);
                         }
                     },
+                    match: function(pattern) { obj.toMatch(pattern); },
                     toHaveProperty: function(prop) {
-                        if (actual === null || actual === undefined || !(prop in actual)) {
-                            throw new Error('Expected object to have property ' + JSON.stringify(prop));
+                        if (actual === null || actual === undefined
+                                || !(prop in actual)) {
+                            throw new Error('Expected object to have property '
+                                + JSON.stringify(prop));
                         }
                     },
+                    property: function(prop) { obj.toHaveProperty(prop); },
                     not: {
                         toBe: function(expected) {
                             if (actual === expected) {
-                                throw new Error('Expected not to be ' + JSON.stringify(expected));
+                                throw new Error('Expected not to be '
+                                    + JSON.stringify(expected));
+                            }
+                        },
+                        equal: function(expected) {
+                            if (actual === expected) {
+                                throw new Error('Expected not to equal '
+                                    + JSON.stringify(expected));
                             }
                         },
                         toEqual: function(expected) {
-                            if (JSON.stringify(actual) === JSON.stringify(expected)) {
-                                throw new Error('Expected not to equal ' + JSON.stringify(expected));
+                            if (JSON.stringify(actual)
+                                    === JSON.stringify(expected)) {
+                                throw new Error('Expected not to deep-equal '
+                                    + JSON.stringify(expected));
                             }
                         },
+                        eql: function(expected) { obj.not.toEqual(expected); },
                         toContain: function(expected) {
-                            if (typeof actual === 'string' && actual.indexOf(expected) !== -1) {
-                                throw new Error('Expected string not to contain ' + JSON.stringify(expected));
+                            if (typeof actual === 'string'
+                                    && actual.indexOf(expected) !== -1) {
+                                throw new Error('Expected string not to contain '
+                                    + JSON.stringify(expected));
                             }
-                            if (Array.isArray(actual) && actual.indexOf(expected) !== -1) {
-                                throw new Error('Expected array not to contain ' + JSON.stringify(expected));
+                            if (Array.isArray(actual)
+                                    && actual.indexOf(expected) !== -1) {
+                                throw new Error('Expected array not to contain '
+                                    + JSON.stringify(expected));
                             }
+                        },
+                        include: function(expected) {
+                            obj.not.toContain(expected);
                         },
                         toBeTruthy: function() {
                             if (actual) {
-                                throw new Error('Expected falsy but got ' + JSON.stringify(actual));
+                                throw new Error('Expected falsy but got '
+                                    + JSON.stringify(actual));
                             }
                         },
                         toBeDefined: function() {
                             if (actual !== undefined && actual !== null) {
-                                throw new Error('Expected undefined but got ' + JSON.stringify(actual));
+                                throw new Error('Expected undefined but got '
+                                    + JSON.stringify(actual));
                             }
                         },
                         toMatch: function(pattern) {
-                            var regex = (typeof pattern === 'string') ? new RegExp(pattern) : pattern;
-                            if (regex.test(actual)) {
-                                throw new Error('Expected ' + JSON.stringify(actual) + ' not to match ' + pattern);
+                            var re = (typeof pattern === 'string')
+                                ? new RegExp(pattern) : pattern;
+                            if (re.test(actual)) {
+                                throw new Error('Expected '
+                                    + JSON.stringify(actual)
+                                    + ' not to match ' + pattern);
                             }
+                        },
+                        match: function(pattern) {
+                            obj.not.toMatch(pattern);
                         }
                     }
                 };
+                obj.to = obj;
+                obj.not.to = obj.not;
+                return obj;
             }
             """;
 
@@ -252,7 +297,7 @@ public class ScriptEngine {
                     return map;
                 }).build();
 
-        try (Context context = Context.newBuilder("js").allowHostAccess(hostAccess)
+        try (Context context = Context.newBuilder("js", "regex").allowHostAccess(hostAccess)
                 .option("engine.WarnInterpreterOnly", "false").build()) {
 
             Value bindings = context.getBindings("js");
