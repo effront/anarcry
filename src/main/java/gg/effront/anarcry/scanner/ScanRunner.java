@@ -49,17 +49,17 @@ import gg.effront.anarcry.scanner.web.secrets.SecretsModule;
 import gg.effront.anarcry.scanner.web.cloud.CloudMisconfigModule;
 import gg.effront.anarcry.scanner.web.sqli.SqlInjectionModule;
 import gg.effront.anarcry.scanner.web.backendliveness.BackendLivenessModule;
-import gg.effront.anarcry.scanner.web.clerk.ClerkModule;
 import gg.effront.anarcry.scanner.web.clickjacking.ClickjackingModule;
 import gg.effront.anarcry.scanner.web.domsink.DomSinkModule;
-import gg.effront.anarcry.scanner.web.emailsec.EmailSecurityModule;
-import gg.effront.anarcry.scanner.web.errordisclosure.ErrorDisclosureModule;
-import gg.effront.anarcry.scanner.web.ratelimit.RateLimitModule;
 import gg.effront.anarcry.scanner.web.frameworkconfig.FrameworkConfigModule;
 import gg.effront.anarcry.scanner.web.jsanalyzer.JsAnalyzerModule;
 import gg.effront.anarcry.scanner.web.subtakeover.SubdomainTakeoverModule;
 import gg.effront.anarcry.scanner.web.upload.FileUploadModule;
 import gg.effront.anarcry.scanner.web.websocket.WebSocketModule;
+import gg.effront.anarcry.scanner.web.authflow.AuthFlowModule;
+import gg.effront.anarcry.scanner.web.cspdiscovery.CspApiDiscoveryModule;
+import gg.effront.anarcry.scanner.web.idorcross.IdorCrossTenantModule;
+import gg.effront.anarcry.scanner.web.swagger.SwaggerDiscoveryModule;
 import gg.effront.anarcry.scanner.web.xss.XssModule;
 
 import java.util.ArrayList;
@@ -69,6 +69,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -88,6 +89,7 @@ public class ScanRunner {
     private final List<String> testedModules = Collections.synchronizedList(new ArrayList<>());
     private final List<Finding> accumulatedFindings = Collections.synchronizedList(new ArrayList<>());
     private volatile List<ValidatedFinding> lastValidatedFindings = List.of();
+    private final List<FindingListener> findingListeners = new CopyOnWriteArrayList<>();
     private final List<Scanner> customModules = new ArrayList<>();
     private volatile ExecutorService executor = newScanExecutor();
     private volatile ExecutorService modulePool = newModulePool();
@@ -114,6 +116,15 @@ public class ScanRunner {
     }
     public void setOnScanEvent(Consumer<ScanEvent> cb) {
         this.eventCb = cb;
+    }
+
+    /**
+     * Registers a FindingListener that will be called for every finding as it is
+     * discovered, before deduplication and suppression. Thread-safe -- listeners
+     * are stored in a CopyOnWriteArrayList and may be added at any time.
+     */
+    public void addFindingListener(FindingListener listener) {
+        findingListeners.add(listener);
     }
 
     /**
@@ -323,17 +334,17 @@ public class ScanRunner {
         if (ctx.has("Clickjacking")) {
             modules.add(new ClickjackingModule());
         }
-        if (ctx.has("RateLimit")) {
-            modules.add(new RateLimitModule());
+        if (ctx.has("SwaggerDiscovery")) {
+            modules.add(new SwaggerDiscoveryModule());
         }
-        if (ctx.has("EmailSec")) {
-            modules.add(new EmailSecurityModule());
+        if (ctx.has("IdorCrossTenant")) {
+            modules.add(new IdorCrossTenantModule());
         }
-        if (ctx.has("Clerk")) {
-            modules.add(new ClerkModule());
+        if (ctx.has("AuthFlow")) {
+            modules.add(new AuthFlowModule());
         }
-        if (ctx.has("ErrorDisclosure")) {
-            modules.add(new ErrorDisclosureModule());
+        if (ctx.has("CspApiDiscovery")) {
+            modules.add(new CspApiDiscoveryModule());
         }
         modules.addAll(customModules);
 
@@ -361,6 +372,9 @@ public class ScanRunner {
             try {
                 List<Finding> findings = enricher.scan(ctx, safeLog);
                 for (Finding f : findings) {
+                    notifyFindingListeners(f);
+                    eventCb.accept(new ScanEvent(ScanEvent.Type.FINDING_DISCOVERED, enricher.id(), moduleIndex,
+                            moduleCount, findings.size()));
                     String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
                     if (seenFindings.add(dedupKey)) {
                         if (ctx.config().isSuppressed(f.module(), f.title(), ctx.host())) {
@@ -763,6 +777,9 @@ public class ScanRunner {
                         } else {
                             recordModuleResult(module.id(), findings);
                             for (Finding f : findings) {
+                                notifyFindingListeners(f);
+                                eventCb.accept(new ScanEvent(ScanEvent.Type.FINDING_DISCOVERED, module.id(),
+                                        moduleIndex, moduleCount, findings.size()));
                                 String dedupKey = f.module() + "|" + f.endpoint() + "|" + f.title();
                                 if (seenFindings.add(dedupKey)) {
                                     if (scanCtx.config().isSuppressed(f.module(), f.title(), scanCtx.host())) {
@@ -829,6 +846,9 @@ public class ScanRunner {
                                     "Validar e sanitizar todos os inputs que podem resultar em requisicoes "
                                             + "server-side. Bloquear conexoes de saida do servidor para destinos "
                                             + "nao-autorizados. Implementar allowlist de hosts/IPs permitidos.");
+                            notifyFindingListeners(f);
+                            eventCb.accept(new ScanEvent(ScanEvent.Type.FINDING_DISCOVERED, f.module(), 0, moduleCount,
+                                    hits.size()));
                             if (!scanCtx.config().isSuppressed(f.module(), f.title(), scanCtx.host())) {
                                 findingCb.accept(f);
                                 accumulatedFindings.add(f);
@@ -902,6 +922,8 @@ public class ScanRunner {
                                 + "Copiar cookies de sessao pos-challenge e usar no campo Session Cookie do scanner. "
                                 + "Considerar headless browser com solve de challenge para automacao.",
                         "", "", "", 0.0);
+                notifyFindingListeners(f);
+                eventCb.accept(new ScanEvent(ScanEvent.Type.FINDING_DISCOVERED, "WAF", 0, moduleCount, 1));
                 findingCb.accept(f);
                 total[0]++;
             }
@@ -909,6 +931,16 @@ public class ScanRunner {
 
         eventCb.accept(new ScanEvent(ScanEvent.Type.SCAN_DONE, null, moduleCount, moduleCount));
         safeLog.accept("[*] Scan concluido -- " + total[0] + " finding(s) no total");
+    }
+
+    private void notifyFindingListeners(Finding finding) {
+        for (FindingListener listener : findingListeners) {
+            try {
+                listener.onFinding(finding);
+            } catch (Exception ignored) {
+                // Listener errors must not break the scan pipeline
+            }
+        }
     }
 
     private void recordModuleResult(String moduleId, List<Finding> findings) {

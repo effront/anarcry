@@ -10,6 +10,7 @@ import gg.effront.anarcry.fuzzer.PayloadProcessor;
 import gg.effront.anarcry.fuzzer.PayloadSource;
 import gg.effront.anarcry.fuzzer.RangePayloadSource;
 import gg.effront.anarcry.gui.AnarCryGui;
+import gg.effront.anarcry.mcp.McpServer;
 import gg.effront.anarcry.util.HttpRequestUtil;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.report.ReportEngine;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 public class Main {
 
@@ -43,7 +45,10 @@ public class Main {
         EnvLoader env = null;
         boolean headless = false;
         boolean tui = false;
+        boolean mcp = false;
+        int mcpPort = McpServer.DEFAULT_PORT;
         String target = null;
+        String modules = null;
         String format = "anarcry";
         String fuzzConfig = null;
         int timeoutMinutes = HEADLESS_TIMEOUT_MINUTES;
@@ -66,8 +71,18 @@ public class Main {
             } else if ("--fuzz".equals(arg) && idx + 1 < args.length) {
                 fuzzConfig = args[idx + 1];
                 idx += 2;
+            } else if ("--mcp".equals(arg)) {
+                mcp = true;
+                idx++;
+            } else if ("--mcp-port".equals(arg) && idx + 1 < args.length) {
+                mcpPort = Integer.parseInt(args[idx + 1]);
+                mcp = true;
+                idx += 2;
             } else if ("--target".equals(arg) && idx + 1 < args.length) {
                 target = args[idx + 1];
+                idx += 2;
+            } else if ("--modules".equals(arg) && idx + 1 < args.length) {
+                modules = args[idx + 1];
                 idx += 2;
             } else if ("--timeout".equals(arg) && idx + 1 < args.length) {
                 timeoutMinutes = Integer.parseInt(args[idx + 1]);
@@ -92,13 +107,33 @@ public class Main {
 
         if (fuzzConfig != null) {
             runFuzz(fuzzConfig);
+        } else if (mcp) {
+            runMcp(mcpPort);
         } else if (headless) {
-            runHeadless(env, target, timeoutMinutes, format);
+            runHeadless(env, target, modules, timeoutMinutes, format);
         } else if (tui) {
             new AnarCryTui().start(env);
         } else {
             new AnarCryGui().start(env);
         }
+    }
+
+    private static void runMcp(int port) throws Exception {
+        System.out.println("[*] AnarCry MCP Server starting on port " + port);
+        McpServer server = new McpServer(port, System.out::println);
+        server.start();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("[~] Shutdown signal received");
+            server.close();
+        }));
+
+        try {
+            Thread.currentThread().join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        server.close();
     }
 
     private static void runFuzz(String configFile) throws Exception {
@@ -196,8 +231,8 @@ public class Main {
         System.exit(0);
     }
 
-    private static void runHeadless(EnvLoader env, String targetArg, int timeoutMinutes, String format)
-            throws Exception {
+    private static void runHeadless(EnvLoader env, String targetArg, String modulesArg, int timeoutMinutes,
+            String format) throws Exception {
         String target = targetArg;
         String jwt1 = "";
         String jwt2 = "";
@@ -218,20 +253,25 @@ public class Main {
             target = "https://" + target;
         }
 
-        Set<String> modules = ScanOrchestrator.defaultModules();
+        Set<String> modules = resolveModules(modulesArg);
         List<Finding> findings = Collections.synchronizedList(new ArrayList<>());
         CountDownLatch done = new CountDownLatch(1);
 
-        ScanRunner runner = new ScanRunner(System.out::println, f -> {
+        // All log output goes to stderr -- stdout is reserved for structured output
+        Consumer<String> log = System.err::println;
+
+        ScanRunner runner = new ScanRunner(log, f -> {
             findings.add(f);
-            System.out.printf("[FINDING] %-8s %-16s %s%n", f.severity(), f.module(), f.title());
+            System.err.printf("[FINDING] %-8s %-16s %s%n", f.severity(), f.module(), f.title());
         });
         runner.setOnScanFinish(done::countDown);
 
         ScanContext ctx = ScanOrchestrator.buildContext(target, jwt1, jwt2, modules);
 
-        System.out.println("[*] AnarCry headless scan: " + target);
-        System.out.println("[*] Modulos: " + modules.size());
+        log.accept("[*] AnarCry headless scan: " + target);
+        log.accept("[*] Modulos (" + modules.size() + "): " + String.join(", ", modules));
+        log.accept("[*] Format: " + format);
+        log.accept("[*] Timeout: " + timeoutMinutes + " minutos");
         runner.run(ctx);
 
         boolean finished = done.await(timeoutMinutes, TimeUnit.MINUTES);
@@ -241,20 +281,91 @@ public class Main {
             System.err.println("[!] Scan timeout apos " + timeoutMinutes + " minutos");
         }
 
-        System.out.println("\n[*] " + findings.size() + " finding(s)");
-        findings.stream().sorted(Comparator.comparingInt(f -> f.severity().ordinal()))
-                .forEach(f -> System.out.printf("  %-8s [%s] %s%n", f.severity(), f.module(), f.title()));
+        System.err.println("[*] " + findings.size() + " finding(s)");
 
-        if (!findings.isEmpty()) {
-            ReportEngine engine = new ReportEngine();
-            List<Finding> snapshot = new ArrayList<>(findings);
-            String report = switch (format.toLowerCase()) {
-                case "h1" -> engine.exportH1(snapshot, target, "AnarCry Scan");
-                case "bugcrowd" -> engine.exportBugcrowd(snapshot, target);
-                case "sarif" -> engine.exportSarif(snapshot, target);
-                default -> engine.export(snapshot, target);
-            };
-            System.out.println("\n[*] Report: " + report);
+        // Output structured results to stdout
+        List<Finding> snapshot = new ArrayList<>(findings);
+        snapshot.sort(Comparator.comparingInt(f -> f.severity().ordinal()));
+
+        ReportEngine engine = new ReportEngine();
+        String output = switch (format.toLowerCase()) {
+            case "json" -> engine.toJson(snapshot);
+            case "md" -> buildMarkdownStdout(snapshot, target);
+            case "h1" -> {
+                engine.exportH1(snapshot, target, "AnarCry Scan");
+                yield engine.toJson(snapshot);
+            }
+            case "bugcrowd" -> {
+                engine.exportBugcrowd(snapshot, target);
+                yield engine.toJson(snapshot);
+            }
+            case "sarif" -> {
+                engine.exportSarif(snapshot, target);
+                yield engine.toJson(snapshot);
+            }
+            default -> engine.toJson(snapshot);
+        };
+        System.out.println(output);
+        System.out.flush();
+
+        System.exit(finished ? 0 : 1);
+    }
+
+    private static Set<String> resolveModules(String modulesArg) {
+        if (modulesArg == null || modulesArg.isBlank()) {
+            return ScanOrchestrator.defaultModules();
         }
+        Set<String> requested = new java.util.LinkedHashSet<>();
+        for (String m : modulesArg.split(",")) {
+            String trimmed = m.trim();
+            if (!trimmed.isEmpty()) {
+                if (ScanOrchestrator.ALL_MODULES.contains(trimmed)) {
+                    requested.add(trimmed);
+                } else {
+                    System.err.println("[!] Modulo desconhecido: " + trimmed + " -- disponiveis: "
+                            + String.join(", ", ScanOrchestrator.ALL_MODULES));
+                    System.exit(1);
+                }
+            }
+        }
+        if (requested.isEmpty()) {
+            System.err.println("[!] Nenhum modulo valido especificado");
+            System.exit(1);
+        }
+        return requested;
+    }
+
+    private static String buildMarkdownStdout(List<Finding> findings, String targetUrl) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("# AnarCry Headless Scan\n\n");
+        sb.append("**Target:** ").append(targetUrl).append("\n");
+        sb.append("**Findings:** ").append(findings.size()).append("\n\n");
+        if (findings.isEmpty()) {
+            sb.append("No vulnerabilities detected.\n");
+            return sb.toString();
+        }
+        sb.append("| Severity | CVSS | CWE | Module | Endpoint | Title |\n");
+        sb.append("|----------|------|-----|--------|----------|-------|\n");
+        for (Finding f : findings) {
+            sb.append("| ").append(f.severity()).append(" | ").append(String.format("%.1f", f.cvssScore()))
+                    .append(" | ").append(f.cweId()).append(" | ").append(f.module()).append(" | ")
+                    .append(f.endpoint().replace("|", "\\|")).append(" | ").append(f.title().replace("|", "\\|"))
+                    .append(" |\n");
+        }
+        sb.append("\n");
+        for (Finding f : findings) {
+            sb.append("## ").append(f.module()).append(": ").append(f.title()).append("\n\n");
+            sb.append("**Severity:** ").append(f.severity()).append(" (CVSS ")
+                    .append(String.format("%.1f", f.cvssScore())).append(")\n");
+            sb.append("**Endpoint:** `").append(f.endpoint()).append("`\n");
+            sb.append("**CWE:** ").append(f.cweId()).append(" -- ").append(f.cweTitle()).append("\n\n");
+            sb.append("**Evidence:**\n```\n").append(f.evidence() != null ? f.evidence() : "").append("\n```\n\n");
+            sb.append("**Impact:** ").append(f.impact() != null ? f.impact() : "").append("\n\n");
+            sb.append("**Reproduction:**\n```\n").append(f.reproduction() != null ? f.reproduction() : "")
+                    .append("\n```\n\n");
+            sb.append("**Recommendation:** ").append(f.recommendation() != null ? f.recommendation() : "")
+                    .append("\n\n---\n\n");
+        }
+        return sb.toString();
     }
 }
