@@ -48,9 +48,12 @@ public class AuthFlowModule implements Scanner {
             "/api/password-reset", "/api/forgot-password", "/api/auth/forgot-password", "/api/v1/auth/forgot-password",
             "/api/auth/reset-password", "/api/v1/password/reset");
 
-    private static final String LOGIN_BODY_VALID = "{\"email\":\"test@example.com\",\"password\":\"TestPass123!\"}";
-    private static final String LOGIN_BODY_INVALID = "{\"email\":\"nonexistent@example.com\",\"password\":\"WrongPass!\"}";
-    private static final String LOGIN_BODY_VALID_USER = "{\"email\":\"test@example.com\",\"password\":\"WrongPass!\"}";
+    private static final String TEST_EMAIL = "test@example.com";
+    private static final String FAKE_EMAIL = "noexist@example.com";
+    private static final String LOGIN_BODY_VALID = "{\"email\":\"" + TEST_EMAIL + "\",\"password\":\"TestPass123!\"}";
+    private static final String LOGIN_BODY_INVALID = "{\"email\":\"" + FAKE_EMAIL + "\",\"password\":\"WrongPass!\"}";
+    private static final String LOGIN_BODY_VALID_USER = "{\"email\":\"" + TEST_EMAIL
+            + "\",\"password\":\"WrongPass!\"}";
 
     private static final Pattern SESSION_COOKIE = Pattern.compile(
             "(?:JSESSIONID|PHPSESSID|session|sess_id|connect\\.sid|_session)=([^;]+)", Pattern.CASE_INSENSITIVE);
