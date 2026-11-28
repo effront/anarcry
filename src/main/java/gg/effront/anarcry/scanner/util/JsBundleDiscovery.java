@@ -27,7 +27,7 @@ public final class JsBundleDiscovery {
 
     // Next.js chunk references: "static/chunks/xxx-hash.js"
     private static final Pattern NEXT_CHUNK_PATH = Pattern
-            .compile("\"((?:static/chunks|_next/static/chunks)/[A-Za-z0-9_.-]+\\.js)\"");
+            .compile("\"((?:static/chunks|_next/static/chunks)/[A-Za-z0-9_/.()-]+\\.js)\"");
 
     // Webpack/Vite manifest: chunk map entries
     private static final Pattern MANIFEST_ENTRY = Pattern.compile("\"([^\"]+\\.js)\"\\s*:");

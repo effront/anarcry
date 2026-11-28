@@ -80,6 +80,12 @@ public record ScanContext(String targetUrl, String jwtToken, String jwtToken2, S
         return targetUrl.toLowerCase().startsWith("https://");
     }
 
+    public String baseUrl() {
+        String scheme = isHttps() ? "https" : "http";
+        int defPort = isHttps() ? 443 : 80;
+        return scheme + "://" + host() + (port() != defPort ? ":" + port() : "");
+    }
+
     public boolean has(String module) {
         return enabledModules.contains(module);
     }

@@ -166,7 +166,12 @@ public class GuiModulesPanel extends JPanel {
         checksPanel.add(moduleCheck("JsAnalyzer", false, "Extracts API endpoints from JS fetch/axios calls"));
         checksPanel
                 .add(moduleCheck("DomSinks", false, "Detects dangerous DOM sinks (innerHTML, eval, document.write)"));
+        checksPanel.add(moduleCheck("SwaggerDiscovery", false, "Discovers exposed Swagger/OpenAPI specs"));
         checksPanel.add(moduleCheck("IDOR", false, "Requires two auth tokens (JWT Token 2) for cross-user testing"));
+        checksPanel.add(
+                moduleCheck("IdorCrossTenant", false, "Cross-tenant write IDOR via PUT/PATCH/DELETE (needs 2 tokens)"));
+        checksPanel.add(moduleCheck("AuthFlow", false, "Analyzes auth flow for enumeration, fixation, lockout gaps"));
+        checksPanel.add(moduleCheck("CspApiDiscovery", false, "Discovers API endpoints from CSP headers"));
         moduleChecks.get("IDOR").addActionListener(e -> updateCredentialFields());
 
         checksPanel.add(Box.createVerticalStrut(12));

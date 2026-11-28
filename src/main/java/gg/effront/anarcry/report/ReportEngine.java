@@ -13,6 +13,7 @@ import gg.effront.anarcry.model.Severity;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -57,6 +58,66 @@ public class ReportEngine {
         List<Finding> sorted = findings.stream().sorted(Comparator.comparingInt(f -> ORDER.indexOf(f.severity())))
                 .toList();
         return GSON.toJson(sorted);
+    }
+
+    // -------------------------------------------------------------------------
+    // Structured JSON report -- full metadata for headless/CLI output
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns a structured JSON string with scan metadata, severity breakdown, and
+     * all findings. Suitable for stdout in headless mode or for piping into other
+     * tools.
+     */
+    public String generateJsonString(List<Finding> findings, String targetUrl) {
+        List<Finding> sorted = findings.stream().sorted(Comparator.comparingInt(f -> ORDER.indexOf(f.severity())))
+                .toList();
+
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("scanDate", Instant.now().toString());
+        report.put("targetUrl", targetUrl);
+        report.put("totalFindings", sorted.size());
+
+        Map<String, Long> bySeverity = new LinkedHashMap<>();
+        for (Severity s : ORDER) {
+            long count = sorted.stream().filter(f -> f.severity() == s).count();
+            bySeverity.put(s.name(), count);
+        }
+        report.put("bySeverity", bySeverity);
+
+        List<Map<String, Object>> findingsList = new ArrayList<>();
+        for (Finding f : sorted) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("module", f.module());
+            entry.put("endpoint", f.endpoint());
+            entry.put("title", f.title());
+            entry.put("severity", f.severity().name());
+            entry.put("evidence", f.evidence());
+            entry.put("impact", f.impact());
+            entry.put("reproduction", f.reproduction());
+            entry.put("recommendation", f.recommendation());
+            entry.put("cweId", f.cweId());
+            entry.put("cvssScore", f.cvssScore());
+            entry.put("cvssVector", f.cvssVector());
+            findingsList.add(entry);
+        }
+        report.put("findings", findingsList);
+
+        return GSON.toJson(report);
+    }
+
+    /**
+     * Writes the structured JSON report to the reports directory and returns the
+     * file path. The file includes scan metadata, severity breakdown, and all
+     * findings sorted by severity.
+     */
+    public String generateJson(List<Finding> findings, String targetUrl) throws IOException {
+        String json = generateJsonString(findings, targetUrl);
+        String timestamp = LocalDateTime.now().format(FMT);
+        Files.createDirectories(REPORTS_DIR);
+        Path path = REPORTS_DIR.resolve("anarcry-report-" + timestamp + ".json");
+        Files.writeString(path, json);
+        return path.toString();
     }
 
     private String buildMarkdown(List<Finding> findings, String targetUrl, String timestamp, List<String> testedModules,
@@ -708,6 +769,42 @@ public class ReportEngine {
         Files.writeString(mdPath, sb.toString());
         return mdPath.toString();
     }
+
+    // -------------------------------------------------------------------------
+    // SARIF via SarifBuilder (multi-run support)
+    // -------------------------------------------------------------------------
+
+    public String generateSarif(List<Finding> findings, String targetUrl) {
+        List<Finding> sorted = findings.stream().sorted(Comparator.comparingInt(f -> ORDER.indexOf(f.severity())))
+                .toList();
+        SarifBuilder builder = new SarifBuilder();
+        builder.addAnarCryRun(sorted, targetUrl);
+        return builder.build();
+    }
+
+    // -------------------------------------------------------------------------
+    // Fusion report (AnarCry + ARTEX combined)
+    // -------------------------------------------------------------------------
+
+    public String generateFusionReport(List<Finding> local, List<Finding> remote, String targetUrl) throws IOException {
+        FusionReport fusion = new FusionReport(local, remote, targetUrl);
+
+        String timestamp = LocalDateTime.now().format(FMT);
+        String base = "fusion-report-" + timestamp;
+
+        Files.createDirectories(REPORTS_DIR);
+        Path mdPath = REPORTS_DIR.resolve(base + ".md");
+        Path jsonPath = REPORTS_DIR.resolve(base + ".json");
+
+        Files.writeString(mdPath, fusion.generateMarkdown());
+        Files.writeString(jsonPath, fusion.generateJson());
+
+        return mdPath.toString();
+    }
+
+    // -------------------------------------------------------------------------
+    // Internal helpers
+    // -------------------------------------------------------------------------
 
     private static String truncate(String s, int max) {
         if (s == null) {

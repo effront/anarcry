@@ -45,14 +45,15 @@ public class CrawlerModule implements Scanner {
             "/.git/config", "/.git/HEAD", "/git/config", "/wp-admin", "/wp-login.php", "/xmlrpc.php", "/phpmyadmin",
             "/phpinfo.php", "/console", "/rails/info/properties", "/rails/mailers", "/debug", "/trace", "/test",
             "/demo", "/upload", "/uploads", "/files", "/static", "/assets", "/public", "/resources", "/internal",
-            "/private", "/secret", "/v1", "/v2", "/v3", "/api/v1/users", "/api/v2/users");
+            "/private", "/secret", "/v1", "/v2", "/v3", "/api/v1/users", "/api/v2/users", "/trpc", "/api/uploadthing",
+            "/api/session/properties", "/api/oembed", "/v1/environment", "/_next/data", "/webhooks", "/manifest.json");
 
     private static final List<String> OPENAPI_PATHS = List.of("/swagger.json", "/openapi.json", "/openapi.yaml",
             "/api-docs", "/v2/api-docs", "/v3/api-docs", "/swagger-ui.html", "/swagger-ui/index.html");
 
     // Regex para extrair paths de JS
-    private static final Pattern PATH_PATTERN = Pattern
-            .compile("[\"'](\\/(?:api|v[0-9]|graphql|auth|user|admin)[\\w/.\\-]{0,100})[\"']");
+    private static final Pattern PATH_PATTERN = Pattern.compile("[\"'](\\/(?:api|trpc|upload|session|webhook|oembed"
+            + "|v[0-9]|graphql|auth|user|admin)[\\w/.\\-]{0,100})[\"']");
 
     @Override
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {

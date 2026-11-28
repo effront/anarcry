@@ -68,6 +68,43 @@ public class JsAnalyzerModule implements Scanner {
     // Template literal parameter pattern: ${...} -> {param}
     private static final Pattern TEMPLATE_PARAM = Pattern.compile("\\$\\{([^}]+)\\}");
 
+    // -- tRPC patterns --
+
+    private static final Pattern TRPC_HOOK = Pattern.compile("\\w+\\.(\\w+)\\.(\\w+)\\.(useQuery|useMutation)");
+
+    private static final Pattern TRPC_CONCAT_URL = Pattern
+            .compile("\\.concat\\s*\\(\\s*[\"']([^\"']+)[\"']\\s*,\\s*[\"']/trpc[\"']\\)");
+
+    private static final Pattern TRPC_URL = Pattern.compile("url\\s*:\\s*[\"']([^\"']*/trpc)[\"']");
+
+    // -- UploadThing patterns --
+
+    private static final Pattern UPLOADTHING_SLUG = Pattern
+            .compile("(?:endpoint|slug)\\s*[=:]\\s*[\"']([a-zA-Z]+(?:Uploader|Upload)[a-zA-Z]*)[\"']");
+
+    private static final Pattern UPLOADTHING_CALL = Pattern
+            .compile("(?:startUpload|useUploadThing)\\s*\\(\\s*[\"']([a-zA-Z]+(?:Uploader|uploader))[\"']");
+
+    // -- Next.js Server Actions --
+
+    private static final Pattern SERVER_ACTION_REF = Pattern.compile(
+            "createServerReference\\s*\\(\\s*[\"']([0-9a-f]{20,50})[\"'](?:[^)]*,\\s*[\"']([a-zA-Z_]+)[\"'])?");
+
+    // -- Analytics key patterns --
+
+    private static final Pattern POSTHOG_INIT = Pattern
+            .compile("(?:posthog|PostHog)\\s*\\.\\s*init\\s*\\(\\s*[\"']?([^\"',)]+)[\"']?");
+
+    private static final Pattern PHC_KEY = Pattern.compile("phc_[A-Za-z0-9_-]{20,}");
+
+    private static final Pattern PK_KEY = Pattern.compile("pk_(?:live|test)_[A-Za-z0-9_-]{20,}");
+
+    // -- Environment / config leaks --
+
+    private static final Pattern NEXT_PUBLIC_ENV = Pattern.compile("(?:env|process\\.env)\\.?(NEXT_PUBLIC_[A-Z_]+)");
+
+    private static final Pattern ISSUE_TRACKER_REF = Pattern.compile("[\"']([A-Z]{2,10}-\\d{1,6})[\"']");
+
     /** Represents a single discovered API endpoint from JS analysis. */
     private record ApiEndpoint(String method, String path, String contentType, boolean hasAuth) {
     }
@@ -85,6 +122,11 @@ public class JsAnalyzerModule implements Scanner {
         Set<String> jsUrls = new LinkedHashSet<>();
         List<ApiEndpoint> allEndpoints = new ArrayList<>();
         Set<String> seenEndpoints = new HashSet<>();
+        Set<String> trpcBaseUrls = new LinkedHashSet<>();
+        Set<String> serverActions = new LinkedHashSet<>();
+        Set<String> analyticsKeys = new LinkedHashSet<>();
+        Set<String> envVarRefs = new LinkedHashSet<>();
+        Set<String> issueRefs = new LinkedHashSet<>();
 
         String base = ctx.targetUrl().replaceAll("/+$", "");
 
@@ -102,6 +144,7 @@ public class JsAnalyzerModule implements Scanner {
                 continue;
             }
             analyzeJsContent(body, jsUrl, allEndpoints, seenEndpoints, log);
+            analyzeFrameworkMetadata(body, trpcBaseUrls, serverActions, analyticsKeys, envVarRefs, issueRefs);
         }
 
         // Phase 3: Feed discovered API paths into discoveredPaths
@@ -168,6 +211,76 @@ public class JsAnalyzerModule implements Scanner {
                                 + "sole access control. Implement proper RBAC and session "
                                 + "validation on the backend."));
             }
+        }
+
+        // Phase 5: Framework metadata findings
+        if (!trpcBaseUrls.isEmpty()) {
+            StringBuilder ev = new StringBuilder("tRPC base URL(s) detected:\n");
+            for (String url : trpcBaseUrls) {
+                ev.append("  ").append(url).append("\n");
+            }
+            findings.add(Finding.of(id(), base, "tRPC Base URL Exposed in JS Bundle", Severity.INFO, ev.toString(),
+                    "tRPC endpoint base URL is embedded in client JavaScript, "
+                            + "revealing the RPC API surface for enumeration.",
+                    "curl -s '" + base + "' | grep -oE '/trpc'",
+                    "Ensure all tRPC procedures enforce server-side " + "authentication and authorization."));
+        }
+
+        if (!serverActions.isEmpty()) {
+            StringBuilder ev = new StringBuilder("Next.js Server Action references:\n");
+            for (String action : serverActions) {
+                ev.append("  ").append(action).append("\n");
+            }
+            findings.add(Finding.of(id(), base, "Next.js Server Actions Exposed in JS Bundle", Severity.INFO,
+                    ev.toString(),
+                    "Server Action hashes embedded in client bundles allow direct "
+                            + "invocation via POST with the Next-Action header.",
+                    "curl -X POST '" + base + "' -H 'Next-Action: <hash>' -H 'Content-Type: text/plain;charset=UTF-8'",
+                    "Ensure Server Actions validate authentication and input. "
+                            + "Do not expose sensitive operations as Server Actions "
+                            + "without proper access control."));
+        }
+
+        if (!analyticsKeys.isEmpty()) {
+            StringBuilder ev = new StringBuilder("Analytics/tracking keys found in JS:\n");
+            for (String key : analyticsKeys) {
+                ev.append("  ").append(key).append("\n");
+            }
+            findings.add(Finding.of(id(), base, "Analytics Keys Exposed in JS Bundle", Severity.LOW, ev.toString(),
+                    "Exposed analytics project keys allow attackers to pollute "
+                            + "analytics data or enumerate project configuration.",
+                    "curl -s '" + base + "' | grep -oE 'phc_[A-Za-z0-9_-]+'",
+                    "Rotate exposed keys if they grant write access. "
+                            + "Use server-side proxying for analytics to avoid "
+                            + "exposing project keys in client bundles."));
+        }
+
+        if (!envVarRefs.isEmpty()) {
+            StringBuilder ev = new StringBuilder("NEXT_PUBLIC environment variables referenced:\n");
+            for (String v : envVarRefs) {
+                ev.append("  ").append(v).append("\n");
+            }
+            findings.add(Finding.of(id(), base, "NEXT_PUBLIC Environment Variables in JS Bundle", Severity.INFO,
+                    ev.toString(),
+                    "NEXT_PUBLIC_ prefixed environment variables are inlined into "
+                            + "client bundles at build time, revealing application configuration.",
+                    "curl -s '" + base + "' | grep -oE 'NEXT_PUBLIC_[A-Z_]+'",
+                    "Audit all NEXT_PUBLIC_ variables to ensure no secrets or "
+                            + "internal infrastructure details are exposed. Use "
+                            + "server-side environment variables for sensitive config."));
+        }
+
+        if (!issueRefs.isEmpty()) {
+            StringBuilder ev = new StringBuilder("Issue tracker references found in JS:\n");
+            for (String ref : issueRefs) {
+                ev.append("  ").append(ref).append("\n");
+            }
+            findings.add(Finding.of(id(), base, "Issue Tracker References in JS Bundle", Severity.INFO, ev.toString(),
+                    "Internal issue tracker IDs (Jira, Linear) embedded in client "
+                            + "code reveal project management details and feature flags.",
+                    "curl -s '" + base + "' | grep -oE '[A-Z]+-[0-9]+'",
+                    "Remove hardcoded issue tracker references from production "
+                            + "bundles. Use feature flag systems instead of ticket IDs."));
         }
 
         if (findings.isEmpty()) {
@@ -256,8 +369,80 @@ public class JsAnalyzerModule implements Scanner {
             endpoints.add(new ApiEndpoint(method, path, null, hasAuth));
         }
 
+        // 6. tRPC React hook calls
+        Matcher trpcHookMatcher = TRPC_HOOK.matcher(content);
+        while (trpcHookMatcher.find()) {
+            String namespace = trpcHookMatcher.group(1);
+            String procedure = trpcHookMatcher.group(2);
+            String path = "/trpc/" + namespace + "." + procedure + "?batch=1";
+            if (!seenEndpoints.add("trpc|" + path)) {
+                continue;
+            }
+            endpoints.add(new ApiEndpoint("POST", path, "application/json", false));
+        }
+
+        // 7. UploadThing slugs
+        Set<String> utSlugs = new HashSet<>();
+        Matcher utSlugMatcher = UPLOADTHING_SLUG.matcher(content);
+        while (utSlugMatcher.find()) {
+            utSlugs.add(utSlugMatcher.group(1));
+        }
+        Matcher utCallMatcher = UPLOADTHING_CALL.matcher(content);
+        while (utCallMatcher.find()) {
+            utSlugs.add(utCallMatcher.group(1));
+        }
+        for (String slug : utSlugs) {
+            String path = "/api/uploadthing?slug=" + slug + "&actionType=upload";
+            if (!seenEndpoints.add("uploadthing|" + slug)) {
+                continue;
+            }
+            endpoints.add(new ApiEndpoint("POST", path, "multipart/form-data", false));
+        }
+
         if (!endpoints.isEmpty()) {
             log.accept("[+] " + id() + ": extracted endpoints from " + jsUrl);
+        }
+    }
+
+    private static void analyzeFrameworkMetadata(String content, Set<String> trpcBaseUrls, Set<String> serverActions,
+            Set<String> analyticsKeys, Set<String> envVarRefs, Set<String> issueRefs) {
+        Matcher concatMatcher = TRPC_CONCAT_URL.matcher(content);
+        while (concatMatcher.find()) {
+            trpcBaseUrls.add(concatMatcher.group(1) + "/trpc");
+        }
+        Matcher trpcUrlMatcher = TRPC_URL.matcher(content);
+        while (trpcUrlMatcher.find()) {
+            trpcBaseUrls.add(trpcUrlMatcher.group(1));
+        }
+
+        Matcher saMatcher = SERVER_ACTION_REF.matcher(content);
+        while (saMatcher.find()) {
+            String hash = saMatcher.group(1);
+            String name = saMatcher.group(2);
+            serverActions.add(name != null ? name + " (" + hash + ")" : hash);
+        }
+
+        Matcher phMatcher = POSTHOG_INIT.matcher(content);
+        while (phMatcher.find()) {
+            analyticsKeys.add("posthog:" + phMatcher.group(1).trim());
+        }
+        Matcher phcMatcher = PHC_KEY.matcher(content);
+        while (phcMatcher.find()) {
+            analyticsKeys.add(phcMatcher.group());
+        }
+        Matcher pkMatcher = PK_KEY.matcher(content);
+        while (pkMatcher.find()) {
+            analyticsKeys.add(pkMatcher.group());
+        }
+
+        Matcher envMatcher = NEXT_PUBLIC_ENV.matcher(content);
+        while (envMatcher.find()) {
+            envVarRefs.add(envMatcher.group(1));
+        }
+
+        Matcher issueMatcher = ISSUE_TRACKER_REF.matcher(content);
+        while (issueMatcher.find()) {
+            issueRefs.add(issueMatcher.group(1));
         }
     }
 

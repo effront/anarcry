@@ -37,6 +37,7 @@ import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -160,6 +161,7 @@ public class FtpExplorerView extends JPanel {
     private JTextArea fileInfoArea;
     private JTextArea logArea;
     private DefaultTableModel sensitiveTableModel;
+    private JTextArea sensitivePreviewArea;
     private JTextArea fingerprintArea;
     private DefaultTableModel cvesTableModel;
     private JTextArea tlsAuditArea;
@@ -303,7 +305,25 @@ public class FtpExplorerView extends JPanel {
         };
         JTable sensitiveTable = new JTable(sensitiveTableModel);
         sensitiveTable.setAutoCreateRowSorter(true);
-        panel.add(new JScrollPane(sensitiveTable), BorderLayout.CENTER);
+
+        sensitivePreviewArea = createReadOnlyTextArea();
+        sensitivePreviewArea.setText("Select a file above to preview its contents");
+
+        sensitiveTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                int viewRow = sensitiveTable.getSelectedRow();
+                if (viewRow >= 0) {
+                    int modelRow = sensitiveTable.convertRowIndexToModel(viewRow);
+                    String path = (String) sensitiveTableModel.getValueAt(modelRow, 0);
+                    previewSensitiveFile(path);
+                }
+            }
+        });
+
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(sensitiveTable),
+                new JScrollPane(sensitivePreviewArea));
+        split.setResizeWeight(0.5);
+        panel.add(split, BorderLayout.CENTER);
 
         JPanel bottomBar = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton scanButton = new JButton("Scan Sensitive Files");
@@ -312,6 +332,95 @@ public class FtpExplorerView extends JPanel {
         panel.add(bottomBar, BorderLayout.SOUTH);
 
         return panel;
+    }
+
+    private static final long MAX_PREVIEW_SIZE = 512 * 1024;
+
+    private void previewSensitiveFile(String remotePath) {
+        if (activeSession == null || !activeSession.connected) {
+            return;
+        }
+        FtpSession session = activeSession;
+        sensitivePreviewArea.setText("Loading " + remotePath + "...");
+
+        Thread.ofVirtual().name("ftp-preview-" + session.host).start(() -> {
+            Consumer<String> log = msg -> appendLog(session, msg);
+            try {
+                String content = downloadPreview(session, remotePath, log);
+                if (content == null) {
+                    content = listDirectoryPreview(session, remotePath, log);
+                }
+
+                String finalContent = content;
+                SwingUtilities.invokeLater(() -> {
+                    if (session == activeSession) {
+                        sensitivePreviewArea.setText(finalContent);
+                        sensitivePreviewArea.setCaretPosition(0);
+                    }
+                });
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() -> {
+                    if (session == activeSession) {
+                        sensitivePreviewArea.setText("Error reading " + remotePath + ": " + ex.getMessage());
+                    }
+                });
+            }
+        });
+    }
+
+    private String downloadPreview(FtpSession session, String remotePath, Consumer<String> log) {
+        try {
+            Path tempFile = Files.createTempFile("anarcry-preview-", ".tmp");
+            tempFile.toFile().deleteOnExit();
+
+            if (session.sftpClient != null) {
+                session.sftpClient.download(remotePath, tempFile, log);
+            } else if (session.ftpClient != null) {
+                session.ftpClient.download(remotePath, tempFile, log);
+            } else {
+                return null;
+            }
+
+            long fileSize = Files.size(tempFile);
+            String content;
+            if (fileSize > MAX_PREVIEW_SIZE) {
+                byte[] partial = new byte[(int) MAX_PREVIEW_SIZE];
+                try (var is = Files.newInputStream(tempFile)) {
+                    int read = is.read(partial);
+                    content = new String(partial, 0, read, java.nio.charset.StandardCharsets.UTF_8)
+                            + "\n\n--- truncated at 512 KB (total: " + formatSize(fileSize) + ") ---";
+                }
+            } else {
+                content = Files.readString(tempFile, java.nio.charset.StandardCharsets.UTF_8);
+            }
+            Files.deleteIfExists(tempFile);
+            return content;
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private String listDirectoryPreview(FtpSession session, String remotePath, Consumer<String> log) {
+        try {
+            List<FileEntry> entries = listRemote(session, remotePath);
+            StringBuilder sb = new StringBuilder();
+            sb.append("[Directory] ").append(remotePath).append("\n\n");
+            for (FileEntry e : entries) {
+                sb.append(e.permissions()).append("  ");
+                sb.append(String.format("%10s", formatSize(e.size()))).append("  ");
+                sb.append(e.name());
+                if (e.isDirectory()) {
+                    sb.append('/');
+                }
+                sb.append('\n');
+            }
+            if (entries.isEmpty()) {
+                sb.append("(empty directory)");
+            }
+            return sb.toString();
+        } catch (Exception ex) {
+            return "Cannot read " + remotePath + ": " + ex.getMessage();
+        }
     }
 
     private JPanel buildFingerprintTab() {
@@ -1009,6 +1118,11 @@ public class FtpExplorerView extends JPanel {
                 });
             } catch (Exception ex) {
                 appendLog(session, "[!] Failed to list " + remotePath + " -- " + ex.getMessage());
+                SwingUtilities.invokeLater(() -> {
+                    parentNode.removeAllChildren();
+                    parentNode.add(new DefaultMutableTreeNode("(error listing)"));
+                    treeModel.reload(parentNode);
+                });
             }
         });
     }
@@ -1028,8 +1142,6 @@ public class FtpExplorerView extends JPanel {
             return;
         }
         activeSession.currentPath = path;
-        activeSession.treeNode.removeAllChildren();
-        treeModel.reload(activeSession.treeNode);
         loadChildren(activeSession, activeSession.treeNode, path);
     }
 
@@ -1362,38 +1474,40 @@ public class FtpExplorerView extends JPanel {
     // -------------------------------------------------------------------------
 
     private void runFingerprint(FtpSession session) {
-        Consumer<String> log = msg -> appendLog(session, msg);
-        try {
-            if (session.ftpClient != null) {
-                String banner = session.ftpClient.getBanner();
-                String systType = session.ftpClient.getSystemType();
-                Set<String> features = session.ftpClient.getFeatures();
-                FingerprintResult fp = BannerFingerprinter.fingerprint(banner, systType, features, log);
-                SwingUtilities.invokeLater(() -> displayFingerprint(session, fp, banner));
-            } else if (session.sftpClient != null) {
-                String version = session.sftpClient.getServerVersion();
-                SwingUtilities.invokeLater(() -> {
-                    StringBuilder sb = new StringBuilder();
-                    sb.append("Protocol:    SFTP/SSH\n");
-                    sb.append("Server:      ").append(version).append('\n');
-                    sb.append("Host Key:    ").append(session.sftpClient.getHostKeyType()).append('\n');
-                    sb.append("KEX:         ").append(session.sftpClient.getKexAlgorithms()).append('\n');
-                    sb.append("Ciphers:     ").append(session.sftpClient.getCiphers()).append('\n');
-                    sb.append("MACs:        ").append(session.sftpClient.getMacs()).append('\n');
+        Thread.ofVirtual().name("ftp-fingerprint-" + session.host).start(() -> {
+            Consumer<String> log = msg -> appendLog(session, msg);
+            try {
+                if (session.ftpClient != null) {
+                    String banner = session.ftpClient.getBanner();
+                    String systType = session.ftpClient.getSystemType();
+                    Set<String> features = session.ftpClient.getFeatures();
+                    FingerprintResult fp = BannerFingerprinter.fingerprint(banner, systType, features, log);
+                    SwingUtilities.invokeLater(() -> displayFingerprint(session, fp, banner));
+                } else if (session.sftpClient != null) {
+                    String version = session.sftpClient.getServerVersion();
+                    SwingUtilities.invokeLater(() -> {
+                        StringBuilder sb = new StringBuilder();
+                        sb.append("Protocol:    SFTP/SSH\n");
+                        sb.append("Server:      ").append(version).append('\n');
+                        sb.append("Host Key:    ").append(session.sftpClient.getHostKeyType()).append('\n');
+                        sb.append("KEX:         ").append(session.sftpClient.getKexAlgorithms()).append('\n');
+                        sb.append("Ciphers:     ").append(session.sftpClient.getCiphers()).append('\n');
+                        sb.append("MACs:        ").append(session.sftpClient.getMacs()).append('\n');
 
-                    session.fingerprintText = sb.toString();
-                    session.cvesData.clear();
+                        session.fingerprintText = sb.toString();
+                        session.cvesData.clear();
 
-                    if (session == activeSession) {
-                        fingerprintArea.setText(session.fingerprintText);
-                        fingerprintArea.setCaretPosition(0);
-                        cvesTableModel.setRowCount(0);
-                    }
-                });
+                        if (session == activeSession) {
+                            fingerprintArea.setText(session.fingerprintText);
+                            fingerprintArea.setCaretPosition(0);
+                            cvesTableModel.setRowCount(0);
+                        }
+                    });
+                }
+            } catch (Exception ex) {
+                appendLog(session, "[!] Fingerprint error -- " + ex.getMessage());
             }
-        } catch (Exception ex) {
-            appendLog(session, "[!] Fingerprint error -- " + ex.getMessage());
-        }
+        });
     }
 
     private void displayFingerprint(FtpSession session, FingerprintResult fp, String banner) {
@@ -1490,24 +1604,24 @@ public class FtpExplorerView extends JPanel {
                 return;
             }
 
-            List<SensitiveFile> results = scanner.scan(basePath, log);
+            Consumer<SensitiveFile> onMatch = sf -> {
+                Object[] row = new Object[]{sf.path(), sf.category(), formatSize(sf.size()), sf.matchReason()};
+                SwingUtilities.invokeLater(() -> {
+                    session.sensitiveData.add(row);
+                    if (session == activeSession) {
+                        sensitiveTableModel.addRow(row);
+                    }
+                });
+            };
+
             SwingUtilities.invokeLater(() -> {
                 session.sensitiveData.clear();
-                for (SensitiveFile sf : results) {
-                    session.sensitiveData
-                            .add(new Object[]{sf.path(), sf.category(), formatSize(sf.size()), sf.matchReason()});
-                }
-
                 if (session == activeSession) {
                     sensitiveTableModel.setRowCount(0);
-                    for (Object[] r : session.sensitiveData) {
-                        sensitiveTableModel.addRow(r);
-                    }
-                    if (!results.isEmpty()) {
-                        rightTabs.setSelectedIndex(2);
-                    }
                 }
             });
+
+            scanner.scan(basePath, SensitiveFileScanner.DEFAULT_MAX_DEPTH, log, onMatch);
         } catch (Exception ex) {
             appendLog(session, "[!] Sensitive scan error -- " + ex.getMessage());
         }
@@ -1560,7 +1674,6 @@ public class FtpExplorerView extends JPanel {
         if (session == activeSession) {
             tlsAuditArea.setText(session.tlsAuditText);
             tlsAuditArea.setCaretPosition(0);
-            rightTabs.setSelectedIndex(4);
         }
     }
 
@@ -1582,7 +1695,6 @@ public class FtpExplorerView extends JPanel {
         if (session == activeSession) {
             tlsAuditArea.setText(session.tlsAuditText);
             tlsAuditArea.setCaretPosition(0);
-            rightTabs.setSelectedIndex(4);
         }
     }
 

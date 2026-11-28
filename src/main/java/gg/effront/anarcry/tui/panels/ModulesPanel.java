@@ -82,6 +82,10 @@ public class ModulesPanel extends Panel {
     private final CheckBox domSinksCheck;
     private final CheckBox backendLivenessCheck;
     private final CheckBox clickjackingCheck;
+    private final CheckBox swaggerDiscoveryCheck;
+    private final CheckBox idorCrossTenantCheck;
+    private final CheckBox authFlowCheck;
+    private final CheckBox cspApiDiscoveryCheck;
     private final CheckBox exploitationCheck;
     private final List<CheckBox> allModuleChecks = new ArrayList<>();
     private final PasteableTextBox targetBox;
@@ -150,6 +154,10 @@ public class ModulesPanel extends Panel {
         domSinksCheck = new CheckBox("DomSinks");
         backendLivenessCheck = new CheckBox("BackendLiveness");
         clickjackingCheck = new CheckBox("Clickjacking");
+        swaggerDiscoveryCheck = new CheckBox("SwaggerDiscovery");
+        idorCrossTenantCheck = new CheckBox("IdorCrossTenant (needs 2 tokens)");
+        authFlowCheck = new CheckBox("AuthFlow");
+        cspApiDiscoveryCheck = new CheckBox("CspApiDiscovery");
 
         allModuleChecks.addAll(List.of(crawlerCheck, infraCheck, tlsCheck, headersCheck, hstsCheck, jwtCheck, pqcCheck,
                 corsCheck, oauthCheck, openRedirectCheck, ssrfCheck, graphqlCheck, crlfCheck, xxeCheck, sstiCheck,
@@ -157,7 +165,8 @@ public class ModulesPanel extends Panel {
                 sqliCheck, xssCheck, lfiCheck, cmdInjectionCheck, csrfCheck, secretsCheck, raceConditionCheck,
                 nosqliCheck, deserializationCheck, fileUploadCheck, subTakeoverCheck, webSocketCheck,
                 protoPollutionCheck, cloudMisconfigCheck, frameworkConfigCheck, jsAnalyzerCheck, domSinksCheck,
-                backendLivenessCheck, clickjackingCheck));
+                backendLivenessCheck, clickjackingCheck, swaggerDiscoveryCheck, idorCrossTenantCheck, authFlowCheck,
+                cspApiDiscoveryCheck));
 
         Label selectLabel = new Label("Select modules:");
         selectLabel.setForegroundColor(com.googlecode.lanterna.TextColor.ANSI.WHITE);
@@ -229,7 +238,11 @@ public class ModulesPanel extends Panel {
         addComponent(frameworkConfigCheck);
         addComponent(jsAnalyzerCheck);
         addComponent(domSinksCheck);
+        addComponent(swaggerDiscoveryCheck);
         addComponent(idorCheck);
+        addComponent(idorCrossTenantCheck);
+        addComponent(authFlowCheck);
+        addComponent(cspApiDiscoveryCheck);
 
         addComponent(new EmptySpace(new TerminalSize(1, 1)));
         Label postLabel = new Label("── POST-SCAN ───────────");
@@ -529,6 +542,18 @@ public class ModulesPanel extends Panel {
         }
         if (clickjackingCheck.isChecked()) {
             modules.add("Clickjacking");
+        }
+        if (swaggerDiscoveryCheck.isChecked()) {
+            modules.add("SwaggerDiscovery");
+        }
+        if (idorCrossTenantCheck.isChecked()) {
+            modules.add("IdorCrossTenant");
+        }
+        if (authFlowCheck.isChecked()) {
+            modules.add("AuthFlow");
+        }
+        if (cspApiDiscoveryCheck.isChecked()) {
+            modules.add("CspApiDiscovery");
         }
 
         if (modules.isEmpty()) {

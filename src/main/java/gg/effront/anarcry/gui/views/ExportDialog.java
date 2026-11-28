@@ -4,10 +4,12 @@ import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.report.ReportEngine;
 
 import java.awt.BorderLayout;
+import java.awt.Desktop;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.nio.file.Path;
 import java.util.List;
 
 import javax.swing.BorderFactory;
@@ -111,6 +113,37 @@ public class ExportDialog extends JDialog {
         add(buttonPanel, BorderLayout.SOUTH);
     }
 
+    private void showExportSuccess(String filePath) {
+        JDialog dialog = new JDialog(this, "Export Successful", true);
+        dialog.setLayout(new BorderLayout(8, 8));
+        dialog.setSize(480, 140);
+        dialog.setLocationRelativeTo(this);
+
+        JLabel label = new JLabel("Report exported to: " + filePath);
+        label.setBorder(BorderFactory.createEmptyBorder(12, 12, 4, 12));
+        dialog.add(label, BorderLayout.CENTER);
+
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
+        JButton viewBtn = new JButton("View");
+        viewBtn.addActionListener(e -> {
+            try {
+                Desktop.getDesktop().open(Path.of(filePath).getParent().toFile());
+            } catch (Exception ex) {
+                // fall back silently
+            }
+            dialog.dispose();
+        });
+        btnPanel.add(viewBtn);
+
+        JButton okBtn = new JButton("OK");
+        okBtn.addActionListener(e -> dialog.dispose());
+        btnPanel.add(okBtn);
+
+        dialog.add(btnPanel, BorderLayout.SOUTH);
+        dialog.getRootPane().setDefaultButton(okBtn);
+        dialog.setVisible(true);
+    }
+
     private void toggleProgramField() {
         boolean h1 = h1Radio.isSelected();
         programLabel.setEnabled(h1);
@@ -141,8 +174,7 @@ public class ExportDialog extends JDialog {
                 path = engine.export(findings, targetUrl);
             }
 
-            JOptionPane.showMessageDialog(this, "Report exported to:\n" + path, "Export Successful",
-                    JOptionPane.INFORMATION_MESSAGE);
+            showExportSuccess(path);
             dispose();
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Export failed:\n" + ex.getMessage(), "Export Error",

