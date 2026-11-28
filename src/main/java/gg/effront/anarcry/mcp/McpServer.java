@@ -76,7 +76,7 @@ public final class McpServer implements AutoCloseable {
 
         this.requestPool = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("mcp-http-", 0).factory());
 
-        this.server = HttpServer.create(new InetSocketAddress(port), 0);
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         this.server.createContext(MCP_PATH, new McpHttpHandler());
         this.server.setExecutor(requestPool);
     }
