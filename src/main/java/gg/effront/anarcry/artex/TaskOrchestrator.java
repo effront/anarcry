@@ -313,7 +313,7 @@ public class TaskOrchestrator {
 
         JsonArray arr = new JsonArray();
         for (Finding finding : batch) {
-            arr.add(findingToJson(finding));
+            arr.add(FindingDto.toJsonObject(finding));
         }
 
         // Push async -- don't block scan thread
@@ -360,24 +360,6 @@ public class TaskOrchestrator {
                 log.accept("[!] ARTEX: failed to push assets -- " + unwrapMessage(e));
             }
         }, asyncPool);
-    }
-
-    /** Serializes an AnarCry Finding to JSON for ARTEX consumption. */
-    private static JsonObject findingToJson(Finding f) {
-        JsonObject obj = new JsonObject();
-        obj.addProperty("module", f.module());
-        obj.addProperty("endpoint", f.endpoint());
-        obj.addProperty("title", f.title());
-        obj.addProperty("severity", f.severity().name().toLowerCase());
-        obj.addProperty("evidence", f.evidence());
-        obj.addProperty("impact", f.impact());
-        obj.addProperty("reproduction", f.reproduction());
-        obj.addProperty("recommendation", f.recommendation());
-        obj.addProperty("cwe_id", f.cweId());
-        obj.addProperty("cwe_title", f.cweTitle());
-        obj.addProperty("cvss_vector", f.cvssVector());
-        obj.addProperty("cvss_score", f.cvssScore());
-        return obj;
     }
 
     /** Unwraps nested exception messages for cleaner logging. */

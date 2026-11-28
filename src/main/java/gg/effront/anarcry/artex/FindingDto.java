@@ -1,5 +1,6 @@
 package gg.effront.anarcry.artex;
 
+import com.google.gson.JsonObject;
 import gg.effront.anarcry.model.Finding;
 
 /**
@@ -35,5 +36,23 @@ public record FindingDto(String module, String endpoint, String title, String se
     public static FindingDto from(Finding f) {
         return new FindingDto(f.module(), f.endpoint(), f.title(), f.severity().name(), f.evidence(), f.impact(),
                 f.reproduction(), f.recommendation(), f.cweId(), f.cvssScore(), f.cvssVector());
+    }
+
+    /** Serializes an AnarCry Finding to a JSON object for ARTEX consumption. */
+    public static JsonObject toJsonObject(Finding f) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("module", f.module());
+        obj.addProperty("endpoint", f.endpoint());
+        obj.addProperty("title", f.title());
+        obj.addProperty("severity", f.severity().name().toLowerCase());
+        obj.addProperty("evidence", f.evidence());
+        obj.addProperty("impact", f.impact());
+        obj.addProperty("reproduction", f.reproduction());
+        obj.addProperty("recommendation", f.recommendation());
+        obj.addProperty("cwe_id", f.cweId());
+        obj.addProperty("cwe_title", f.cweTitle());
+        obj.addProperty("cvss_vector", f.cvssVector());
+        obj.addProperty("cvss_score", f.cvssScore());
+        return obj;
     }
 }

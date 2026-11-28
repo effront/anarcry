@@ -46,6 +46,10 @@ public class CspApiDiscoveryModule implements Scanner {
             "stackpath.bootstrapcdn.com", "code.jquery.com", "www.google-analytics.com", "www.googletagmanager.com",
             "connect.facebook.net", "platform.twitter.com", "cdn.segment.com");
 
+    private record CspParseResult(Set<String> discoveredUrls, Set<String> discoveredDomains, Set<String> internalApis,
+            Set<String> apiEndpoints) {
+    }
+
     @Override
     public String id() {
         return "CspApiDiscovery";
@@ -55,15 +59,39 @@ public class CspApiDiscoveryModule implements Scanner {
     public List<Finding> scan(ScanContext ctx, Consumer<String> log) throws Exception {
         List<Finding> findings = new ArrayList<>();
         HttpClient hc = HttpClientFactory.http2();
-
-        String scheme = ctx.isHttps() ? "https" : "http";
-        int defPort = ctx.isHttps() ? 443 : 80;
-        String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
+        String base = ctx.baseUrl();
 
         log.accept("[~] CspApiDiscovery: analisando CSP headers em " + base);
 
-        // Fetch the main page to get CSP headers
-        String cspHeader = null;
+        String cspHeader = fetchCspHeader(ctx, hc, base, log);
+        if (cspHeader.isBlank()) {
+            log.accept("[~] CspApiDiscovery: nenhum CSP header encontrado");
+            return findings;
+        }
+
+        log.accept("[~] CspApiDiscovery: CSP encontrado (" + cspHeader.length() + " chars)");
+
+        CspParseResult parsed = parseCspDirectives(cspHeader);
+        if (parsed.discoveredUrls().isEmpty() && parsed.discoveredDomains().isEmpty()) {
+            log.accept("[+] CspApiDiscovery: CSP presente mas sem URLs/dominios relevantes");
+            return findings;
+        }
+
+        log.accept(
+                "[~] CspApiDiscovery: " + parsed.discoveredUrls().size() + " URLs, " + parsed.discoveredDomains().size()
+                        + " dominios, " + parsed.apiEndpoints().size() + " connect-src endpoints");
+
+        buildApiSurfaceFinding(parsed, base, findings);
+        probeInternalApis(ctx, hc, parsed.internalApis(), findings, log);
+        probeConnectSrcApis(ctx, hc, parsed, log);
+
+        if (findings.isEmpty()) {
+            log.accept("[+] CspApiDiscovery: nenhuma API exposta detectada via CSP");
+        }
+        return findings;
+    }
+
+    private String fetchCspHeader(ScanContext ctx, HttpClient hc, String base, Consumer<String> log) {
         try {
             HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(base + "/"))
                     .timeout(Duration.ofSeconds(6)).GET();
@@ -73,38 +101,37 @@ public class CspApiDiscoveryModule implements Scanner {
             HttpRequest req = builder.build();
             HttpResponse<String> resp = Http.send(ctx, hc, req, HttpResponse.BodyHandlers.ofString(), id());
 
-            cspHeader = resp.headers().firstValue("content-security-policy").orElse("");
-            if (cspHeader.isBlank()) {
-                cspHeader = resp.headers().firstValue("content-security-policy-report-only").orElse("");
+            String csp = resp.headers().firstValue("content-security-policy").orElse("");
+            if (csp.isBlank()) {
+                csp = resp.headers().firstValue("content-security-policy-report-only").orElse("");
             }
-
-            // Also check meta tag in HTML
-            if (cspHeader.isBlank()) {
-                String body = resp.body() != null ? resp.body() : "";
-                Pattern metaCsp = Pattern.compile(
-                        "<meta[^>]+http-equiv=[\"']Content-Security-Policy[\"'][^>]+content=[\"']([^\"']+)[\"']",
-                        Pattern.CASE_INSENSITIVE);
-                Matcher metaMatcher = metaCsp.matcher(body);
-                if (metaMatcher.find()) {
-                    cspHeader = metaMatcher.group(1);
+            if (csp.isBlank()) {
+                csp = extractCspFromMetaTag(resp.body());
+                if (!csp.isBlank()) {
                     log.accept("[~] CspApiDiscovery: CSP encontrado via meta tag");
                 }
             }
+            return csp;
         } catch (CircuitBreakerException cbe) {
             throw cbe;
         } catch (Exception e) {
             log.accept("[!] CspApiDiscovery: falha ao buscar CSP: " + e.getMessage());
-            return findings;
+            return "";
         }
+    }
 
-        if (cspHeader.isBlank()) {
-            log.accept("[~] CspApiDiscovery: nenhum CSP header encontrado");
-            return findings;
+    private static String extractCspFromMetaTag(String body) {
+        if (body == null) {
+            return "";
         }
+        Pattern metaCsp = Pattern.compile(
+                "<meta[^>]+http-equiv=[\"']Content-Security-Policy[\"'][^>]+content=[\"']([^\"']+)[\"']",
+                Pattern.CASE_INSENSITIVE);
+        Matcher m = metaCsp.matcher(body);
+        return m.find() ? m.group(1) : "";
+    }
 
-        log.accept("[~] CspApiDiscovery: CSP encontrado (" + cspHeader.length() + " chars)");
-
-        // Parse all directives
+    private static CspParseResult parseCspDirectives(String cspHeader) {
         Set<String> discoveredUrls = new LinkedHashSet<>();
         Set<String> discoveredDomains = new LinkedHashSet<>();
         Set<String> internalApis = new LinkedHashSet<>();
@@ -114,149 +141,148 @@ public class CspApiDiscoveryModule implements Scanner {
         while (dirMatcher.find()) {
             String directive = dirMatcher.group(1);
             String values = dirMatcher.group(2);
-
-            // Extract full URLs
-            Matcher urlMatcher = URL_PATTERN.matcher(values);
-            while (urlMatcher.find()) {
-                String url = urlMatcher.group();
-                discoveredUrls.add(url);
-
-                // Classify as API endpoint (connect-src is most indicative)
-                if ("connect-src".equals(directive)) {
-                    apiEndpoints.add(url);
-                }
-
-                // Check for internal indicators
-                String urlLower = url.toLowerCase();
-                for (String indicator : INTERNAL_INDICATORS) {
-                    if (urlLower.contains(indicator)) {
-                        internalApis.add(url);
-                        break;
-                    }
-                }
-            }
-
-            // Extract domains
-            Matcher domMatcher = DOMAIN_PATTERN.matcher(values);
-            while (domMatcher.find()) {
-                String domain = domMatcher.group(1);
-                if (!KNOWN_CDN_DOMAINS.contains(domain.toLowerCase())) {
-                    discoveredDomains.add(domain);
-                }
-            }
+            extractUrlsFromDirective(directive, values, discoveredUrls, apiEndpoints, internalApis);
+            extractDomainsFromValues(values, discoveredDomains);
         }
 
-        if (discoveredUrls.isEmpty() && discoveredDomains.isEmpty()) {
-            log.accept("[+] CspApiDiscovery: CSP presente mas sem URLs/dominios relevantes");
-            return findings;
-        }
+        return new CspParseResult(discoveredUrls, discoveredDomains, internalApis, apiEndpoints);
+    }
 
-        log.accept("[~] CspApiDiscovery: " + discoveredUrls.size() + " URLs, " + discoveredDomains.size()
-                + " dominios, " + apiEndpoints.size() + " connect-src endpoints");
-
-        // Report API surface discovery (INFO)
-        if (!apiEndpoints.isEmpty() || !discoveredDomains.isEmpty()) {
-            StringBuilder evidence = new StringBuilder("CSP header analise:");
-            if (!apiEndpoints.isEmpty()) {
-                evidence.append(" | connect-src APIs: ").append(String.join(", ", limitSet(apiEndpoints, 10)));
+    private static void extractUrlsFromDirective(String directive, String values, Set<String> discoveredUrls,
+            Set<String> apiEndpoints, Set<String> internalApis) {
+        Matcher urlMatcher = URL_PATTERN.matcher(values);
+        while (urlMatcher.find()) {
+            String url = urlMatcher.group();
+            discoveredUrls.add(url);
+            if ("connect-src".equals(directive)) {
+                apiEndpoints.add(url);
             }
-            if (!discoveredDomains.isEmpty()) {
-                evidence.append(" | Dominios: ").append(String.join(", ", limitSet(discoveredDomains, 10)));
-            }
-            evidence.append(" | Total URLs: ").append(discoveredUrls.size());
-
-            findings.add(Finding.of(id(), "/",
-                    "CSP API Surface Discovery -- "
-                            + apiEndpoints.size() + " API endpoints, " + discoveredDomains.size() + " dominios",
-                    Severity.INFO, evidence.toString(),
-                    "CSP header revela a superficie de API do aplicativo, incluindo endpoints "
-                            + "de backend, servicos terceiros e dominios permitidos. "
-                            + "Informacao util para reconhecimento e mapeamento de ataque",
-                    "curl -sI '" + base + "/' | grep -i content-security-policy",
-                    "Minimizar dominios no CSP para reduzir superficie exposta. "
-                            + "Usar nonces em vez de domain allowlists quando possivel. "
-                            + "Revisar periodicamente dominios no CSP para remover entradas obsoletas",
-                    CWE_ID, CWE_TITLE, CVSS_INFO, SCORE_INFO));
+            classifyInternalUrl(url, internalApis);
         }
+    }
 
-        // Probe internal APIs for accessibility (MEDIUM if reachable)
-        if (!internalApis.isEmpty()) {
-            log.accept("[~] CspApiDiscovery: probing " + internalApis.size() + " APIs internas detectadas no CSP");
-            for (String internalUrl : internalApis) {
-                try {
-                    HttpRequest probeReq = HttpRequest.newBuilder().uri(URI.create(internalUrl))
-                            .timeout(Duration.ofSeconds(5)).GET().build();
-                    HttpResponse<String> probeResp = Http.send(ctx, hc, probeReq, HttpResponse.BodyHandlers.ofString(),
-                            id());
-
-                    int status = probeResp.statusCode();
-                    if (status >= 200 && status < 500 && status != 404) {
-                        String body = probeResp.body() != null ? probeResp.body() : "";
-                        log.accept("[!] CspApiDiscovery: API interna acessivel: " + internalUrl + " (HTTP " + status
-                                + ")");
-                        findings.add(Finding.of(id(), internalUrl,
-                                "Internal API acessivel externamente: " + internalUrl, Severity.MEDIUM,
-                                "URL: " + internalUrl + " | Status: " + status + " | Descoberto via CSP connect-src"
-                                        + " | Body preview: " + body.substring(0, Math.min(150, body.length())),
-                                "API interna referenciada no CSP e acessivel externamente. "
-                                        + "APIs internas geralmente nao implementam autenticacao ou autorizacao "
-                                        + "completa, podendo expor dados sensiveis ou funcionalidades administrativas",
-                                "curl '" + internalUrl + "'",
-                                "Restringir acesso a APIs internas via firewall/VPN. "
-                                        + "Nunca expor URLs internas no CSP de paginas publicas. "
-                                        + "Implementar autenticacao em todas as APIs independente do ambiente",
-                                CWE_ID, CWE_TITLE, CVSS_MEDIUM, SCORE_MEDIUM));
-                    }
-                } catch (CircuitBreakerException cbe) {
-                    throw cbe;
-                } catch (Exception ignored) {
-                    // Internal API not reachable -- expected
-                }
+    private static void classifyInternalUrl(String url, Set<String> internalApis) {
+        String urlLower = url.toLowerCase();
+        for (String indicator : INTERNAL_INDICATORS) {
+            if (urlLower.contains(indicator)) {
+                internalApis.add(url);
+                break;
             }
         }
+    }
 
-        // Probe connect-src API endpoints for open access
-        Set<String> nonInternalApis = new LinkedHashSet<>(apiEndpoints);
-        nonInternalApis.removeAll(internalApis);
-        if (!nonInternalApis.isEmpty()) {
-            log.accept("[~] CspApiDiscovery: probing " + nonInternalApis.size() + " connect-src API endpoints");
-            int probed = 0;
-            for (String apiUrl : nonInternalApis) {
-                if (probed >= 10) {
-                    break;
-                }
-                try {
-                    // Skip same-origin URLs
-                    URI apiUri = URI.create(apiUrl);
-                    if (ctx.host().equals(apiUri.getHost())) {
-                        continue;
-                    }
+    private static void extractDomainsFromValues(String values, Set<String> discoveredDomains) {
+        Matcher domMatcher = DOMAIN_PATTERN.matcher(values);
+        while (domMatcher.find()) {
+            String domain = domMatcher.group(1);
+            if (!KNOWN_CDN_DOMAINS.contains(domain.toLowerCase())) {
+                discoveredDomains.add(domain);
+            }
+        }
+    }
 
-                    HttpRequest probeReq = HttpRequest.newBuilder().uri(apiUri).timeout(Duration.ofSeconds(5)).GET()
-                            .build();
-                    HttpResponse<String> probeResp = Http.send(ctx, hc, probeReq, HttpResponse.BodyHandlers.ofString(),
-                            id());
-                    probed++;
+    private void buildApiSurfaceFinding(CspParseResult parsed, String base, List<Finding> findings) {
+        if (parsed.apiEndpoints().isEmpty() && parsed.discoveredDomains().isEmpty()) {
+            return;
+        }
+        StringBuilder evidence = new StringBuilder("CSP header analise:");
+        if (!parsed.apiEndpoints().isEmpty()) {
+            evidence.append(" | connect-src APIs: ").append(String.join(", ", limitSet(parsed.apiEndpoints(), 10)));
+        }
+        if (!parsed.discoveredDomains().isEmpty()) {
+            evidence.append(" | Dominios: ").append(String.join(", ", limitSet(parsed.discoveredDomains(), 10)));
+        }
+        evidence.append(" | Total URLs: ").append(parsed.discoveredUrls().size());
 
-                    int status = probeResp.statusCode();
+        findings.add(Finding.of(id(), "/", "CSP API Surface Discovery -- " + parsed.apiEndpoints().size()
+                + " API endpoints, " + parsed.discoveredDomains().size() + " dominios", Severity.INFO,
+                evidence.toString(),
+                "CSP header revela a superficie de API do aplicativo, incluindo endpoints "
+                        + "de backend, servicos terceiros e dominios permitidos. "
+                        + "Informacao util para reconhecimento e mapeamento de ataque",
+                "curl -sI '" + base + "/' | grep -i content-security-policy",
+                "Minimizar dominios no CSP para reduzir superficie exposta. "
+                        + "Usar nonces em vez de domain allowlists quando possivel. "
+                        + "Revisar periodicamente dominios no CSP para remover entradas obsoletas",
+                CWE_ID, CWE_TITLE, CVSS_INFO, SCORE_INFO));
+    }
+
+    private void probeInternalApis(ScanContext ctx, HttpClient hc, Set<String> internalApis, List<Finding> findings,
+            Consumer<String> log) {
+        if (internalApis.isEmpty()) {
+            return;
+        }
+        log.accept("[~] CspApiDiscovery: probing " + internalApis.size() + " APIs internas detectadas no CSP");
+        for (String internalUrl : internalApis) {
+            try {
+                HttpRequest probeReq = HttpRequest.newBuilder().uri(URI.create(internalUrl))
+                        .timeout(Duration.ofSeconds(5)).GET().build();
+                HttpResponse<String> probeResp = Http.send(ctx, hc, probeReq, HttpResponse.BodyHandlers.ofString(),
+                        id());
+
+                int status = probeResp.statusCode();
+                if (status >= 200 && status < 500 && status != 404) {
                     String body = probeResp.body() != null ? probeResp.body() : "";
-
-                    // If a third-party API returns JSON data without auth, it may be interesting
-                    if (status == 200 && body.stripLeading().startsWith("{") && body.length() > 50) {
-                        log.accept("[~] CspApiDiscovery: third-party API retorna dados abertos: " + apiUrl);
-                    }
-                } catch (CircuitBreakerException cbe) {
-                    throw cbe;
-                } catch (Exception ignored) {
-                    // Third party API not reachable or timeout
+                    log.accept("[!] CspApiDiscovery: API interna acessivel: " + internalUrl + " (HTTP " + status + ")");
+                    findings.add(Finding.of(id(), internalUrl, "Internal API acessivel externamente: " + internalUrl,
+                            Severity.MEDIUM,
+                            "URL: " + internalUrl + " | Status: " + status + " | Descoberto via CSP connect-src"
+                                    + " | Body preview: " + body.substring(0, Math.min(150, body.length())),
+                            "API interna referenciada no CSP e acessivel externamente. "
+                                    + "APIs internas geralmente nao implementam autenticacao ou autorizacao "
+                                    + "completa, podendo expor dados sensiveis ou funcionalidades administrativas",
+                            "curl '" + internalUrl + "'",
+                            "Restringir acesso a APIs internas via firewall/VPN. "
+                                    + "Nunca expor URLs internas no CSP de paginas publicas. "
+                                    + "Implementar autenticacao em todas as APIs independente do ambiente",
+                            CWE_ID, CWE_TITLE, CVSS_MEDIUM, SCORE_MEDIUM));
                 }
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
+            } catch (Exception ignored) {
+                // Internal API not reachable -- expected
             }
         }
+    }
 
-        if (findings.isEmpty()) {
-            log.accept("[+] CspApiDiscovery: nenhuma API exposta detectada via CSP");
+    private void probeConnectSrcApis(ScanContext ctx, HttpClient hc, CspParseResult parsed, Consumer<String> log) {
+        Set<String> nonInternalApis = new LinkedHashSet<>(parsed.apiEndpoints());
+        nonInternalApis.removeAll(parsed.internalApis());
+        if (nonInternalApis.isEmpty()) {
+            return;
         }
-        return findings;
+        log.accept("[~] CspApiDiscovery: probing " + nonInternalApis.size() + " connect-src API endpoints");
+        int probed = 0;
+        for (String apiUrl : nonInternalApis) {
+            if (probed >= 10) {
+                break;
+            }
+            try {
+                // Skip same-origin URLs
+                URI apiUri = URI.create(apiUrl);
+                if (ctx.host().equals(apiUri.getHost())) {
+                    continue;
+                }
+
+                HttpRequest probeReq = HttpRequest.newBuilder().uri(apiUri).timeout(Duration.ofSeconds(5)).GET()
+                        .build();
+                HttpResponse<String> probeResp = Http.send(ctx, hc, probeReq, HttpResponse.BodyHandlers.ofString(),
+                        id());
+                probed++;
+
+                int status = probeResp.statusCode();
+                String body = probeResp.body() != null ? probeResp.body() : "";
+
+                // If a third-party API returns JSON data without auth, it may be interesting
+                if (status == 200 && body.stripLeading().startsWith("{") && body.length() > 50) {
+                    log.accept("[~] CspApiDiscovery: third-party API retorna dados abertos: " + apiUrl);
+                }
+            } catch (CircuitBreakerException cbe) {
+                throw cbe;
+            } catch (Exception ignored) {
+                // Third party API not reachable or timeout
+            }
+        }
     }
 
     private static Set<String> limitSet(Set<String> set, int max) {

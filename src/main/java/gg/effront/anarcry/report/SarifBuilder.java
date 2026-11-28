@@ -180,44 +180,12 @@ public class SarifBuilder {
     }
 
     private static Map<String, Object> buildResult(Finding f, Map<String, Integer> ruleIndexMap) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        String ruleId = safe(f.cweId());
-        result.put("ruleId", ruleId);
-        Integer ri = ruleIndexMap.get(ruleId);
-        if (ri != null) {
-            result.put("ruleIndex", ri);
-        }
-        result.put("level", sarifLevel(f.severity()));
-        result.put("message", Map.of("text", f.title() + " -- " + safe(f.evidence())));
-
-        // Location
-        Map<String, Object> artifactLocation = new LinkedHashMap<>();
-        artifactLocation.put("uri", f.endpoint());
-        result.put("locations", List.of(Map.of("physicalLocation", Map.of("artifactLocation", artifactLocation))));
-
-        // Custom properties
-        Map<String, Object> props = new LinkedHashMap<>();
-        props.put("module", f.module());
-        props.put("severity", f.severity().name());
-        props.put("cvssScore", f.cvssScore());
-        props.put("cvssVector", safe(f.cvssVector()));
-        props.put("evidence", safe(f.evidence()));
-        props.put("impact", safe(f.impact()));
-        props.put("reproduction", safe(f.reproduction()));
-        result.put("properties", props);
-
-        return result;
+        return buildResultEntry(safe(f.cweId()), ruleIndexMap, f.severity(), f.title(), safe(f.evidence()),
+                f.endpoint(), f.module(), f.cvssScore(), safe(f.cvssVector()), safe(f.impact()),
+                safe(f.reproduction()));
     }
 
     private static Map<String, Object> buildArtexResult(JsonObject obj, Map<String, Integer> ruleIndexMap) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        String ruleId = jsonStr(obj, "cweId", "CWE-0");
-        result.put("ruleId", ruleId);
-        Integer ri = ruleIndexMap.get(ruleId);
-        if (ri != null) {
-            result.put("ruleIndex", ri);
-        }
-
         String severityStr = jsonStr(obj, "severity", "MEDIUM").toUpperCase();
         Severity severity;
         try {
@@ -225,29 +193,37 @@ public class SarifBuilder {
         } catch (IllegalArgumentException e) {
             severity = Severity.MEDIUM;
         }
-        result.put("level", sarifLevel(severity));
+        double cvssScore = obj.has("cvssScore") ? obj.get("cvssScore").getAsDouble() : 0.0;
+        return buildResultEntry(jsonStr(obj, "cweId", "CWE-0"), ruleIndexMap, severity,
+                jsonStr(obj, "title", "ARTEX finding"), jsonStr(obj, "evidence", ""), jsonStr(obj, "endpoint", ""),
+                jsonStr(obj, "module", "ARTEX"), cvssScore, jsonStr(obj, "cvssVector", ""), jsonStr(obj, "impact", ""),
+                jsonStr(obj, "reproduction", ""));
+    }
 
-        String title = jsonStr(obj, "title", "ARTEX finding");
-        String evidence = jsonStr(obj, "evidence", "");
+    private static Map<String, Object> buildResultEntry(String ruleId, Map<String, Integer> ruleIndexMap,
+            Severity severity, String title, String evidence, String endpoint, String module, double cvssScore,
+            String cvssVector, String impact, String reproduction) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("ruleId", ruleId);
+        Integer ri = ruleIndexMap.get(ruleId);
+        if (ri != null) {
+            result.put("ruleIndex", ri);
+        }
+        result.put("level", sarifLevel(severity));
         result.put("message", Map.of("text", title + " -- " + evidence));
 
-        // Location
-        String endpoint = jsonStr(obj, "endpoint", "");
         Map<String, Object> artifactLocation = new LinkedHashMap<>();
         artifactLocation.put("uri", endpoint);
         result.put("locations", List.of(Map.of("physicalLocation", Map.of("artifactLocation", artifactLocation))));
 
-        // Custom properties
         Map<String, Object> props = new LinkedHashMap<>();
-        props.put("module", jsonStr(obj, "module", "ARTEX"));
+        props.put("module", module);
         props.put("severity", severity.name());
-        if (obj.has("cvssScore")) {
-            props.put("cvssScore", obj.get("cvssScore").getAsDouble());
-        }
-        props.put("cvssVector", jsonStr(obj, "cvssVector", ""));
+        props.put("cvssScore", cvssScore);
+        props.put("cvssVector", cvssVector);
         props.put("evidence", evidence);
-        props.put("impact", jsonStr(obj, "impact", ""));
-        props.put("reproduction", jsonStr(obj, "reproduction", ""));
+        props.put("impact", impact);
+        props.put("reproduction", reproduction);
         result.put("properties", props);
 
         return result;

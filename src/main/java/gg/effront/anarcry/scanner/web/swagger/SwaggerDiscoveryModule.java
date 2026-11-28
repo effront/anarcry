@@ -52,9 +52,7 @@ public class SwaggerDiscoveryModule implements Scanner {
         List<Finding> findings = new ArrayList<>();
         HttpClient hc = HttpClientFactory.http2();
 
-        String scheme = ctx.isHttps() ? "https" : "http";
-        int defPort = ctx.isHttps() ? 443 : 80;
-        String base = scheme + "://" + ctx.host() + (ctx.port() != defPort ? ":" + ctx.port() : "");
+        String base = ctx.baseUrl();
 
         log.accept("[~] SwaggerDiscovery: probing " + PROBE_PATHS.size() + " paths em " + base);
 
@@ -74,7 +72,7 @@ public class SwaggerDiscoveryModule implements Scanner {
                 }
 
                 String body = resp.body() != null ? resp.body() : "";
-                if (body.isBlank() || isHtml(body)) {
+                if (body.isBlank() || Http.isHtmlResponse(body)) {
                     continue;
                 }
 
@@ -192,8 +190,4 @@ public class SwaggerDiscoveryModule implements Scanner {
         return findings;
     }
 
-    private static boolean isHtml(String body) {
-        String t = body.stripLeading();
-        return t.startsWith("<!DOCTYPE") || t.startsWith("<html") || t.startsWith("<!doctype");
-    }
 }

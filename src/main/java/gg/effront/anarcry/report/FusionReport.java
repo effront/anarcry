@@ -9,9 +9,11 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -210,72 +212,74 @@ public class FusionReport {
         }
     }
 
+    private record ChainRule(String[] required, String description) {
+        boolean matches(Set<String> modules) {
+            for (String r : required) {
+                if (r.contains("|")) {
+                    boolean any = false;
+                    for (String alt : r.split("\\|")) {
+                        if (modules.contains(alt)) {
+                            any = true;
+                            break;
+                        }
+                    }
+                    if (!any) {
+                        return false;
+                    }
+                } else if (!modules.contains(r)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    private static final List<ChainRule> CHAIN_RULES = List.of(
+            new ChainRule(new String[]{"SSRF", "SQLi"},
+                    "SSRF -> SQLi: SSRF to internal endpoint can reach database "
+                            + "interfaces vulnerable to SQL injection"),
+            new ChainRule(new String[]{"SSRF", "LFI"},
+                    "SSRF -> LFI: server-side request forgery can be leveraged to "
+                            + "read local files via file:// or internal endpoints"),
+            new ChainRule(new String[]{"IDOR", "JWT|OAuth"},
+                    "Auth weakness + IDOR: broken authentication combined with "
+                            + "insecure direct object references enables full cross-account access"),
+            new ChainRule(new String[]{"XSS", "CORS"},
+                    "XSS + CORS: reflected XSS from an allowed origin can exfiltrate "
+                            + "data cross-origin via permissive CORS policy"),
+            new ChainRule(new String[]{"OpenRedirect", "JWT|OAuth"},
+                    "Open Redirect + Auth: redirect bypass can steal authorization "
+                            + "codes or tokens during OAuth/JWT flows"),
+            new ChainRule(new String[]{"SSTI", "CmdInject"},
+                    "SSTI + Command Injection: template injection achieving RCE "
+                            + "confirms the same underlying command execution path"),
+            new ChainRule(new String[]{"SQLi", "IDOR"},
+                    "SQLi + IDOR: SQL injection can escalate an IDOR from read to "
+                            + "write, enabling data modification across accounts"),
+            new ChainRule(new String[]{"ReqSmuggling", "CachePoisoning"},
+                    "Request Smuggling + Cache Poisoning: smuggling can poison "
+                            + "the cache for all users, turning a single request into mass exploitation"),
+            new ChainRule(new String[]{"CRLF", "XSS"},
+                    "CRLF + XSS: header injection via CRLF can inject XSS payloads "
+                            + "in HTTP response headers or body"),
+            new ChainRule(new String[]{"XXE", "SSRF"},
+                    "XXE + SSRF: XML external entity injection can be used to perform "
+                            + "server-side requests to internal services"));
+
     private List<String> detectAttackChains() {
         List<String> chains = new ArrayList<>();
-        List<Finding> all = mergedFindings();
 
-        Map<String, List<Finding>> byModule = new LinkedHashMap<>();
-        for (Finding f : all) {
-            byModule.computeIfAbsent(f.module(), k -> new ArrayList<>()).add(f);
-        }
-
-        boolean hasSsrf = byModule.containsKey("SSRF");
-        boolean hasSqli = byModule.containsKey("SQLi");
-        boolean hasXss = byModule.containsKey("XSS");
-        boolean hasIdor = byModule.containsKey("IDOR");
-        boolean hasAuth = byModule.containsKey("JWT") || byModule.containsKey("OAuth");
-        boolean hasOpenRedirect = byModule.containsKey("OpenRedirect");
-        boolean hasSsti = byModule.containsKey("SSTI");
-        boolean hasLfi = byModule.containsKey("LFI");
-        boolean hasCmdInject = byModule.containsKey("CmdInject");
-        boolean hasCors = byModule.containsKey("CORS");
-        boolean hasSmuggling = byModule.containsKey("ReqSmuggling");
-        boolean hasCachePoisoning = byModule.containsKey("CachePoisoning");
-        boolean hasCrlf = byModule.containsKey("CRLF");
-        boolean hasXxe = byModule.containsKey("XXE");
-
-        if (hasSsrf && hasSqli) {
-            chains.add("SSRF -> SQLi: SSRF to internal endpoint can reach database "
-                    + "interfaces vulnerable to SQL injection");
-        }
-        if (hasSsrf && hasLfi) {
-            chains.add("SSRF -> LFI: server-side request forgery can be leveraged to "
-                    + "read local files via file:// or internal endpoints");
-        }
-        if (hasIdor && hasAuth) {
-            chains.add("Auth weakness + IDOR: broken authentication combined with "
-                    + "insecure direct object references enables full cross-account access");
-        }
-        if (hasXss && hasCors) {
-            chains.add("XSS + CORS: reflected XSS from an allowed origin can exfiltrate "
-                    + "data cross-origin via permissive CORS policy");
-        }
-        if (hasOpenRedirect && hasAuth) {
-            chains.add("Open Redirect + Auth: redirect bypass can steal authorization "
-                    + "codes or tokens during OAuth/JWT flows");
-        }
-        if (hasSsti && hasCmdInject) {
-            chains.add("SSTI + Command Injection: template injection achieving RCE "
-                    + "confirms the same underlying command execution path");
-        }
-        if (hasSqli && hasIdor) {
-            chains.add("SQLi + IDOR: SQL injection can escalate an IDOR from read to "
-                    + "write, enabling data modification across accounts");
-        }
-        if (hasSmuggling && hasCachePoisoning) {
-            chains.add("Request Smuggling + Cache Poisoning: smuggling can poison "
-                    + "the cache for all users, turning a single request into mass exploitation");
-        }
-        if (hasCrlf && hasXss) {
-            chains.add("CRLF + XSS: header injection via CRLF can inject XSS payloads "
-                    + "in HTTP response headers or body");
-        }
-        if (hasXxe && hasSsrf) {
-            chains.add("XXE + SSRF: XML external entity injection can be used to perform "
-                    + "server-side requests to internal services");
+        Set<String> modules = new HashSet<>();
+        for (Finding f : mergedFindings()) {
+            modules.add(f.module());
         }
 
-        // Cross-source overlap hint
+        for (ChainRule rule : CHAIN_RULES) {
+            if (rule.matches(modules)) {
+                chains.add(rule.description);
+            }
+        }
+
         List<String> overlapModules = detectOverlapModules();
         if (!overlapModules.isEmpty()) {
             chains.add("Cross-validation: both AnarCry and ARTEX independently detected " + "issues in module(s) "

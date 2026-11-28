@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
+import gg.effront.anarcry.artex.FindingDto;
 import gg.effront.anarcry.model.Finding;
 import gg.effront.anarcry.scanner.DiscoveredPaths;
 import gg.effront.anarcry.scanner.ScanConfig;
@@ -30,6 +31,7 @@ import gg.effront.anarcry.scanner.web.xxe.XxeModule;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -39,6 +41,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Executes a single MCP tool call by instantiating the appropriate scanner
@@ -48,6 +51,15 @@ public final class McpToolExecutor {
 
     private static final int DEFAULT_TIMEOUT_SECONDS = 120;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+
+    private static final Map<String, Supplier<Scanner>> MODULE_FACTORIES = Map.ofEntries(
+            Map.entry("SQLi", SqlInjectionModule::new), Map.entry("XSS", XssModule::new),
+            Map.entry("SSRF", SsrfModule::new), Map.entry("SSTI", SstiModule::new), Map.entry("LFI", LfiModule::new),
+            Map.entry("XXE", XxeModule::new), Map.entry("CORS", CorsModule::new),
+            Map.entry("Headers", HeadersModule::new), Map.entry("CmdInjection", CommandInjectionModule::new),
+            Map.entry("OpenRedirect", OpenRedirectModule::new), Map.entry("GraphQL", GraphQLModule::new),
+            Map.entry("JWT", JwtModule::new), Map.entry("TLS", TlsModule::new), Map.entry("IDOR", IdorModule::new),
+            Map.entry("CSRF", CsrfModule::new));
 
     private final McpToolRegistry registry;
     private final ExecutorService executor;
@@ -113,20 +125,7 @@ public final class McpToolExecutor {
 
         JsonArray findingsArr = new JsonArray();
         for (Finding f : findings) {
-            JsonObject fj = new JsonObject();
-            fj.addProperty("module", f.module());
-            fj.addProperty("endpoint", f.endpoint());
-            fj.addProperty("title", f.title());
-            fj.addProperty("severity", f.severity().name());
-            fj.addProperty("evidence", f.evidence());
-            fj.addProperty("impact", f.impact());
-            fj.addProperty("reproduction", f.reproduction());
-            fj.addProperty("recommendation", f.recommendation());
-            fj.addProperty("cwe_id", f.cweId());
-            fj.addProperty("cwe_title", f.cweTitle());
-            fj.addProperty("cvss_vector", f.cvssVector());
-            fj.addProperty("cvss_score", f.cvssScore());
-            findingsArr.add(fj);
+            findingsArr.add(FindingDto.toJsonObject(f));
         }
         result.add("findings", findingsArr);
 
@@ -148,24 +147,8 @@ public final class McpToolExecutor {
 
     /** Instantiates the scanner module for the given module ID. */
     private static Scanner instantiateModule(String moduleId) {
-        return switch (moduleId) {
-            case "SQLi" -> new SqlInjectionModule();
-            case "XSS" -> new XssModule();
-            case "SSRF" -> new SsrfModule();
-            case "SSTI" -> new SstiModule();
-            case "LFI" -> new LfiModule();
-            case "XXE" -> new XxeModule();
-            case "CORS" -> new CorsModule();
-            case "Headers" -> new HeadersModule();
-            case "CmdInjection" -> new CommandInjectionModule();
-            case "OpenRedirect" -> new OpenRedirectModule();
-            case "GraphQL" -> new GraphQLModule();
-            case "JWT" -> new JwtModule();
-            case "TLS" -> new TlsModule();
-            case "IDOR" -> new IdorModule();
-            case "CSRF" -> new CsrfModule();
-            default -> null;
-        };
+        Supplier<Scanner> factory = MODULE_FACTORIES.get(moduleId);
+        return factory != null ? factory.get() : null;
     }
 
     /**

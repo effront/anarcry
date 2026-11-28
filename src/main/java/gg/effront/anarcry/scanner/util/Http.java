@@ -375,6 +375,14 @@ public class Http {
                 "\\t");
     }
 
+    public static boolean isHtmlResponse(String body) {
+        if (body == null || body.isBlank()) {
+            return false;
+        }
+        String t = body.stripLeading();
+        return t.startsWith("<!DOCTYPE") || t.startsWith("<html") || t.startsWith("<!doctype");
+    }
+
     static Map<String, String> flattenHeaders(Map<String, List<String>> headerMap) {
         Map<String, String> flat = new LinkedHashMap<>();
         for (var entry : headerMap.entrySet()) {
